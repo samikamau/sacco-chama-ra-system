@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bank / M-Pesa — Financial Operating System</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav">
+      <div class="brand">Ledger</div>
+      <a href="index.html">Dashboard</a>
+      <a href="members.html">Members</a>
+      <a href="contributions.html">Contributions</a>
+      <a href="payments.html">Payments</a>
+      <a href="reconcile.html" class="active">Bank / M-Pesa</a>
+      <a href="statement.html">Member Statements</a>
+      <a href="#" onclick="signOut()">Sign out</a>
+    </nav>
+    <main class="main">
+      <h1>Bank / M-Pesa import and matching</h1>
+
+      <div class="card">
+        <h2>Import a statement</h2>
+        <p style="color:var(--color-muted);font-size:13px">
+          CSV columns expected: <code>date, reference, description, amount, type</code>
+          (type is "credit" or "debit"). Export this from your bank/M-Pesa portal first.
+        </p>
+        <input type="file" id="f-file" accept=".csv">
+        <button class="btn accent" onclick="importFile()" style="margin-top:12px">Import as bank transactions</button>
+        <p id="import-error" class="error" style="display:none"></p>
+        <p id="import-success" style="display:none;color:var(--color-success)"></p>
+      </div>
+
+      <div class="card">
+        <h2>Review matches</h2>
+        <button class="btn" onclick="runMatching()">Re-run matching</button>
+        <table style="margin-top:12px">
+          <thead><tr><th>Date</th><th>Reference</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead>
+          <tbody id="rows"><tr><td colspan="5" class="empty">No imported transactions yet.</td></tr></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let orgId, bankAccountId, thresholds;
+
+    async function ensureBankAccount() {
+      let { data } = await supabase.from("bank_accounts").select("id").eq("organisation_id", orgId).limit(1);
+      if (data && data.length) return data[0].id;
+      const { data: created, error } = await supabase.from("bank_accounts")
+        .insert({ organisation_id: orgId, account_name: "Main account" }).select("id").single();
+      if (error) throw error;
+      return created.id;
+    }
+
+    async function loadThresholds() {
+      const { data } = await supabase.from("organisation_settings")
+        .select("match_auto_threshold, match_suggest_threshold").eq("organisation_id", orgId).single();
+      thresholds = data || { match_auto_threshold: 0.9, match_suggest_threshold: 0.6 };
+    }
+
+    async function importFile() {
+      const errorEl = document.getElementById("import-error");
+      const successEl = document.getElementById("import-success");
+      errorEl.style.display = "none"; successEl.style.display = "none";
+      const file = document.getElementById("f-file").files[0];
+      if (!file) { showError(errorEl, "Choose a CSV file first."); return; }
+
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: async (results) => {
+          const rows = results.data.map(r => ({
+            organisation_id: orgId,
+            bank_account_id: bankAccountId,
+            txn_date: r.date,
+            reference: r.reference || null,
+            description: r.description || null,
+            amount: Math.abs(parseFloat(r.amount)),
+            txn_type: (r.type || "credit").toLowerCase(),
+          })).filter(r => r.txn_date && !isNaN(r.amount));
+
+          if (!rows.length) { showError(errorEl, "No valid rows found in that file."); return; }
+
+          const { error } = await supabase.from("bank_transactions").insert(rows);
+          if (error) { showError(errorEl, error.message); return; }
+          successEl.textContent = `Imported ${rows.length} transaction(s).`;
+          successEl.style.display = "block";
+          runMatching();
+        }
+      });
+    }
+
+    // Simple client-side scoring: exact reference match against a payment's
+    // reference scores 1.0; amount+date within 3 days scores 0.65. This is
+    // the placeholder logic flagged in the deployment notes — replace with
+    // a proper SQL matching function once you have real statement formats
+    // to test against.
+    async function runMatching() {
+      const { data: txns } = await supabase.from("bank_transactions")
+        .select("id, txn_date, reference, amount, match_status")
+        .eq("organisation_id", orgId).in("match_status", ["unmatched", "suggested"]);
+
+      const { data: payments } = await supabase.from("payments")
+        .select("id, transaction_date, reference, amount, status")
+        .eq("organisation_id", orgId);
+
+      for (const t of (txns || [])) {
+        let best = { score: 0, paymentId: null };
+        for (const p of (payments || [])) {
+          let score = 0;
+          if (t.reference && p.reference && t.reference.trim() === p.reference.trim()) score = 1.0;
+          else if (Number(t.amount) === Number(p.amount) &&
+                   Math.abs(new Date(t.txn_date) - new Date(p.transaction_date)) <= 3 * 86400000) score = 0.65;
+          if (score > best.score) best = { score, paymentId: p.id };
+        }
+
+        let status = "unmatched";
+        if (best.score >= thresholds.match_auto_threshold) status = "matched";
+        else if (best.score >= thresholds.match_suggest_threshold) status = "suggested";
+
+        if (status !== "unmatched") {
+          await supabase.from("bank_transactions").update({
+            match_status: status, matched_payment_id: best.paymentId, match_score: best.score
+          }).eq("id", t.id);
+        }
+      }
+      loadRows();
+    }
+
+    async function loadRows() {
+      const { data, error } = await supabase.from("bank_transactions")
+        .select("id, txn_date, reference, amount, match_status")
+        .eq("organisation_id", orgId).order("txn_date", { ascending: false });
+      const tbody = document.getElementById("rows");
+      if (error) { tbody.innerHTML = `<tr><td colspan="5" class="error">${error.message}</td></tr>`; return; }
+      if (!data.length) { tbody.innerHTML = `<tr><td colspan="5" class="empty">No imported transactions yet.</td></tr>`; return; }
+      tbody.innerHTML = data.map(t => `
+        <tr>
+          <td>${t.txn_date}</td>
+          <td>${t.reference ?? "—"}</td>
+          <td class="num">${money(t.amount)}</td>
+          <td><span class="status ${t.match_status}">${t.match_status}</span></td>
+          <td>${t.match_status === "suggested" ? `<button class="btn" onclick="confirmMatch('${t.id}')">Confirm</button>` : ""}</td>
+        </tr>`).join("");
+    }
+
+    async function confirmMatch(id) {
+      await supabase.from("bank_transactions").update({ match_status: "matched" }).eq("id", id);
+      loadRows();
+    }
+
+    (async () => {
+      const session = await requireSession();
+      if (!session) return;
+      const org = await currentOrg();
+      if (!org) return;
+      orgId = org.organisation_id;
+      bankAccountId = await ensureBankAccount();
+      await loadThresholds();
+      loadRows();
+    })();
+  </script>
+</body>
+</html>

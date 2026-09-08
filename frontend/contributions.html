@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Contributions — Financial Operating System</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav">
+      <div class="brand">Ledger</div>
+      <a href="index.html">Dashboard</a>
+      <a href="members.html">Members</a>
+      <a href="contributions.html" class="active">Contributions</a>
+      <a href="payments.html">Payments</a>
+      <a href="reconcile.html">Bank / M-Pesa</a>
+      <a href="statement.html">Member Statements</a>
+      <a href="#" onclick="signOut()">Sign out</a>
+    </nav>
+    <main class="main">
+      <h1>Contributions</h1>
+
+      <div class="card">
+        <h2>Contribution rule</h2>
+        <div id="rule-view" class="empty">No rule set up yet.</div>
+        <details style="margin-top:16px">
+          <summary style="cursor:pointer;color:var(--color-muted)">Create a rule</summary>
+          <div style="margin-top:12px">
+            <div class="field"><label>Name</label><input id="r-name" value="Standard monthly contribution"></div>
+            <div class="field"><label>Amount (KES, used when a member has no individual amount set)</label><input id="r-amount" type="number"></div>
+            <div class="field"><label>Due day of month</label><input id="r-due-day" type="number" value="5"></div>
+            <button class="btn accent" onclick="createRule()">Save rule</button>
+          </div>
+        </details>
+        <p id="rule-error" class="error" style="display:none"></p>
+      </div>
+
+      <div class="card">
+        <h2>Generate a period</h2>
+        <div class="field"><label>Period start</label><input id="p-start" type="date"></div>
+        <div class="field"><label>Period end</label><input id="p-end" type="date"></div>
+        <div class="field"><label>Due date</label><input id="p-due" type="date"></div>
+        <button class="btn accent" onclick="generatePeriod()">Generate for all active members</button>
+        <p id="period-error" class="error" style="display:none"></p>
+      </div>
+
+      <div class="card">
+        <h2>Status by member (most recent period)</h2>
+        <table>
+          <thead><tr><th>Member</th><th class="num">Expected</th><th class="num">Paid</th><th>Status</th></tr></thead>
+          <tbody id="rows"><tr><td colspan="4" class="empty">No periods generated yet.</td></tr></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let orgId, currentRuleId;
+
+    async function loadRule() {
+      const { data } = await supabase.from("contribution_rules")
+        .select("id, name, amount, due_day").eq("organisation_id", orgId).eq("active", true).limit(1);
+      const el = document.getElementById("rule-view");
+      if (data && data.length) {
+        currentRuleId = data[0].id;
+        el.innerHTML = `<strong>${data[0].name}</strong> — KES ${money(data[0].amount)}, due on day ${data[0].due_day} of the period.`;
+        el.classList.remove("empty");
+      }
+    }
+
+    async function createRule() {
+      const errorEl = document.getElementById("rule-error");
+      const payload = {
+        organisation_id: orgId,
+        name: document.getElementById("r-name").value.trim(),
+        amount: document.getElementById("r-amount").value,
+        due_day: document.getElementById("r-due-day").value,
+      };
+      if (!payload.amount) { showError(errorEl, "Amount is required."); return; }
+      const { error } = await supabase.from("contribution_rules").insert(payload);
+      if (error) { showError(errorEl, error.message); return; }
+      loadRule();
+    }
+
+    async function generatePeriod() {
+      const errorEl = document.getElementById("period-error");
+      errorEl.style.display = "none";
+      if (!currentRuleId) { showError(errorEl, "Create a contribution rule first."); return; }
+      const start = document.getElementById("p-start").value;
+      const end = document.getElementById("p-end").value;
+      const due = document.getElementById("p-due").value;
+      if (!start || !end || !due) { showError(errorEl, "All three dates are required."); return; }
+
+      const { error } = await supabase.rpc("fn_generate_contribution_period", {
+        p_organisation_id: orgId,
+        p_rule_id: currentRuleId,
+        p_period_start: start,
+        p_period_end: end,
+        p_due_date: due,
+      });
+      if (error) { showError(errorEl, error.message); return; }
+      loadStatus();
+    }
+
+    async function loadStatus() {
+      const { data: periods } = await supabase
+        .from("contribution_periods").select("id, period_start")
+        .eq("organisation_id", orgId).order("period_start", { ascending: false }).limit(1);
+
+      const tbody = document.getElementById("rows");
+      if (!periods || !periods.length) { tbody.innerHTML = `<tr><td colspan="4" class="empty">No periods generated yet.</td></tr>`; return; }
+
+      const { data, error } = await supabase
+        .from("contributions")
+        .select("amount_expected, amount_paid, status, members(full_name)")
+        .eq("organisation_id", orgId).eq("period_id", periods[0].id);
+
+      if (error) { tbody.innerHTML = `<tr><td colspan="4" class="error">${error.message}</td></tr>`; return; }
+      tbody.innerHTML = data.map(c => `
+        <tr>
+          <td>${c.members.full_name}</td>
+          <td class="num">${money(c.amount_expected)}</td>
+          <td class="num">${money(c.amount_paid)}</td>
+          <td><span class="status ${c.status === 'paid' ? 'paid' : c.status === 'partial' ? 'partial' : 'unpaid'}">${c.status}</span></td>
+        </tr>`).join("");
+    }
+
+    (async () => {
+      const session = await requireSession();
+      if (!session) return;
+      const org = await currentOrg();
+      if (!org) return;
+      orgId = org.organisation_id;
+      loadRule();
+      loadStatus();
+    })();
+  </script>
+</body>
+</html>

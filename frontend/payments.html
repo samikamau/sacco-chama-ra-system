@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Payments — Financial Operating System</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav">
+      <div class="brand">Ledger</div>
+      <a href="index.html">Dashboard</a>
+      <a href="members.html">Members</a>
+      <a href="contributions.html">Contributions</a>
+      <a href="payments.html" class="active">Payments</a>
+      <a href="reconcile.html">Bank / M-Pesa</a>
+      <a href="statement.html">Member Statements</a>
+      <a href="#" onclick="signOut()">Sign out</a>
+    </nav>
+    <main class="main">
+      <h1>Record a payment</h1>
+
+      <div class="card">
+        <div class="field">
+          <label>Member</label>
+          <select id="f-member"></select>
+        </div>
+        <div class="field"><label>Amount (KES)</label><input id="f-amount" type="number"></div>
+        <div class="field">
+          <label>Channel</label>
+          <select id="f-channel">
+            <option value="mpesa">M-Pesa</option>
+            <option value="bank">Bank</option>
+            <option value="cash">Cash</option>
+            <option value="cheque">Cheque</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Money into which account</label>
+          <select id="f-cash-account"></select>
+        </div>
+        <div class="field"><label>Reference (e.g. M-Pesa code)</label><input id="f-reference"></div>
+        <div class="field"><label>Description</label><input id="f-description"></div>
+        <button class="btn accent" onclick="recordPayment()">Record and post payment</button>
+        <p id="error" class="error" style="display:none"></p>
+        <p id="success" style="display:none;color:var(--color-success)"></p>
+      </div>
+
+      <div class="card">
+        <h2>Recent payments</h2>
+        <table>
+          <thead><tr><th>Date</th><th>Member</th><th>Channel</th><th class="num">Amount</th><th>Status</th></tr></thead>
+          <tbody id="rows"><tr><td colspan="5" class="empty">No payments yet.</td></tr></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let orgId, contributionIncomeAccountId;
+
+    async function loadMembers() {
+      const { data } = await supabase.from("members")
+        .select("id, member_number, full_name").eq("organisation_id", orgId).eq("status", "active").order("full_name");
+      const sel = document.getElementById("f-member");
+      sel.innerHTML = (data || []).map(m => `<option value="${m.id}">${m.member_number} — ${m.full_name}</option>`).join("");
+    }
+
+    async function loadAccounts() {
+      const { data } = await supabase.from("chart_of_accounts")
+        .select("id, code, name, account_type").eq("organisation_id", orgId).eq("is_active", true);
+      const cashAccounts = (data || []).filter(a => a.account_type === "asset");
+      document.getElementById("f-cash-account").innerHTML =
+        cashAccounts.map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join("");
+      const income = (data || []).find(a => a.code === "4000");
+      contributionIncomeAccountId = income ? income.id : null;
+    }
+
+    async function loadPayments() {
+      const { data, error } = await supabase
+        .from("payments")
+        .select("transaction_date, channel, amount, status, members(full_name)")
+        .eq("organisation_id", orgId).order("created_at", { ascending: false }).limit(20);
+      const tbody = document.getElementById("rows");
+      if (error) { tbody.innerHTML = `<tr><td colspan="5" class="error">${error.message}</td></tr>`; return; }
+      if (!data.length) { tbody.innerHTML = `<tr><td colspan="5" class="empty">No payments yet.</td></tr>`; return; }
+      tbody.innerHTML = data.map(p => `
+        <tr>
+          <td>${p.transaction_date}</td>
+          <td>${p.members.full_name}</td>
+          <td>${p.channel}</td>
+          <td class="num">${money(p.amount)}</td>
+          <td><span class="status ${p.status === 'posted' ? 'paid' : 'partial'}">${p.status}</span></td>
+        </tr>`).join("");
+    }
+
+    async function recordPayment() {
+      const errorEl = document.getElementById("error");
+      const successEl = document.getElementById("success");
+      errorEl.style.display = "none"; successEl.style.display = "none";
+
+      if (!contributionIncomeAccountId) {
+        showError(errorEl, "No 'Contribution Income' account (code 4000) found. Run the seed chart-of-accounts script first.");
+        return;
+      }
+      const cashAccountId = document.getElementById("f-cash-account").value;
+      if (!cashAccountId) {
+        showError(errorEl, "No cash/bank/M-Pesa account found. Run the seed chart-of-accounts script first.");
+        return;
+      }
+
+      const { error } = await supabase.rpc("fn_record_and_post_payment", {
+        p_organisation_id: orgId,
+        p_member_id: document.getElementById("f-member").value,
+        p_amount: document.getElementById("f-amount").value,
+        p_channel: document.getElementById("f-channel").value,
+        p_reference: document.getElementById("f-reference").value || null,
+        p_description: document.getElementById("f-description").value || null,
+        p_cash_account_id: cashAccountId,
+        p_contribution_income_account_id: contributionIncomeAccountId,
+      });
+
+      if (error) { showError(errorEl, error.message); return; }
+      successEl.textContent = "Payment recorded and posted.";
+      successEl.style.display = "block";
+      document.getElementById("f-amount").value = "";
+      document.getElementById("f-reference").value = "";
+      document.getElementById("f-description").value = "";
+      loadPayments();
+    }
+
+    (async () => {
+      const session = await requireSession();
+      if (!session) return;
+      const org = await currentOrg();
+      if (!org) return;
+      orgId = org.organisation_id;
+      await Promise.all([loadMembers(), loadAccounts()]);
+      loadPayments();
+    })();
+  </script>
+</body>
+</html>

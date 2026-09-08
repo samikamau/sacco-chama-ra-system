@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Members — Financial Operating System</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav">
+      <div class="brand">Ledger</div>
+      <a href="index.html">Dashboard</a>
+      <a href="members.html" class="active">Members</a>
+      <a href="contributions.html">Contributions</a>
+      <a href="payments.html">Payments</a>
+      <a href="reconcile.html">Bank / M-Pesa</a>
+      <a href="statement.html">Member Statements</a>
+      <a href="#" onclick="signOut()">Sign out</a>
+    </nav>
+    <main class="main">
+      <h1>Members</h1>
+
+      <div class="card">
+        <h2>Add a member</h2>
+        <div class="field"><label>Member number</label><input id="f-number"></div>
+        <div class="field"><label>Full name</label><input id="f-name"></div>
+        <div class="field"><label>Phone</label><input id="f-phone" placeholder="2547XXXXXXXX"></div>
+        <div class="field"><label>Monthly contribution (KES)</label><input id="f-amount" type="number"></div>
+        <button class="btn accent" onclick="addMember()">Add member</button>
+        <p id="error" class="error" style="display:none"></p>
+      </div>
+
+      <div class="card">
+        <h2>All members</h2>
+        <table>
+          <thead><tr><th>No.</th><th>Name</th><th>Phone</th><th class="num">Monthly</th><th>Status</th></tr></thead>
+          <tbody id="rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let orgId;
+
+    async function loadMembers() {
+      const { data, error } = await supabase
+        .from("members")
+        .select("member_number, full_name, phone, monthly_contribution, status")
+        .eq("organisation_id", orgId)
+        .order("member_number");
+
+      const tbody = document.getElementById("rows");
+      if (error) { tbody.innerHTML = `<tr><td colspan="5" class="error">${error.message}</td></tr>`; return; }
+      if (!data.length) { tbody.innerHTML = `<tr><td colspan="5" class="empty">No members yet.</td></tr>`; return; }
+      tbody.innerHTML = data.map(m => `
+        <tr>
+          <td>${m.member_number}</td>
+          <td>${m.full_name}</td>
+          <td>${m.phone ?? "—"}</td>
+          <td class="num">${money(m.monthly_contribution)}</td>
+          <td><span class="status ${m.status === 'active' ? 'paid' : 'unpaid'}">${m.status}</span></td>
+        </tr>`).join("");
+    }
+
+    async function addMember() {
+      const errorEl = document.getElementById("error");
+      errorEl.style.display = "none";
+      const payload = {
+        organisation_id: orgId,
+        member_number: document.getElementById("f-number").value.trim(),
+        full_name: document.getElementById("f-name").value.trim(),
+        phone: document.getElementById("f-phone").value.trim() || null,
+        monthly_contribution: document.getElementById("f-amount").value || null,
+      };
+      if (!payload.member_number || !payload.full_name) {
+        showError(errorEl, "Member number and full name are required.");
+        return;
+      }
+      const { error } = await supabase.from("members").insert(payload);
+      if (error) { showError(errorEl, error.message); return; }
+      document.getElementById("f-number").value = "";
+      document.getElementById("f-name").value = "";
+      document.getElementById("f-phone").value = "";
+      document.getElementById("f-amount").value = "";
+      loadMembers();
+    }
+
+    (async () => {
+      const session = await requireSession();
+      if (!session) return;
+      const org = await currentOrg();
+      if (!org) return;
+      orgId = org.organisation_id;
+      loadMembers();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Member Statements — Financial Operating System</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav">
+      <div class="brand">Ledger</div>
+      <a href="index.html">Dashboard</a>
+      <a href="members.html">Members</a>
+      <a href="contributions.html">Contributions</a>
+      <a href="payments.html">Payments</a>
+      <a href="reconcile.html">Bank / M-Pesa</a>
+      <a href="statement.html" class="active">Member Statements</a>
+      <a href="#" onclick="signOut()">Sign out</a>
+    </nav>
+    <main class="main">
+      <h1>Member statement</h1>
+
+      <div class="card">
+        <div class="field">
+          <label>Member</label>
+          <select id="f-member" onchange="loadStatement()"></select>
+        </div>
+      </div>
+
+      <div class="card">
+        <table>
+          <thead><tr><th>Date</th><th>Description</th><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead>
+          <tbody id="rows"><tr><td colspan="5" class="empty">Select a member above.</td></tr></tbody>
+        </table>
+        <div style="text-align:right;margin-top:12px;font-family:var(--font-mono)">
+          Closing balance: <strong id="closing">—</strong>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let orgId;
+
+    async function loadMembers() {
+      const { data } = await supabase.from("members")
+        .select("id, member_number, full_name").eq("organisation_id", orgId).order("full_name");
+      document.getElementById("f-member").innerHTML =
+        (data || []).map(m => `<option value="${m.id}">${m.member_number} — ${m.full_name}</option>`).join("");
+      if (data && data.length) loadStatement();
+    }
+
+    async function loadStatement() {
+      const memberId = document.getElementById("f-member").value;
+      if (!memberId) return;
+      const { data, error } = await supabase
+        .from("v_member_ledger")
+        .select("entry_date, description, account_name, debit, credit")
+        .eq("member_id", memberId)
+        .order("entry_date");
+
+      const tbody = document.getElementById("rows");
+      if (error) { tbody.innerHTML = `<tr><td colspan="5" class="error">${error.message}</td></tr>`; return; }
+      if (!data.length) {
+        tbody.innerHTML = `<tr><td colspan="5" class="empty">No ledger activity for this member yet.</td></tr>`;
+        document.getElementById("closing").textContent = "0.00";
+        return;
+      }
+      tbody.innerHTML = data.map(r => `
+        <tr>
+          <td>${r.entry_date}</td>
+          <td>${r.description}</td>
+          <td>${r.account_name}</td>
+          <td class="num">${Number(r.debit) ? money(r.debit) : ""}</td>
+          <td class="num">${Number(r.credit) ? money(r.credit) : ""}</td>
+        </tr>`).join("");
+
+      const balance = data.reduce((s, r) => s + Number(r.debit) - Number(r.credit), 0);
+      document.getElementById("closing").textContent = money(balance);
+    }
+
+    (async () => {
+      const session = await requireSession();
+      if (!session) return;
+      const org = await currentOrg();
+      if (!org) return;
+      orgId = org.organisation_id;
+      loadMembers();
+    })();
+  </script>
+</body>
+</html>
