@@ -30,7 +30,7 @@
       const email = document.getElementById("email").value.trim();
       const password = document.getElementById("password").value;
       const errorEl = document.getElementById("error");
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
       if (error) {
         showError(errorEl, error.message);
         return;
@@ -39,7 +39,7 @@
     }
 
     // If already signed in, skip straight to the dashboard.
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabaseClient.auth.getSession().then(({ data: { session } }) => {
       if (session) window.location.href = "index.html";
     });
   </script>

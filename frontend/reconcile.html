@@ -51,16 +51,16 @@
     let orgId, bankAccountId, thresholds;
 
     async function ensureBankAccount() {
-      let { data } = await supabase.from("bank_accounts").select("id").eq("organisation_id", orgId).limit(1);
+      let { data } = await supabaseClient.from("bank_accounts").select("id").eq("organisation_id", orgId).limit(1);
       if (data && data.length) return data[0].id;
-      const { data: created, error } = await supabase.from("bank_accounts")
+      const { data: created, error } = await supabaseClient.from("bank_accounts")
         .insert({ organisation_id: orgId, account_name: "Main account" }).select("id").single();
       if (error) throw error;
       return created.id;
     }
 
     async function loadThresholds() {
-      const { data } = await supabase.from("organisation_settings")
+      const { data } = await supabaseClient.from("organisation_settings")
         .select("match_auto_threshold, match_suggest_threshold").eq("organisation_id", orgId).single();
       thresholds = data || { match_auto_threshold: 0.9, match_suggest_threshold: 0.6 };
     }
@@ -88,7 +88,7 @@
 
           if (!rows.length) { showError(errorEl, "No valid rows found in that file."); return; }
 
-          const { error } = await supabase.from("bank_transactions").insert(rows);
+          const { error } = await supabaseClient.from("bank_transactions").insert(rows);
           if (error) { showError(errorEl, error.message); return; }
           successEl.textContent = `Imported ${rows.length} transaction(s).`;
           successEl.style.display = "block";
@@ -103,11 +103,11 @@
     // a proper SQL matching function once you have real statement formats
     // to test against.
     async function runMatching() {
-      const { data: txns } = await supabase.from("bank_transactions")
+      const { data: txns } = await supabaseClient.from("bank_transactions")
         .select("id, txn_date, reference, amount, match_status")
         .eq("organisation_id", orgId).in("match_status", ["unmatched", "suggested"]);
 
-      const { data: payments } = await supabase.from("payments")
+      const { data: payments } = await supabaseClient.from("payments")
         .select("id, transaction_date, reference, amount, status")
         .eq("organisation_id", orgId);
 
@@ -126,7 +126,7 @@
         else if (best.score >= thresholds.match_suggest_threshold) status = "suggested";
 
         if (status !== "unmatched") {
-          await supabase.from("bank_transactions").update({
+          await supabaseClient.from("bank_transactions").update({
             match_status: status, matched_payment_id: best.paymentId, match_score: best.score
           }).eq("id", t.id);
         }
@@ -135,7 +135,7 @@
     }
 
     async function loadRows() {
-      const { data, error } = await supabase.from("bank_transactions")
+      const { data, error } = await supabaseClient.from("bank_transactions")
         .select("id, txn_date, reference, amount, match_status")
         .eq("organisation_id", orgId).order("txn_date", { ascending: false });
       const tbody = document.getElementById("rows");
@@ -152,7 +152,7 @@
     }
 
     async function confirmMatch(id) {
-      await supabase.from("bank_transactions").update({ match_status: "matched" }).eq("id", id);
+      await supabaseClient.from("bank_transactions").update({ match_status: "matched" }).eq("id", id);
       loadRows();
     }
 

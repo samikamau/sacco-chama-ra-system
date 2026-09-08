@@ -47,7 +47,7 @@
     let orgId;
 
     async function loadMembers() {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from("members")
         .select("member_number, full_name, phone, monthly_contribution, status")
         .eq("organisation_id", orgId)
@@ -80,7 +80,7 @@
         showError(errorEl, "Member number and full name are required.");
         return;
       }
-      const { error } = await supabase.from("members").insert(payload);
+      const { error } = await supabaseClient.from("members").insert(payload);
       if (error) { showError(errorEl, error.message); return; }
       document.getElementById("f-number").value = "";
       document.getElementById("f-name").value = "";

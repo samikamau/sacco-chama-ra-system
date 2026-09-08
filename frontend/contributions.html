@@ -61,7 +61,7 @@
     let orgId, currentRuleId;
 
     async function loadRule() {
-      const { data } = await supabase.from("contribution_rules")
+      const { data } = await supabaseClient.from("contribution_rules")
         .select("id, name, amount, due_day").eq("organisation_id", orgId).eq("active", true).limit(1);
       const el = document.getElementById("rule-view");
       if (data && data.length) {
@@ -80,7 +80,7 @@
         due_day: document.getElementById("r-due-day").value,
       };
       if (!payload.amount) { showError(errorEl, "Amount is required."); return; }
-      const { error } = await supabase.from("contribution_rules").insert(payload);
+      const { error } = await supabaseClient.from("contribution_rules").insert(payload);
       if (error) { showError(errorEl, error.message); return; }
       loadRule();
     }
@@ -94,7 +94,7 @@
       const due = document.getElementById("p-due").value;
       if (!start || !end || !due) { showError(errorEl, "All three dates are required."); return; }
 
-      const { error } = await supabase.rpc("fn_generate_contribution_period", {
+      const { error } = await supabaseClient.rpc("fn_generate_contribution_period", {
         p_organisation_id: orgId,
         p_rule_id: currentRuleId,
         p_period_start: start,
@@ -106,14 +106,14 @@
     }
 
     async function loadStatus() {
-      const { data: periods } = await supabase
+      const { data: periods } = await supabaseClient
         .from("contribution_periods").select("id, period_start")
         .eq("organisation_id", orgId).order("period_start", { ascending: false }).limit(1);
 
       const tbody = document.getElementById("rows");
       if (!periods || !periods.length) { tbody.innerHTML = `<tr><td colspan="4" class="empty">No periods generated yet.</td></tr>`; return; }
 
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from("contributions")
         .select("amount_expected, amount_paid, status, members(full_name)")
         .eq("organisation_id", orgId).eq("period_id", periods[0].id);

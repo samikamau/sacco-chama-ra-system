@@ -7,7 +7,7 @@
 // =========================================================================
 
 async function requireSession() {
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await supabaseClient.auth.getSession();
   if (!session) {
     window.location.href = "login.html";
     return null;
@@ -16,7 +16,7 @@ async function requireSession() {
 }
 
 async function currentOrg() {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from("organisation_users")
     .select("organisation_id, role, organisations(name, org_type, currency)")
     .eq("status", "active")
@@ -31,7 +31,7 @@ async function currentOrg() {
 }
 
 async function signOut() {
-  await supabase.auth.signOut();
+  await supabaseClient.auth.signOut();
   window.location.href = "login.html";
 }
 

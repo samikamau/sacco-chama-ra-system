@@ -64,14 +64,14 @@
     let orgId, contributionIncomeAccountId;
 
     async function loadMembers() {
-      const { data } = await supabase.from("members")
+      const { data } = await supabaseClient.from("members")
         .select("id, member_number, full_name").eq("organisation_id", orgId).eq("status", "active").order("full_name");
       const sel = document.getElementById("f-member");
       sel.innerHTML = (data || []).map(m => `<option value="${m.id}">${m.member_number} — ${m.full_name}</option>`).join("");
     }
 
     async function loadAccounts() {
-      const { data } = await supabase.from("chart_of_accounts")
+      const { data } = await supabaseClient.from("chart_of_accounts")
         .select("id, code, name, account_type").eq("organisation_id", orgId).eq("is_active", true);
       const cashAccounts = (data || []).filter(a => a.account_type === "asset");
       document.getElementById("f-cash-account").innerHTML =
@@ -81,7 +81,7 @@
     }
 
     async function loadPayments() {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from("payments")
         .select("transaction_date, channel, amount, status, members(full_name)")
         .eq("organisation_id", orgId).order("created_at", { ascending: false }).limit(20);
@@ -113,7 +113,7 @@
         return;
       }
 
-      const { error } = await supabase.rpc("fn_record_and_post_payment", {
+      const { error } = await supabaseClient.rpc("fn_record_and_post_payment", {
         p_organisation_id: orgId,
         p_member_id: document.getElementById("f-member").value,
         p_amount: document.getElementById("f-amount").value,

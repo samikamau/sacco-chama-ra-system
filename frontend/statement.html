@@ -46,7 +46,7 @@
     let orgId;
 
     async function loadMembers() {
-      const { data } = await supabase.from("members")
+      const { data } = await supabaseClient.from("members")
         .select("id, member_number, full_name").eq("organisation_id", orgId).order("full_name");
       document.getElementById("f-member").innerHTML =
         (data || []).map(m => `<option value="${m.id}">${m.member_number} — ${m.full_name}</option>`).join("");
@@ -56,7 +56,7 @@
     async function loadStatement() {
       const memberId = document.getElementById("f-member").value;
       if (!memberId) return;
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from("v_member_ledger")
         .select("entry_date, description, account_name, debit, credit")
         .eq("member_id", memberId)

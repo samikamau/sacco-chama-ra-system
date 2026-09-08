@@ -47,12 +47,12 @@
       document.getElementById("org-name").textContent = org.organisations.name;
       const orgId = org.organisation_id;
 
-      const { count: memberCount } = await supabase
+      const { count: memberCount } = await supabaseClient
         .from("members").select("*", { count: "exact", head: true })
         .eq("organisation_id", orgId).eq("status", "active");
       document.getElementById("m-members").textContent = memberCount ?? 0;
 
-      const { data: contributions } = await supabase
+      const { data: contributions } = await supabaseClient
         .from("contributions").select("amount_expected, amount_paid")
         .eq("organisation_id", orgId);
 
@@ -62,10 +62,10 @@
       document.getElementById("m-received").textContent = money(received);
       document.getElementById("m-rate").textContent = expected > 0 ? Math.round((received / expected) * 100) + "%" : "—";
 
-      const { count: unmatchedBank } = await supabase
+      const { count: unmatchedBank } = await supabaseClient
         .from("bank_transactions").select("*", { count: "exact", head: true })
         .eq("organisation_id", orgId).in("match_status", ["unmatched", "suggested"]);
-      const { count: unmatchedMpesa } = await supabase
+      const { count: unmatchedMpesa } = await supabaseClient
         .from("mpesa_transactions").select("*", { count: "exact", head: true })
         .eq("organisation_id", orgId).in("match_status", ["unmatched", "suggested"]);
       document.getElementById("m-unmatched").textContent = (unmatchedBank ?? 0) + (unmatchedMpesa ?? 0);
