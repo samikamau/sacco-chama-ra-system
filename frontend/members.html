@@ -2,34 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Members — Financial Operating System</title>
+<title>Member Profile — Financial Operating System</title>
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-  .drawer-backdrop {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.35);
-    display: none; z-index: 40;
-  }
-  .drawer-backdrop.open { display: block; }
-  .drawer {
-    position: fixed; top: 0; right: 0; height: 100vh; width: 440px; max-width: 92vw;
-    background: var(--color-surface); z-index: 50; transform: translateX(100%);
-    transition: transform 0.2s ease; overflow-y: auto; padding: var(--space-4);
-    box-shadow: -2px 0 12px rgba(0,0,0,0.12);
-  }
-  .drawer.open { transform: translateX(0); }
-  .drawer h2 { border-bottom: 1px solid var(--color-line); padding-bottom: var(--space-3); }
-  .drawer .section-label {
-    font-family: var(--font-display); font-size: 14px; color: var(--color-primary);
-    margin: var(--space-4) 0 var(--space-2) 0;
-  }
-  .drawer-actions { display: flex; gap: var(--space-2); margin-top: var(--space-4); flex-wrap: wrap; }
-  .toast {
-    position: fixed; bottom: 20px; right: 20px; background: var(--color-success);
-    color: #fff; padding: var(--space-3) var(--space-4); border-radius: var(--radius);
-    z-index: 60; display: none;
-  }
-  .toast.show { display: block; }
+  .profile-head { display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px; }
+  .kv { display:grid; grid-template-columns: 150px 1fr; gap:6px 12px; font-size:14px; }
+  .kv .k { color: var(--color-muted); }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--space-3); }
+  .kpi { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius); padding: var(--space-3); }
+  .kpi .value { font-family: var(--font-mono); font-size: 20px; font-variant-numeric: tabular-nums; }
+  .kpi .label { color: var(--color-muted); font-size: 12px; margin-top: 2px; }
+  .back { color: var(--color-muted); text-decoration:none; font-size:13px; }
 </style>
 </head>
 <body>
@@ -45,216 +29,149 @@
       <a href="#" onclick="signOut()">Sign out</a>
     </nav>
     <main class="main">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <h1>Members</h1>
-        <button class="btn accent" onclick="openDrawer()">+ Add Member</button>
-      </div>
-
-      <div class="card">
-        <table>
-          <thead><tr><th>No.</th><th>Name</th><th>Phone</th><th class="num">Monthly</th><th>KYC</th><th>Status</th></tr></thead>
-          <tbody id="rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
-        </table>
-      </div>
+      <a class="back" href="members.html">&larr; Back to members</a>
+      <div id="content"><p class="empty" style="margin-top:16px">Loading…</p></div>
     </main>
   </div>
-
-  <div class="drawer-backdrop" id="backdrop" onclick="closeDrawer()"></div>
-  <div class="drawer" id="drawer">
-    <h2>Add member</h2>
-
-    <div class="section-label">Member details</div>
-    <div class="field"><label>Member number (auto-generated, editable)</label><input id="f-number"></div>
-    <div class="field"><label>Full name *</label><input id="f-name"></div>
-    <div class="field"><label>Date of birth</label><input id="f-dob" type="date"></div>
-    <div class="field"><label>Gender</label>
-      <select id="f-gender"><option value="">—</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select>
-    </div>
-    <div class="field"><label>Phone</label><input id="f-phone" placeholder="2547XXXXXXXX"></div>
-    <div class="field"><label>Email</label><input id="f-email" type="email"></div>
-    <div class="field"><label>Physical address</label><input id="f-address"></div>
-
-    <div class="section-label">Membership</div>
-    <div class="field"><label>Date joined</label><input id="f-joined" type="date"></div>
-    <div class="field"><label>Membership category (for category-based contributions)</label><input id="f-category" placeholder="e.g. A"></div>
-    <div class="field"><label>Monthly contribution (optional per-member override)</label><input id="f-amount" type="number"></div>
-    <div class="field"><label>Occupation</label><input id="f-occupation"></div>
-    <div class="field"><label>Employer / business</label><input id="f-employer"></div>
-
-    <div class="section-label">Next of kin</div>
-    <div class="field"><label>Name</label><input id="f-nok-name"></div>
-    <div class="field"><label>Relationship</label><input id="f-nok-rel"></div>
-    <div class="field"><label>Phone</label><input id="f-nok-phone"></div>
-
-    <div class="section-label">Payment information</div>
-    <div class="field"><label>Preferred method</label>
-      <select id="f-pay-method"><option value="">—</option><option value="mpesa">M-Pesa</option><option value="bank">Bank</option><option value="cash">Cash</option></select>
-    </div>
-    <div class="field"><label>M-Pesa number</label><input id="f-mpesa"></div>
-    <div class="field"><label>Bank name</label><input id="f-bank"></div>
-    <div class="field"><label>Bank account number</label><input id="f-bank-acc"></div>
-
-    <div class="section-label">KYC</div>
-    <div class="field"><label>ID type</label>
-      <select id="f-id-type"><option value="national_id">National ID</option><option value="passport">Passport</option><option value="alien_id">Alien ID</option><option value="other">Other</option></select>
-    </div>
-    <div class="field"><label>ID number</label><input id="f-id-number"></div>
-    <div class="field"><label>KYC status</label>
-      <select id="f-kyc-status"><option value="pending">Pending</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select>
-    </div>
-    <div class="field"><label>KYC notes</label><input id="f-kyc-notes"></div>
-
-    <p id="drawer-error" class="error" style="display:none"></p>
-    <div class="drawer-actions">
-      <button class="btn accent" onclick="saveMember(false)">Save</button>
-      <button class="btn" onclick="saveMember(true)">Save & add another</button>
-      <button class="btn" style="background:#888" onclick="closeDrawer()">Cancel</button>
-    </div>
-  </div>
-
-  <div class="toast" id="toast"></div>
 
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
   <script>
     let orgId;
 
-    function showToast(msg) {
-      const t = document.getElementById("toast");
-      t.textContent = msg; t.classList.add("show");
-      setTimeout(() => t.classList.remove("show"), 2500);
+    function getMemberId() {
+      return new URLSearchParams(window.location.search).get("id");
     }
 
-    async function nextMemberNumber() {
-      const { data } = await supabaseClient.from("members")
-        .select("member_number").eq("organisation_id", orgId);
-      // Find highest numeric suffix on existing SC/member numbers, else start at 1.
-      let max = 0;
-      (data || []).forEach(m => {
-        const n = parseInt((m.member_number || "").replace(/\D/g, ""), 10);
-        if (!isNaN(n) && n > max) max = n;
-      });
-      return "SC" + String(max + 1).padStart(3, "0");
-    }
+    async function load() {
+      const memberId = getMemberId();
+      const content = document.getElementById("content");
+      if (!memberId) { content.innerHTML = `<p class="error">No member selected.</p>`; return; }
 
-    async function openDrawer() {
-      document.getElementById("drawer-error").style.display = "none";
-      document.getElementById("f-number").value = await nextMemberNumber();
-      document.getElementById("f-joined").value = new Date().toISOString().slice(0,10);
-      document.getElementById("backdrop").classList.add("open");
-      document.getElementById("drawer").classList.add("open");
-    }
-    function closeDrawer() {
-      document.getElementById("backdrop").classList.remove("open");
-      document.getElementById("drawer").classList.remove("open");
-    }
-
-    function val(id) { return document.getElementById(id).value.trim(); }
-
-    async function saveMember(addAnother) {
-      const errorEl = document.getElementById("drawer-error");
-      errorEl.style.display = "none";
-
-      const name = val("f-name");
-      if (!val("f-number") || !name) { showError(errorEl, "Member number and full name are required."); return; }
-
-      const idNumber = val("f-id-number");
-      const phone = val("f-phone");
-
-      // Duplicate checks (Section 6)
-      if (idNumber) {
-        const { data: dupId } = await supabaseClient.from("member_kyc")
-          .select("member_id").eq("organisation_id", orgId).eq("id_number", idNumber).limit(1);
-        if (dupId && dupId.length) { showError(errorEl, "A member with this ID number already exists."); return; }
-      }
-      if (phone) {
-        const { data: dupPhone } = await supabaseClient.from("members")
-          .select("id").eq("organisation_id", orgId).eq("phone", phone).limit(1);
-        if (dupPhone && dupPhone.length) { showError(errorEl, "A member with this phone number already exists."); return; }
-      }
-
-      const memberPayload = {
-        organisation_id: orgId,
-        member_number: val("f-number"),
-        full_name: name,
-        date_of_birth: val("f-dob") || null,
-        gender: val("f-gender") || null,
-        phone: phone || null,
-        email: val("f-email") || null,
-        physical_address: val("f-address") || null,
-        date_joined: val("f-joined") || null,
-        membership_category: val("f-category") || null,
-        monthly_contribution: val("f-amount") || null,
-        occupation: val("f-occupation") || null,
-        employer: val("f-employer") || null,
-        preferred_payment_method: val("f-pay-method") || null,
-        mpesa_number: val("f-mpesa") || null,
-        bank_name: val("f-bank") || null,
-        bank_account_number: val("f-bank-acc") || null,
-      };
-
-      const { data: inserted, error } = await supabaseClient.from("members").insert(memberPayload).select("id").single();
-      if (error) { showError(errorEl, error.message); return; }
-
-      // KYC row
-      await supabaseClient.from("member_kyc").insert({
-        member_id: inserted.id,
-        organisation_id: orgId,
-        id_type: val("f-id-type") || null,
-        id_number: idNumber || null,
-        kyc_status: val("f-kyc-status") || "pending",
-        verification_date: val("f-kyc-status") === "verified" ? new Date().toISOString().slice(0,10) : null,
-        kyc_notes: val("f-kyc-notes") || null,
-      });
-
-      // Next of kin (only if a name was given)
-      if (val("f-nok-name")) {
-        await supabaseClient.from("next_of_kin").insert({
-          member_id: inserted.id,
-          organisation_id: orgId,
-          full_name: val("f-nok-name"),
-          relationship: val("f-nok-rel") || null,
-          phone: val("f-nok-phone") || null,
-        });
-      }
-
-      showToast("Member saved.");
-      loadMembers();
-
-      if (addAnother) {
-        // Clear the form but keep the drawer open, fresh member number.
-        ["f-name","f-dob","f-phone","f-email","f-address","f-category","f-amount",
-         "f-occupation","f-employer","f-mpesa","f-bank","f-bank-acc","f-id-number","f-kyc-notes",
-         "f-nok-name","f-nok-rel","f-nok-phone"].forEach(id => document.getElementById(id).value = "");
-        document.getElementById("f-number").value = await nextMemberNumber();
-      } else {
-        closeDrawer();
-      }
-    }
-
-    async function loadMembers() {
-      const { data, error } = await supabaseClient
+      const { data: m, error } = await supabaseClient
         .from("members")
-        .select("member_number, full_name, phone, monthly_contribution, status, member_kyc(kyc_status)")
-        .eq("organisation_id", orgId)
-        .order("member_number");
+        .select("*, member_kyc(*), next_of_kin(full_name, relationship, phone)")
+        .eq("id", memberId).eq("organisation_id", orgId).single();
 
-      const tbody = document.getElementById("rows");
-      if (error) { tbody.innerHTML = `<tr><td colspan="6" class="error">${error.message}</td></tr>`; return; }
-      if (!data.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty">No members yet.</td></tr>`; return; }
-      tbody.innerHTML = data.map(m => {
-        const kyc = m.member_kyc && m.member_kyc.length ? m.member_kyc[0].kyc_status : "pending";
-        const kycClass = kyc === "verified" ? "paid" : kyc === "rejected" ? "unpaid" : "partial";
-        return `
-        <tr>
-          <td>${m.member_number}</td>
-          <td>${m.full_name}</td>
-          <td>${m.phone ?? "—"}</td>
-          <td class="num">${money(m.monthly_contribution)}</td>
-          <td><span class="status ${kycClass}">${kyc}</span></td>
-          <td><span class="status ${m.status === 'active' ? 'paid' : 'unpaid'}">${m.status}</span></td>
-        </tr>`;
-      }).join("");
+      if (error || !m) { content.innerHTML = `<p class="error">${error ? error.message : "Member not found."}</p>`; return; }
+
+      const kyc = m.member_kyc && m.member_kyc.length ? m.member_kyc[0] : {};
+
+      // Contributions (expected vs paid across all periods)
+      const { data: contribs } = await supabaseClient
+        .from("contributions")
+        .select("amount_expected, amount_paid, status, contribution_periods(period_start, period_end, contribution_rules(contribution_types(name, category)))")
+        .eq("member_id", memberId);
+
+      const expected = (contribs || []).reduce((s,c) => s + Number(c.amount_expected), 0);
+      const paidC = (contribs || []).reduce((s,c) => s + Number(c.amount_paid), 0);
+
+      // Fund balances from posted allocations
+      const { data: allocs } = await supabaseClient
+        .from("payment_allocations")
+        .select("amount, contribution_types(category), payments!inner(member_id, status)")
+        .eq("payments.member_id", memberId)
+        .eq("payments.status", "posted");
+
+      const fundTotal = cat => (allocs || []).filter(a => a.contribution_types.category === cat).reduce((s,a) => s + Number(a.amount), 0);
+      const shares = fundTotal("share_capital");
+      const deposits = fundTotal("share_deposit");
+      const welfare = fundTotal("welfare");
+
+      // Recent payments
+      const { data: payments } = await supabaseClient
+        .from("payments")
+        .select("transaction_date, channel, reference, amount, status")
+        .eq("member_id", memberId).order("transaction_date", { ascending: false }).limit(15);
+
+      const kycClass = kyc.kyc_status === "verified" ? "paid" : kyc.kyc_status === "rejected" ? "unpaid" : "partial";
+
+      content.innerHTML = `
+        <div class="card">
+          <div class="profile-head">
+            <div>
+              <h1 style="margin-bottom:4px">${m.full_name}</h1>
+              <div style="color:var(--color-muted)">${m.member_number}</div>
+            </div>
+            <div style="text-align:right">
+              <span class="status ${m.status === 'active' ? 'paid' : 'unpaid'}">${m.status}</span>
+              <span class="status ${kycClass}" style="margin-left:6px">KYC: ${kyc.kyc_status || 'pending'}</span>
+            </div>
+          </div>
+          <div class="kv" style="margin-top:16px">
+            <div class="k">Phone</div><div>${m.phone ?? "—"}</div>
+            <div class="k">Email</div><div>${m.email ?? "—"}</div>
+            <div class="k">Date joined</div><div>${m.date_joined ?? "—"}</div>
+            <div class="k">Category</div><div>${m.membership_category ?? "—"}</div>
+            <div class="k">Occupation</div><div>${m.occupation ?? "—"}</div>
+            <div class="k">ID (${kyc.id_type ?? "—"})</div><div>${kyc.id_number ?? "—"}</div>
+            <div class="k">KYC verified on</div><div>${kyc.verification_date ?? "—"}</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Fund balances (posted)</h2>
+          <div class="kpi-grid">
+            <div class="kpi"><div class="value">${money(shares)}</div><div class="label">Shares</div></div>
+            <div class="kpi"><div class="value">${money(deposits)}</div><div class="label">Deposits</div></div>
+            <div class="kpi"><div class="value">${money(welfare)}</div><div class="label">Welfare</div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Contribution status (all periods)</h2>
+          <div class="kpi-grid" style="margin-bottom:16px">
+            <div class="kpi"><div class="value">${money(expected)}</div><div class="label">Expected</div></div>
+            <div class="kpi"><div class="value">${money(paidC)}</div><div class="label">Paid</div></div>
+            <div class="kpi"><div class="value">${money(expected - paidC)}</div><div class="label">Outstanding</div></div>
+          </div>
+          <table>
+            <thead><tr><th>Fund</th><th>Period</th><th class="num">Expected</th><th class="num">Paid</th><th>Status</th></tr></thead>
+            <tbody>
+              ${(contribs && contribs.length) ? contribs.map(c => {
+                const rule = c.contribution_periods && c.contribution_periods.contribution_rules;
+                const fund = rule && rule.contribution_types ? rule.contribution_types.name : "Generic";
+                return `<tr>
+                  <td>${fund}</td>
+                  <td>${c.contribution_periods.period_start} to ${c.contribution_periods.period_end}</td>
+                  <td class="num">${money(c.amount_expected)}</td>
+                  <td class="num">${money(c.amount_paid)}</td>
+                  <td><span class="status ${c.status === 'paid' ? 'paid' : c.status === 'partial' ? 'partial' : 'unpaid'}">${c.status}</span></td>
+                </tr>`;
+              }).join("") : `<tr><td colspan="5" class="empty">No contribution periods yet.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h2>Recent payments</h2>
+          <table>
+            <thead><tr><th>Date</th><th>Channel</th><th>Reference</th><th class="num">Amount</th><th>Status</th></tr></thead>
+            <tbody>
+              ${(payments && payments.length) ? payments.map(p => `
+                <tr>
+                  <td>${p.transaction_date}</td>
+                  <td>${p.channel}</td>
+                  <td>${p.reference ?? "—"}</td>
+                  <td class="num">${money(p.amount)}</td>
+                  <td><span class="status ${p.status === 'posted' ? 'paid' : 'partial'}">${p.status}</span></td>
+                </tr>`).join("") : `<tr><td colspan="5" class="empty">No payments recorded yet.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h2>Next of kin</h2>
+          <table>
+            <thead><tr><th>Name</th><th>Relationship</th><th>Phone</th></tr></thead>
+            <tbody>
+              ${(m.next_of_kin && m.next_of_kin.length) ? m.next_of_kin.map(n => `
+                <tr><td>${n.full_name}</td><td>${n.relationship ?? "—"}</td><td>${n.phone ?? "—"}</td></tr>`).join("")
+                : `<tr><td colspan="3" class="empty">None recorded.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      `;
     }
 
     (async () => {
@@ -263,7 +180,7 @@
       const org = await currentOrg();
       if (!org) return;
       orgId = org.organisation_id;
-      loadMembers();
+      load();
     })();
   </script>
 </body>
