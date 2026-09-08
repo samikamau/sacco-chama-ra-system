@@ -5,6 +5,8 @@
 <title>Member Statements — Financial Operating System</title>
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
   <div class="app-shell">
@@ -26,6 +28,7 @@
           <label>Member</label>
           <select id="f-member" onchange="loadStatement()"></select>
         </div>
+        <button class="btn accent" onclick="downloadPdf()">Download PDF</button>
       </div>
 
       <div id="fund-cards"></div>
@@ -47,7 +50,8 @@
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
   <script>
-    let orgId;
+    let orgId, orgName;
+    let currentFunds = [], currentLegacyPayments = [], currentMemberLabel = "";
 
     async function loadMembers() {
       const { data } = await supabaseClient.from("members")
@@ -159,6 +163,10 @@
           })),
       }));
 
+      currentFunds = funds;
+      currentLegacyPayments = legacyPayments;
+      currentMemberLabel = document.getElementById("f-member").selectedOptions[0]?.textContent || "";
+
       document.getElementById("fund-cards").innerHTML =
         funds.length ? funds.map(fundCardHTML).join("") : `<div class="card"><p class="empty">No fund types set up for this organisation yet.</p></div>`;
 
@@ -192,12 +200,101 @@
       loadStatement();
     }
 
+    function downloadPdf() {
+      if (!currentFunds.length && !currentLegacyPayments.length) {
+        alert("Nothing to export yet — select a member with some activity first.");
+        return;
+      }
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      const today = new Date().toLocaleDateString("en-KE", { year: "numeric", month: "long", day: "numeric" });
+      let firstPage = true;
+
+      function newPage() {
+        if (!firstPage) doc.addPage();
+        firstPage = false;
+        doc.setFontSize(16);
+        doc.text(orgName || "Member Statement", 14, 18);
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Member: ${currentMemberLabel}`, 14, 25);
+        doc.text(`Generated: ${today}`, 14, 30);
+        doc.setTextColor(0);
+        return 40;
+      }
+
+      currentFunds.forEach(fund => {
+        let y = newPage();
+        doc.setFontSize(13);
+        doc.text(fund.name, 14, y);
+        y += 8;
+
+        const expected = fund.contributions.reduce((s, c) => s + Number(c.amount_expected), 0);
+        const paid = fund.contributions.reduce((s, c) => s + Number(c.amount_paid), 0);
+        const received = fund.transactions.reduce((s, t) => s + Number(t.amount), 0);
+
+        doc.setFontSize(10);
+        if (fund.contributions.length) {
+          doc.text(`Expected: KES ${money(expected)}    Paid: KES ${money(paid)}    Outstanding: KES ${money(expected - paid)}`, 14, y);
+          y += 6;
+        }
+        doc.text(`Total received: KES ${money(received)}`, 14, y);
+        y += 8;
+
+        if (fund.contributions.length) {
+          doc.autoTable({
+            startY: y,
+            head: [["Period", "Due", "Expected", "Paid", "Status"]],
+            body: fund.contributions.map(c => [
+              `${c.period_start} to ${c.period_end}`, c.due_date,
+              money(c.amount_expected), money(c.amount_paid), c.status
+            ]),
+            styles: { fontSize: 9 },
+            headStyles: { fillColor: [27, 58, 52] },
+          });
+          y = doc.lastAutoTable.finalY + 10;
+        }
+
+        doc.setFontSize(11);
+        doc.text("Transactions", 14, y);
+        y += 4;
+        doc.autoTable({
+          startY: y,
+          head: [["Date", "Channel", "Reference", "Amount"]],
+          body: fund.transactions.length
+            ? fund.transactions.map(t => [t.transaction_date, t.channel, t.reference ?? "—", money(t.amount)])
+            : [["—", "—", "No payments into this fund yet", "—"]],
+          styles: { fontSize: 9 },
+          headStyles: { fillColor: [27, 58, 52] },
+        });
+      });
+
+      if (currentLegacyPayments.length) {
+        let y = newPage();
+        doc.setFontSize(13);
+        doc.text("Other payments (not linked to a fund)", 14, y);
+        y += 8;
+        doc.autoTable({
+          startY: y,
+          head: [["Date", "Channel", "Reference", "Amount"]],
+          body: currentLegacyPayments.map(p => [p.transaction_date, p.channel, p.reference ?? "—", money(p.amount)]),
+          styles: { fontSize: 9 },
+          headStyles: { fillColor: [160, 90, 40] },
+        });
+      }
+
+      const safeName = currentMemberLabel.replace(/[^\w\- ]/g, "").trim().replace(/\s+/g, "_");
+      doc.save(`statement-${safeName || "member"}.pdf`);
+    }
+
     (async () => {
       const session = await requireSession();
       if (!session) return;
       const org = await currentOrg();
       if (!org) return;
       orgId = org.organisation_id;
+      orgName = org.organisations.name;
       loadMembers();
     })();
   </script>
