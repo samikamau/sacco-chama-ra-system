@@ -32,11 +32,12 @@
 
       <div class="card" id="legacy-card" style="display:none">
         <h2>Other payments (not linked to a fund)</h2>
-        <p style="color:var(--color-muted);font-size:13px">These were recorded before fund types existed, so they were never split by account.</p>
+        <p style="color:var(--color-muted);font-size:13px">These were recorded before fund types existed, so they were never split by account. Pick a fund and reallocate them.</p>
         <table>
-          <thead><tr><th>Date</th><th>Channel</th><th>Reference</th><th class="num">Amount</th></tr></thead>
+          <thead><tr><th>Date</th><th>Channel</th><th>Reference</th><th class="num">Amount</th><th>Reallocate to</th><th></th></tr></thead>
           <tbody id="legacy-rows"></tbody>
         </table>
+        <p id="legacy-error" class="error" style="display:none"></p>
       </div>
 
       <p style="color:var(--color-muted);font-size:13px">Loans will appear here as their own account once Phase 2 is built — not shown yet.</p>
@@ -164,16 +165,31 @@
       const legacyCard = document.getElementById("legacy-card");
       if (legacyPayments.length) {
         legacyCard.style.display = "block";
+        const fundOptions = (fundTypes || []).map(f => `<option value="${f.id}">${f.name}</option>`).join("");
         document.getElementById("legacy-rows").innerHTML = legacyPayments.map(p => `
           <tr>
             <td>${p.transaction_date}</td>
             <td>${p.channel}</td>
             <td>${p.reference ?? "—"}</td>
             <td class="num">${money(p.amount)}</td>
+            <td><select id="realloc-${p.id}">${fundOptions}</select></td>
+            <td><button class="btn" onclick="reallocate('${p.id}')">Reallocate</button></td>
           </tr>`).join("");
       } else {
         legacyCard.style.display = "none";
       }
+    }
+
+    async function reallocate(paymentId) {
+      const errorEl = document.getElementById("legacy-error");
+      errorEl.style.display = "none";
+      const fundId = document.getElementById(`realloc-${paymentId}`).value;
+      const { error } = await supabaseClient.rpc("fn_reallocate_legacy_payment", {
+        p_payment_id: paymentId,
+        p_contribution_type_id: fundId,
+      });
+      if (error) { showError(errorEl, error.message); return; }
+      loadStatement();
     }
 
     (async () => {
