@@ -112,17 +112,24 @@
         .eq("organisation_id", orgId);
 
       for (const t of (txns || [])) {
-        let best = { score: 0, paymentId: null };
+        let best = { score: 0, paymentId: null, exact: false };
         for (const p of (payments || [])) {
           let score = 0;
-          if (t.reference && p.reference && t.reference.trim() === p.reference.trim()) score = 1.0;
+          let exact = false;
+          if (t.reference && p.reference && t.reference.trim() === p.reference.trim()) { score = 1.0; exact = true; }
           else if (Number(t.amount) === Number(p.amount) &&
                    Math.abs(new Date(t.txn_date) - new Date(p.transaction_date)) <= 3 * 86400000) score = 0.65;
-          if (score > best.score) best = { score, paymentId: p.id };
+          if (score > best.score) best = { score, paymentId: p.id, exact };
         }
 
+        // Safety rule (not just a threshold): ONLY an exact reference match
+        // may auto-confirm as "matched". Amount+date proximity alone is
+        // ambiguous by nature — two members could pay the same amount on
+        // the same day — so it can only ever land as "suggested", requiring
+        // a human to click Confirm. This is enforced here regardless of
+        // organisation_settings values, per Section 12 of the architecture.
         let status = "unmatched";
-        if (best.score >= thresholds.match_auto_threshold) status = "matched";
+        if (best.exact) status = "matched";
         else if (best.score >= thresholds.match_suggest_threshold) status = "suggested";
 
         if (status !== "unmatched") {
