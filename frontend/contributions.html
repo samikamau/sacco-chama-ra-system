@@ -22,22 +22,64 @@
       <h1>Contributions</h1>
 
       <div class="card">
-        <h2>Contribution rule</h2>
-        <div id="rule-view" class="empty">No rule set up yet.</div>
-        <details style="margin-top:16px">
-          <summary style="cursor:pointer;color:var(--color-muted)">Create a rule</summary>
+        <h2>Fund types</h2>
+        <table style="margin-bottom:16px">
+          <thead><tr><th>Name</th><th>Category</th><th>Posts to</th></tr></thead>
+          <tbody id="fund-rows"><tr><td colspan="3" class="empty">No fund types yet.</td></tr></tbody>
+        </table>
+        <details>
+          <summary style="cursor:pointer;color:var(--color-muted)">Add a fund type</summary>
           <div style="margin-top:12px">
-            <div class="field"><label>Name</label><input id="r-name" value="Standard monthly contribution"></div>
+            <div class="field"><label>Name (e.g. Development Fund)</label><input id="ft-name"></div>
+            <div class="field">
+              <label>Category</label>
+              <select id="ft-category">
+                <option value="share_capital">Share Capital</option>
+                <option value="share_deposit">Share Deposits</option>
+                <option value="welfare">Welfare</option>
+                <option value="development">Development</option>
+                <option value="emergency">Emergency</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Which ledger account should this post to?</label>
+              <select id="ft-account"></select>
+            </div>
+            <button class="btn accent" onclick="createFundType()">Save fund type</button>
+            <p id="ft-error" class="error" style="display:none"></p>
+          </div>
+        </details>
+      </div>
+
+      <div class="card">
+        <h2>Contribution rules</h2>
+        <table style="margin-bottom:16px">
+          <thead><tr><th>Fund</th><th>Rule name</th><th class="num">Amount</th><th>Due day</th></tr></thead>
+          <tbody id="rule-rows"><tr><td colspan="4" class="empty">No rules yet.</td></tr></tbody>
+        </table>
+        <details>
+          <summary style="cursor:pointer;color:var(--color-muted)">Add a rule</summary>
+          <div style="margin-top:12px">
+            <div class="field">
+              <label>Fund</label>
+              <select id="r-fund"></select>
+            </div>
+            <div class="field"><label>Rule name</label><input id="r-name" value="Monthly contribution"></div>
             <div class="field"><label>Amount (KES, used when a member has no individual amount set)</label><input id="r-amount" type="number"></div>
             <div class="field"><label>Due day of month</label><input id="r-due-day" type="number" value="5"></div>
             <button class="btn accent" onclick="createRule()">Save rule</button>
+            <p id="rule-error" class="error" style="display:none"></p>
           </div>
         </details>
-        <p id="rule-error" class="error" style="display:none"></p>
       </div>
 
       <div class="card">
         <h2>Generate a period</h2>
+        <div class="field">
+          <label>Which rule</label>
+          <select id="p-rule"></select>
+        </div>
         <div class="field"><label>Period start</label><input id="p-start" type="date"></div>
         <div class="field"><label>Period end</label><input id="p-end" type="date"></div>
         <div class="field"><label>Due date</label><input id="p-due" type="date"></div>
@@ -46,7 +88,11 @@
       </div>
 
       <div class="card">
-        <h2>Status by member (most recent period)</h2>
+        <h2>Status by member (most recent period for selected rule)</h2>
+        <div class="field" style="max-width:320px">
+          <label>Rule</label>
+          <select id="s-rule" onchange="loadStatus()"></select>
+        </div>
         <table>
           <thead><tr><th>Member</th><th class="num">Expected</th><th class="num">Paid</th><th>Status</th></tr></thead>
           <tbody id="rows"><tr><td colspan="4" class="empty">No periods generated yet.</td></tr></tbody>
@@ -58,37 +104,90 @@
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
   <script>
-    let orgId, currentRuleId;
+    let orgId;
+    let fundTypes = [];
+    let rules = [];
 
-    async function loadRule() {
-      const { data } = await supabaseClient.from("contribution_rules")
-        .select("id, name, amount, due_day").eq("organisation_id", orgId).eq("active", true).limit(1);
-      const el = document.getElementById("rule-view");
-      if (data && data.length) {
-        currentRuleId = data[0].id;
-        el.innerHTML = `<strong>${data[0].name}</strong> — KES ${money(data[0].amount)}, due on day ${data[0].due_day} of the period.`;
-        el.classList.remove("empty");
-      }
+    async function loadAccounts() {
+      const { data } = await supabaseClient.from("chart_of_accounts")
+        .select("id, code, name").eq("organisation_id", orgId).eq("is_active", true).order("code");
+      document.getElementById("ft-account").innerHTML =
+        (data || []).map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join("");
+    }
+
+    async function loadFundTypes() {
+      const { data, error } = await supabaseClient.from("contribution_types")
+        .select("id, name, category, chart_of_accounts(code, name)")
+        .eq("organisation_id", orgId).eq("active", true).order("name");
+      fundTypes = data || [];
+      const tbody = document.getElementById("fund-rows");
+      if (error) { tbody.innerHTML = `<tr><td colspan="3" class="error">${error.message}</td></tr>`; return; }
+      if (!fundTypes.length) { tbody.innerHTML = `<tr><td colspan="3" class="empty">No fund types yet.</td></tr>`; return; }
+      tbody.innerHTML = fundTypes.map(f => `
+        <tr><td>${f.name}</td><td>${f.category}</td><td>${f.chart_of_accounts.code} — ${f.chart_of_accounts.name}</td></tr>`).join("");
+
+      document.getElementById("r-fund").innerHTML =
+        fundTypes.map(f => `<option value="${f.id}">${f.name}</option>`).join("");
+    }
+
+    async function createFundType() {
+      const errorEl = document.getElementById("ft-error");
+      const payload = {
+        organisation_id: orgId,
+        name: document.getElementById("ft-name").value.trim(),
+        category: document.getElementById("ft-category").value,
+        chart_account_id: document.getElementById("ft-account").value,
+      };
+      if (!payload.name) { showError(errorEl, "Name is required."); return; }
+      const { error } = await supabaseClient.from("contribution_types").insert(payload);
+      if (error) { showError(errorEl, error.message); return; }
+      document.getElementById("ft-name").value = "";
+      loadFundTypes();
+    }
+
+    async function loadRules() {
+      const { data, error } = await supabaseClient.from("contribution_rules")
+        .select("id, name, amount, due_day, contribution_types(name)")
+        .eq("organisation_id", orgId).eq("active", true).order("name");
+      rules = data || [];
+      const tbody = document.getElementById("rule-rows");
+      if (error) { tbody.innerHTML = `<tr><td colspan="4" class="error">${error.message}</td></tr>`; return; }
+      if (!rules.length) { tbody.innerHTML = `<tr><td colspan="4" class="empty">No rules yet.</td></tr>`; return; }
+      tbody.innerHTML = rules.map(r => `
+        <tr>
+          <td>${r.contribution_types ? r.contribution_types.name : "— (legacy/generic) —"}</td>
+          <td>${r.name}</td>
+          <td class="num">${money(r.amount)}</td>
+          <td>${r.due_day}</td>
+        </tr>`).join("");
+
+      const options = rules.map(r => `<option value="${r.id}">${r.contribution_types ? r.contribution_types.name : "Generic"} — ${r.name}</option>`).join("");
+      document.getElementById("p-rule").innerHTML = options;
+      document.getElementById("s-rule").innerHTML = options;
+      if (rules.length) loadStatus();
     }
 
     async function createRule() {
       const errorEl = document.getElementById("rule-error");
       const payload = {
         organisation_id: orgId,
+        contribution_type_id: document.getElementById("r-fund").value,
         name: document.getElementById("r-name").value.trim(),
         amount: document.getElementById("r-amount").value,
         due_day: document.getElementById("r-due-day").value,
       };
+      if (!payload.contribution_type_id) { showError(errorEl, "Add a fund type first."); return; }
       if (!payload.amount) { showError(errorEl, "Amount is required."); return; }
       const { error } = await supabaseClient.from("contribution_rules").insert(payload);
       if (error) { showError(errorEl, error.message); return; }
-      loadRule();
+      loadRules();
     }
 
     async function generatePeriod() {
       const errorEl = document.getElementById("period-error");
       errorEl.style.display = "none";
-      if (!currentRuleId) { showError(errorEl, "Create a contribution rule first."); return; }
+      const ruleId = document.getElementById("p-rule").value;
+      if (!ruleId) { showError(errorEl, "Create a rule first."); return; }
       const start = document.getElementById("p-start").value;
       const end = document.getElementById("p-end").value;
       const due = document.getElementById("p-due").value;
@@ -96,7 +195,7 @@
 
       const { error } = await supabaseClient.rpc("fn_generate_contribution_period", {
         p_organisation_id: orgId,
-        p_rule_id: currentRuleId,
+        p_rule_id: ruleId,
         p_period_start: start,
         p_period_end: end,
         p_due_date: due,
@@ -106,12 +205,15 @@
     }
 
     async function loadStatus() {
+      const ruleId = document.getElementById("s-rule").value;
+      const tbody = document.getElementById("rows");
+      if (!ruleId) { tbody.innerHTML = `<tr><td colspan="4" class="empty">No periods generated yet.</td></tr>`; return; }
+
       const { data: periods } = await supabaseClient
         .from("contribution_periods").select("id, period_start")
-        .eq("organisation_id", orgId).order("period_start", { ascending: false }).limit(1);
+        .eq("organisation_id", orgId).eq("rule_id", ruleId).order("period_start", { ascending: false }).limit(1);
 
-      const tbody = document.getElementById("rows");
-      if (!periods || !periods.length) { tbody.innerHTML = `<tr><td colspan="4" class="empty">No periods generated yet.</td></tr>`; return; }
+      if (!periods || !periods.length) { tbody.innerHTML = `<tr><td colspan="4" class="empty">No periods generated yet for this rule.</td></tr>`; return; }
 
       const { data, error } = await supabaseClient
         .from("contributions")
@@ -134,8 +236,9 @@
       const org = await currentOrg();
       if (!org) return;
       orgId = org.organisation_id;
-      loadRule();
-      loadStatus();
+      await loadAccounts();
+      await loadFundTypes();
+      await loadRules();
     })();
   </script>
 </body>

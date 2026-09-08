@@ -26,7 +26,6 @@
           <label>Member</label>
           <select id="f-member"></select>
         </div>
-        <div class="field"><label>Amount (KES)</label><input id="f-amount" type="number"></div>
         <div class="field">
           <label>Channel</label>
           <select id="f-channel">
@@ -43,6 +42,16 @@
         </div>
         <div class="field"><label>Reference (e.g. M-Pesa code)</label><input id="f-reference"></div>
         <div class="field"><label>Description</label><input id="f-description"></div>
+
+        <h3>Split this payment across funds</h3>
+        <table id="split-table" style="margin-bottom:12px">
+          <thead><tr><th>Fund</th><th class="num">Amount (KES)</th></tr></thead>
+          <tbody id="split-rows"></tbody>
+        </table>
+        <div style="text-align:right;font-family:var(--font-mono);margin-bottom:16px">
+          Total: <strong id="split-total">0.00</strong>
+        </div>
+
         <button class="btn accent" onclick="recordPayment()">Record and post payment</button>
         <p id="error" class="error" style="display:none"></p>
         <p id="success" style="display:none;color:var(--color-success)"></p>
@@ -61,7 +70,7 @@
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
   <script>
-    let orgId, contributionIncomeAccountId;
+    let orgId, fundTypes = [];
 
     async function loadMembers() {
       const { data } = await supabaseClient.from("members")
@@ -76,8 +85,30 @@
       const cashAccounts = (data || []).filter(a => a.account_type === "asset");
       document.getElementById("f-cash-account").innerHTML =
         cashAccounts.map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join("");
-      const income = (data || []).find(a => a.code === "4000");
-      contributionIncomeAccountId = income ? income.id : null;
+    }
+
+    async function loadFundTypes() {
+      const { data, error } = await supabaseClient.from("contribution_types")
+        .select("id, name").eq("organisation_id", orgId).eq("active", true).order("name");
+      fundTypes = data || [];
+      const tbody = document.getElementById("split-rows");
+      if (error || !fundTypes.length) {
+        tbody.innerHTML = `<tr><td colspan="2" class="empty">No fund types set up yet — go to Contributions and add at least one (e.g. Share Capital).</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = fundTypes.map(f => `
+        <tr>
+          <td>${f.name}</td>
+          <td class="num"><input type="number" min="0" class="split-amount" data-fund-id="${f.id}" value="0" oninput="updateTotal()" style="text-align:right"></td>
+        </tr>`).join("");
+      updateTotal();
+    }
+
+    function updateTotal() {
+      const inputs = document.querySelectorAll(".split-amount");
+      let total = 0;
+      inputs.forEach(i => total += Number(i.value || 0));
+      document.getElementById("split-total").textContent = money(total);
     }
 
     async function loadPayments() {
@@ -103,33 +134,40 @@
       const successEl = document.getElementById("success");
       errorEl.style.display = "none"; successEl.style.display = "none";
 
-      if (!contributionIncomeAccountId) {
-        showError(errorEl, "No 'Contribution Income' account (code 4000) found. Run the seed chart-of-accounts script first.");
-        return;
-      }
       const cashAccountId = document.getElementById("f-cash-account").value;
       if (!cashAccountId) {
         showError(errorEl, "No cash/bank/M-Pesa account found. Run the seed chart-of-accounts script first.");
         return;
       }
 
-      const { error } = await supabaseClient.rpc("fn_record_and_post_payment", {
+      const allocations = [];
+      document.querySelectorAll(".split-amount").forEach(i => {
+        const amt = Number(i.value || 0);
+        if (amt > 0) allocations.push({ contribution_type_id: i.dataset.fundId, amount: amt });
+      });
+
+      if (!allocations.length) {
+        showError(errorEl, "Enter an amount for at least one fund.");
+        return;
+      }
+
+      const { error } = await supabaseClient.rpc("fn_record_and_post_split_payment", {
         p_organisation_id: orgId,
         p_member_id: document.getElementById("f-member").value,
-        p_amount: document.getElementById("f-amount").value,
         p_channel: document.getElementById("f-channel").value,
         p_reference: document.getElementById("f-reference").value || null,
         p_description: document.getElementById("f-description").value || null,
         p_cash_account_id: cashAccountId,
-        p_contribution_income_account_id: contributionIncomeAccountId,
+        p_allocations: allocations,
       });
 
       if (error) { showError(errorEl, error.message); return; }
       successEl.textContent = "Payment recorded and posted.";
       successEl.style.display = "block";
-      document.getElementById("f-amount").value = "";
       document.getElementById("f-reference").value = "";
       document.getElementById("f-description").value = "";
+      document.querySelectorAll(".split-amount").forEach(i => i.value = 0);
+      updateTotal();
       loadPayments();
     }
 
@@ -139,7 +177,7 @@
       const org = await currentOrg();
       if (!org) return;
       orgId = org.organisation_id;
-      await Promise.all([loadMembers(), loadAccounts()]);
+      await Promise.all([loadMembers(), loadAccounts(), loadFundTypes()]);
       loadPayments();
     })();
   </script>
