@@ -28,27 +28,18 @@
         </div>
       </div>
 
-      <div class="metric">
-        <div class="item"><div class="value" id="s-expected">—</div><div class="label">Total expected (KES)</div></div>
-        <div class="item"><div class="value" id="s-paid">—</div><div class="label">Total paid (KES)</div></div>
-        <div class="item"><div class="value" id="s-outstanding">—</div><div class="label">Outstanding (KES)</div></div>
-      </div>
+      <div id="fund-cards"></div>
 
-      <div class="card">
-        <h2>Contribution periods</h2>
+      <div class="card" id="legacy-card" style="display:none">
+        <h2>Other payments (not linked to a fund)</h2>
+        <p style="color:var(--color-muted);font-size:13px">These were recorded before fund types existed, so they were never split by account.</p>
         <table>
-          <thead><tr><th>Fund</th><th>Period</th><th>Due</th><th class="num">Expected</th><th class="num">Paid</th><th>Status</th></tr></thead>
-          <tbody id="contrib-rows"><tr><td colspan="6" class="empty">Select a member above.</td></tr></tbody>
+          <thead><tr><th>Date</th><th>Channel</th><th>Reference</th><th class="num">Amount</th></tr></thead>
+          <tbody id="legacy-rows"></tbody>
         </table>
       </div>
 
-      <div class="card">
-        <h2>Payment history</h2>
-        <table>
-          <thead><tr><th>Date</th><th>Channel</th><th>Reference</th><th class="num">Amount</th><th>Status</th></tr></thead>
-          <tbody id="payment-rows"><tr><td colspan="5" class="empty">Select a member above.</td></tr></tbody>
-        </table>
-      </div>
+      <p style="color:var(--color-muted);font-size:13px">Loans will appear here as their own account once Phase 2 is built — not shown yet.</p>
     </main>
   </div>
 
@@ -65,63 +56,123 @@
       if (data && data.length) loadStatement();
     }
 
+    function fundCardHTML(fund) {
+      const expected = fund.contributions.reduce((s, c) => s + Number(c.amount_expected), 0);
+      const paid = fund.contributions.reduce((s, c) => s + Number(c.amount_paid), 0);
+      const received = fund.transactions.reduce((s, t) => s + Number(t.amount), 0);
+
+      const periodRows = fund.contributions.length
+        ? fund.contributions.map(c => `
+            <tr>
+              <td>${c.period_start} to ${c.period_end}</td>
+              <td>${c.due_date}</td>
+              <td class="num">${money(c.amount_expected)}</td>
+              <td class="num">${money(c.amount_paid)}</td>
+              <td><span class="status ${c.status === 'paid' ? 'paid' : c.status === 'partial' ? 'partial' : 'unpaid'}">${c.status}</span></td>
+            </tr>`).join("")
+        : `<tr><td colspan="5" class="empty">No recurring periods set up for this fund.</td></tr>`;
+
+      const txnRows = fund.transactions.length
+        ? fund.transactions.map(t => `
+            <tr>
+              <td>${t.transaction_date}</td>
+              <td>${t.channel}</td>
+              <td>${t.reference ?? "—"}</td>
+              <td class="num">${money(t.amount)}</td>
+            </tr>`).join("")
+        : `<tr><td colspan="4" class="empty">No payments into this fund yet.</td></tr>`;
+
+      return `
+        <div class="card">
+          <h2>${fund.name}</h2>
+          <div class="metric" style="margin-bottom:16px">
+            ${fund.contributions.length ? `
+              <div class="item"><div class="value">${money(expected)}</div><div class="label">Expected</div></div>
+              <div class="item"><div class="value">${money(paid)}</div><div class="label">Paid</div></div>
+              <div class="item"><div class="value">${money(expected - paid)}</div><div class="label">Outstanding</div></div>
+            ` : ``}
+            <div class="item"><div class="value">${money(received)}</div><div class="label">Total received</div></div>
+          </div>
+          ${fund.contributions.length ? `
+            <h3>Periods</h3>
+            <table style="margin-bottom:16px">
+              <thead><tr><th>Period</th><th>Due</th><th class="num">Expected</th><th class="num">Paid</th><th>Status</th></tr></thead>
+              <tbody>${periodRows}</tbody>
+            </table>` : ``}
+          <h3>Transactions</h3>
+          <table>
+            <thead><tr><th>Date</th><th>Channel</th><th>Reference</th><th class="num">Amount</th></tr></thead>
+            <tbody>${txnRows}</tbody>
+          </table>
+        </div>`;
+    }
+
     async function loadStatement() {
       const memberId = document.getElementById("f-member").value;
       if (!memberId) return;
 
-      const { data: contributions, error: cErr } = await supabaseClient
+      const { data: fundTypes } = await supabaseClient
+        .from("contribution_types")
+        .select("id, name")
+        .eq("organisation_id", orgId).eq("active", true).order("name");
+
+      const { data: contributions } = await supabaseClient
         .from("contributions")
-        .select("amount_expected, amount_paid, status, contribution_periods(period_start, period_end, due_date, contribution_rules(name, contribution_types(name)))")
-        .eq("member_id", memberId)
-        .order("contribution_periods(period_start)", { ascending: true });
+        .select("amount_expected, amount_paid, status, contribution_periods(period_start, period_end, due_date, contribution_rules(contribution_type_id))")
+        .eq("member_id", memberId);
 
-      const contribTbody = document.getElementById("contrib-rows");
-      if (cErr) {
-        contribTbody.innerHTML = `<tr><td colspan="6" class="error">${cErr.message}</td></tr>`;
-      } else if (!contributions.length) {
-        contribTbody.innerHTML = `<tr><td colspan="6" class="empty">No contribution periods for this member yet.</td></tr>`;
-      } else {
-        contribTbody.innerHTML = contributions.map(c => {
-          const rule = c.contribution_periods.contribution_rules;
-          const fundName = rule && rule.contribution_types ? rule.contribution_types.name : "Generic";
-          return `
-          <tr>
-            <td>${fundName}</td>
-            <td>${c.contribution_periods.period_start} to ${c.contribution_periods.period_end}</td>
-            <td>${c.contribution_periods.due_date}</td>
-            <td class="num">${money(c.amount_expected)}</td>
-            <td class="num">${money(c.amount_paid)}</td>
-            <td><span class="status ${c.status === 'paid' ? 'paid' : c.status === 'partial' ? 'partial' : 'unpaid'}">${c.status}</span></td>
-          </tr>`;
-        }).join("");
-      }
+      const { data: allocations } = await supabaseClient
+        .from("payment_allocations")
+        .select("amount, contribution_type_id, payments!inner(transaction_date, channel, reference, member_id, id)")
+        .eq("payments.member_id", memberId);
 
-      const expected = (contributions || []).reduce((s, c) => s + Number(c.amount_expected), 0);
-      const paid = (contributions || []).reduce((s, c) => s + Number(c.amount_paid), 0);
-      document.getElementById("s-expected").textContent = money(expected);
-      document.getElementById("s-paid").textContent = money(paid);
-      document.getElementById("s-outstanding").textContent = money(expected - paid);
-
-      const { data: payments, error: pErr } = await supabaseClient
+      const { data: allPayments } = await supabaseClient
         .from("payments")
-        .select("transaction_date, channel, reference, amount, status")
-        .eq("member_id", memberId)
-        .order("transaction_date", { ascending: false });
+        .select("id, transaction_date, channel, reference, amount")
+        .eq("member_id", memberId);
 
-      const payTbody = document.getElementById("payment-rows");
-      if (pErr) {
-        payTbody.innerHTML = `<tr><td colspan="5" class="error">${pErr.message}</td></tr>`;
-      } else if (!payments.length) {
-        payTbody.innerHTML = `<tr><td colspan="5" class="empty">No payments recorded for this member yet.</td></tr>`;
-      } else {
-        payTbody.innerHTML = payments.map(p => `
+      const allocatedPaymentIds = new Set((allocations || []).map(a => a.payments.id));
+      const legacyPayments = (allPayments || []).filter(p => !allocatedPaymentIds.has(p.id));
+
+      const funds = (fundTypes || []).map(ft => ({
+        id: ft.id,
+        name: ft.name,
+        contributions: (contributions || [])
+          .filter(c => c.contribution_periods && c.contribution_periods.contribution_rules &&
+                       c.contribution_periods.contribution_rules.contribution_type_id === ft.id)
+          .map(c => ({
+            amount_expected: c.amount_expected,
+            amount_paid: c.amount_paid,
+            status: c.status,
+            period_start: c.contribution_periods.period_start,
+            period_end: c.contribution_periods.period_end,
+            due_date: c.contribution_periods.due_date,
+          })),
+        transactions: (allocations || [])
+          .filter(a => a.contribution_type_id === ft.id)
+          .map(a => ({
+            amount: a.amount,
+            transaction_date: a.payments.transaction_date,
+            channel: a.payments.channel,
+            reference: a.payments.reference,
+          })),
+      }));
+
+      document.getElementById("fund-cards").innerHTML =
+        funds.length ? funds.map(fundCardHTML).join("") : `<div class="card"><p class="empty">No fund types set up for this organisation yet.</p></div>`;
+
+      const legacyCard = document.getElementById("legacy-card");
+      if (legacyPayments.length) {
+        legacyCard.style.display = "block";
+        document.getElementById("legacy-rows").innerHTML = legacyPayments.map(p => `
           <tr>
             <td>${p.transaction_date}</td>
             <td>${p.channel}</td>
             <td>${p.reference ?? "—"}</td>
             <td class="num">${money(p.amount)}</td>
-            <td><span class="status ${p.status === 'posted' ? 'paid' : 'partial'}">${p.status}</span></td>
           </tr>`).join("");
+      } else {
+        legacyCard.style.display = "none";
       }
     }
 
