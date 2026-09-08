@@ -28,14 +28,26 @@
         </div>
       </div>
 
+      <div class="metric">
+        <div class="item"><div class="value" id="s-expected">—</div><div class="label">Total expected (KES)</div></div>
+        <div class="item"><div class="value" id="s-paid">—</div><div class="label">Total paid (KES)</div></div>
+        <div class="item"><div class="value" id="s-outstanding">—</div><div class="label">Outstanding (KES)</div></div>
+      </div>
+
       <div class="card">
+        <h2>Contribution periods</h2>
         <table>
-          <thead><tr><th>Date</th><th>Description</th><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead>
-          <tbody id="rows"><tr><td colspan="5" class="empty">Select a member above.</td></tr></tbody>
+          <thead><tr><th>Period</th><th>Due</th><th class="num">Expected</th><th class="num">Paid</th><th>Status</th></tr></thead>
+          <tbody id="contrib-rows"><tr><td colspan="5" class="empty">Select a member above.</td></tr></tbody>
         </table>
-        <div style="text-align:right;margin-top:12px;font-family:var(--font-mono)">
-          Closing balance: <strong id="closing">—</strong>
-        </div>
+      </div>
+
+      <div class="card">
+        <h2>Payment history</h2>
+        <table>
+          <thead><tr><th>Date</th><th>Channel</th><th>Reference</th><th class="num">Amount</th><th>Status</th></tr></thead>
+          <tbody id="payment-rows"><tr><td colspan="5" class="empty">Select a member above.</td></tr></tbody>
+        </table>
       </div>
     </main>
   </div>
@@ -56,30 +68,56 @@
     async function loadStatement() {
       const memberId = document.getElementById("f-member").value;
       if (!memberId) return;
-      const { data, error } = await supabaseClient
-        .from("v_member_ledger")
-        .select("entry_date, description, account_name, debit, credit")
+
+      const { data: contributions, error: cErr } = await supabaseClient
+        .from("contributions")
+        .select("amount_expected, amount_paid, status, contribution_periods(period_start, period_end, due_date)")
         .eq("member_id", memberId)
-        .order("entry_date");
+        .order("contribution_periods(period_start)", { ascending: true });
 
-      const tbody = document.getElementById("rows");
-      if (error) { tbody.innerHTML = `<tr><td colspan="5" class="error">${error.message}</td></tr>`; return; }
-      if (!data.length) {
-        tbody.innerHTML = `<tr><td colspan="5" class="empty">No ledger activity for this member yet.</td></tr>`;
-        document.getElementById("closing").textContent = "0.00";
-        return;
+      const contribTbody = document.getElementById("contrib-rows");
+      if (cErr) {
+        contribTbody.innerHTML = `<tr><td colspan="5" class="error">${cErr.message}</td></tr>`;
+      } else if (!contributions.length) {
+        contribTbody.innerHTML = `<tr><td colspan="5" class="empty">No contribution periods for this member yet.</td></tr>`;
+      } else {
+        contribTbody.innerHTML = contributions.map(c => `
+          <tr>
+            <td>${c.contribution_periods.period_start} to ${c.contribution_periods.period_end}</td>
+            <td>${c.contribution_periods.due_date}</td>
+            <td class="num">${money(c.amount_expected)}</td>
+            <td class="num">${money(c.amount_paid)}</td>
+            <td><span class="status ${c.status === 'paid' ? 'paid' : c.status === 'partial' ? 'partial' : 'unpaid'}">${c.status}</span></td>
+          </tr>`).join("");
       }
-      tbody.innerHTML = data.map(r => `
-        <tr>
-          <td>${r.entry_date}</td>
-          <td>${r.description}</td>
-          <td>${r.account_name}</td>
-          <td class="num">${Number(r.debit) ? money(r.debit) : ""}</td>
-          <td class="num">${Number(r.credit) ? money(r.credit) : ""}</td>
-        </tr>`).join("");
 
-      const balance = data.reduce((s, r) => s + Number(r.debit) - Number(r.credit), 0);
-      document.getElementById("closing").textContent = money(balance);
+      const expected = (contributions || []).reduce((s, c) => s + Number(c.amount_expected), 0);
+      const paid = (contributions || []).reduce((s, c) => s + Number(c.amount_paid), 0);
+      document.getElementById("s-expected").textContent = money(expected);
+      document.getElementById("s-paid").textContent = money(paid);
+      document.getElementById("s-outstanding").textContent = money(expected - paid);
+
+      const { data: payments, error: pErr } = await supabaseClient
+        .from("payments")
+        .select("transaction_date, channel, reference, amount, status")
+        .eq("member_id", memberId)
+        .order("transaction_date", { ascending: false });
+
+      const payTbody = document.getElementById("payment-rows");
+      if (pErr) {
+        payTbody.innerHTML = `<tr><td colspan="5" class="error">${pErr.message}</td></tr>`;
+      } else if (!payments.length) {
+        payTbody.innerHTML = `<tr><td colspan="5" class="empty">No payments recorded for this member yet.</td></tr>`;
+      } else {
+        payTbody.innerHTML = payments.map(p => `
+          <tr>
+            <td>${p.transaction_date}</td>
+            <td>${p.channel}</td>
+            <td>${p.reference ?? "—"}</td>
+            <td class="num">${money(p.amount)}</td>
+            <td><span class="status ${p.status === 'posted' ? 'paid' : 'partial'}">${p.status}</span></td>
+          </tr>`).join("");
+      }
     }
 
     (async () => {
