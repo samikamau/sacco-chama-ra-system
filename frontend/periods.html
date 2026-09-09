@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Accounting Periods — Financial Operating System</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav">
+      <div class="brand">Ledger</div>
+      <a href="index.html">Dashboard</a>
+      <a href="members.html">Members</a>
+      <a href="contributions.html">Contributions</a>
+      <a href="payments.html">Payments</a>
+      <a href="loans.html">Loans</a>
+      <a href="reconcile.html">Bank / M-Pesa</a>
+      <a href="statement.html">Member Statements</a>
+      <a href="reports.html">Reports</a>
+      <a href="periods.html" class="active">Accounting Periods</a>
+      <a href="#" onclick="signOut()">Sign out</a>
+    </nav>
+    <main class="main">
+      <h1>Accounting periods</h1>
+      <p style="color:var(--color-muted);font-size:13px;max-width:640px">
+        Closing a period locks it: no new journal entries can be dated inside a closed period.
+        Corrections to a closed period must be made as a reversal dated in an open period.
+      </p>
+
+      <div class="card">
+        <h2>Create a period</h2>
+        <div class="field"><label>Start date</label><input id="p-start" type="date"></div>
+        <div class="field"><label>End date</label><input id="p-end" type="date"></div>
+        <button class="btn accent" onclick="createPeriod()">Create period</button>
+        <p id="create-error" class="error" style="display:none"></p>
+        <p id="create-success" style="display:none;color:var(--color-success)"></p>
+      </div>
+
+      <div class="card">
+        <h2>Periods</h2>
+        <table>
+          <thead><tr><th>Start</th><th>End</th><th>Status</th><th>Closed on</th><th></th></tr></thead>
+          <tbody id="rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+        </table>
+        <p id="action-error" class="error" style="display:none"></p>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let orgId;
+
+    async function createPeriod() {
+      const errorEl = document.getElementById("create-error");
+      const successEl = document.getElementById("create-success");
+      errorEl.style.display = "none"; successEl.style.display = "none";
+      const start = document.getElementById("p-start").value;
+      const end = document.getElementById("p-end").value;
+      if (!start || !end) { showError(errorEl, "Both dates are required."); return; }
+
+      const { error } = await supabaseClient.rpc("fn_create_accounting_period", {
+        p_organisation_id: orgId, p_period_start: start, p_period_end: end,
+      });
+      if (error) { showError(errorEl, error.message); return; }
+      successEl.textContent = "Period created.";
+      successEl.style.display = "block";
+      loadPeriods();
+    }
+
+    async function closePeriod(id) {
+      if (!confirm("Close this period? New entries dated inside it will be blocked until it is reopened.")) return;
+      const errorEl = document.getElementById("action-error");
+      errorEl.style.display = "none";
+      const { error } = await supabaseClient.rpc("fn_close_accounting_period", { p_period_id: id });
+      if (error) { showError(errorEl, error.message); return; }
+      loadPeriods();
+    }
+
+    async function reopenPeriod(id) {
+      if (!confirm("Reopen this closed period? This is a significant control action and will be recorded in the audit log.")) return;
+      const errorEl = document.getElementById("action-error");
+      errorEl.style.display = "none";
+      const { error } = await supabaseClient.rpc("fn_reopen_accounting_period", { p_period_id: id });
+      if (error) { showError(errorEl, error.message); return; }
+      loadPeriods();
+    }
+
+    async function loadPeriods() {
+      const { data, error } = await supabaseClient.from("accounting_periods")
+        .select("id, period_start, period_end, status, closed_at")
+        .eq("organisation_id", orgId).order("period_start", { ascending: false });
+
+      const tbody = document.getElementById("rows");
+      if (error) { tbody.innerHTML = `<tr><td colspan="5" class="error">${error.message}</td></tr>`; return; }
+      if (!data.length) { tbody.innerHTML = `<tr><td colspan="5" class="empty">No periods yet.</td></tr>`; return; }
+
+      tbody.innerHTML = data.map(p => `
+        <tr>
+          <td>${p.period_start}</td>
+          <td>${p.period_end}</td>
+          <td><span class="status ${p.status === 'open' ? 'paid' : 'unpaid'}">${p.status}</span></td>
+          <td>${p.closed_at ? new Date(p.closed_at).toLocaleDateString() : "—"}</td>
+          <td>${p.status === 'open'
+            ? `<button class="btn" onclick="closePeriod('${p.id}')">Close</button>`
+            : `<button class="btn" onclick="reopenPeriod('${p.id}')">Reopen</button>`}</td>
+        </tr>`).join("");
+    }
+
+    (async () => {
+      const session = await requireSession();
+      if (!session) return;
+      const org = await currentOrg();
+      if (!org) return;
+      orgId = org.organisation_id;
+      loadPeriods();
+    })();
+  </script>
+</body>
+</html>

@@ -5,6 +5,23 @@
 <title>Dashboard — Financial Operating System</title>
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .kpi-group { margin-bottom: var(--space-4); }
+  .kpi-group h2 { font-size: 15px; color: var(--color-muted); font-weight: 500; margin-bottom: var(--space-2); }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-3); }
+  .kpi {
+    background: var(--color-surface); border: 1px solid var(--color-line);
+    border-radius: var(--radius); padding: var(--space-3);
+  }
+  .kpi .value { font-family: var(--font-mono); font-size: 22px; font-variant-numeric: tabular-nums; }
+  .kpi .label { color: var(--color-muted); font-size: 12px; margin-top: 2px; }
+  .kpi.accent { border-left: 3px solid var(--color-accent); }
+  .insight { padding: var(--space-2) 0; border-bottom: 1px solid var(--color-line); display: flex; gap: var(--space-2); align-items: baseline; }
+  .insight:last-child { border-bottom: none; }
+  .insight .cat { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: #EEE9DC; color: var(--color-muted); flex-shrink: 0; }
+  .insight.good .cat { background: #E4EEE6; color: var(--color-success); }
+  .insight.warning .cat { background: #F3E4E0; color: var(--color-alert); }
+</style>
 </head>
 <body>
   <div class="app-shell">
@@ -14,24 +31,47 @@
       <a href="members.html">Members</a>
       <a href="contributions.html">Contributions</a>
       <a href="payments.html">Payments</a>
+      <a href="loans.html">Loans</a>
       <a href="reconcile.html">Bank / M-Pesa</a>
       <a href="statement.html">Member Statements</a>
+      <a href="reports.html">Reports</a>
+      <a href="periods.html">Accounting Periods</a>
       <a href="#" onclick="signOut()">Sign out</a>
     </nav>
     <main class="main">
       <h1 id="org-name">Dashboard</h1>
 
-      <div class="metric">
-        <div class="item"><div class="value" id="m-members">—</div><div class="label">Active members</div></div>
-        <div class="item"><div class="value" id="m-expected">—</div><div class="label">Expected this period (KES)</div></div>
-        <div class="item"><div class="value" id="m-received">—</div><div class="label">Received (KES)</div></div>
-        <div class="item"><div class="value" id="m-rate">—</div><div class="label">Collection rate</div></div>
-        <div class="item"><div class="value" id="m-unmatched">—</div><div class="label">Unmatched statement lines</div></div>
+      <div class="kpi-group">
+        <h2>Membership</h2>
+        <div class="kpi-grid">
+          <div class="kpi"><div class="value" id="k-active">—</div><div class="label">Active members</div></div>
+          <div class="kpi"><div class="value" id="k-inactive">—</div><div class="label">Inactive members</div></div>
+          <div class="kpi"><div class="value" id="k-total">—</div><div class="label">Total members</div></div>
+        </div>
+      </div>
+
+      <div class="kpi-group">
+        <h2>Contributions (all periods)</h2>
+        <div class="kpi-grid">
+          <div class="kpi"><div class="value" id="k-expected">—</div><div class="label">Expected (KES)</div></div>
+          <div class="kpi"><div class="value" id="k-received">—</div><div class="label">Received (KES)</div></div>
+          <div class="kpi accent"><div class="value" id="k-collection">—</div><div class="label">Collection %</div></div>
+          <div class="kpi"><div class="value" id="k-outstanding">—</div><div class="label">Outstanding (KES)</div></div>
+        </div>
+      </div>
+
+      <div class="kpi-group">
+        <h2>Member funds (posted)</h2>
+        <div class="kpi-grid">
+          <div class="kpi"><div class="value" id="k-shares">—</div><div class="label">Total shares (KES)</div></div>
+          <div class="kpi"><div class="value" id="k-deposits">—</div><div class="label">Total deposits (KES)</div></div>
+          <div class="kpi"><div class="value" id="k-welfare">—</div><div class="label">Total welfare (KES)</div></div>
+        </div>
       </div>
 
       <div class="card">
         <h2>Observations</h2>
-        <ul id="insights"><li class="empty">No observations yet — record contributions and import a statement to see them here.</li></ul>
+        <div id="insights"><p class="empty">Loading…</p></div>
       </div>
     </main>
   </div>
@@ -47,40 +87,34 @@
       document.getElementById("org-name").textContent = org.organisations.name;
       const orgId = org.organisation_id;
 
-      const { count: memberCount } = await supabaseClient
-        .from("members").select("*", { count: "exact", head: true })
-        .eq("organisation_id", orgId).eq("status", "active");
-      document.getElementById("m-members").textContent = memberCount ?? 0;
-
-      const { data: contributions } = await supabaseClient
-        .from("contributions").select("amount_expected, amount_paid")
-        .eq("organisation_id", orgId);
-
-      const expected = (contributions || []).reduce((s, c) => s + Number(c.amount_expected), 0);
-      const received = (contributions || []).reduce((s, c) => s + Number(c.amount_paid), 0);
-      document.getElementById("m-expected").textContent = money(expected);
-      document.getElementById("m-received").textContent = money(received);
-      document.getElementById("m-rate").textContent = expected > 0 ? Math.round((received / expected) * 100) + "%" : "—";
-
-      const { count: unmatchedBank } = await supabaseClient
-        .from("bank_transactions").select("*", { count: "exact", head: true })
-        .eq("organisation_id", orgId).in("match_status", ["unmatched", "suggested"]);
-      const { count: unmatchedMpesa } = await supabaseClient
-        .from("mpesa_transactions").select("*", { count: "exact", head: true })
-        .eq("organisation_id", orgId).in("match_status", ["unmatched", "suggested"]);
-      document.getElementById("m-unmatched").textContent = (unmatchedBank ?? 0) + (unmatchedMpesa ?? 0);
-
-      const insights = [];
-      const outstandingMembers = (contributions || []).filter(c => Number(c.amount_paid) < Number(c.amount_expected)).length;
-      if (outstandingMembers > 0) {
-        insights.push(`${outstandingMembers} contribution record(s) are not yet fully paid.`);
+      const { data: kpis, error: kErr } = await supabaseClient.rpc("fn_dashboard_kpis", { p_organisation_id: orgId });
+      if (kErr) {
+        document.getElementById("insights").innerHTML = `<p class="error">Could not load KPIs: ${kErr.message}</p>`;
+      } else {
+        document.getElementById("k-active").textContent = kpis.active_members;
+        document.getElementById("k-inactive").textContent = kpis.inactive_members;
+        document.getElementById("k-total").textContent = kpis.total_members;
+        document.getElementById("k-expected").textContent = money(kpis.expected);
+        document.getElementById("k-received").textContent = money(kpis.received);
+        document.getElementById("k-collection").textContent = kpis.collection_pct + "%";
+        document.getElementById("k-outstanding").textContent = money(kpis.outstanding);
+        document.getElementById("k-shares").textContent = money(kpis.total_shares);
+        document.getElementById("k-deposits").textContent = money(kpis.total_deposits);
+        document.getElementById("k-welfare").textContent = money(kpis.total_welfare);
       }
-      const unmatchedTotal = (unmatchedBank ?? 0) + (unmatchedMpesa ?? 0);
-      if (unmatchedTotal > 0) {
-        insights.push(`${unmatchedTotal} imported transaction(s) still need review on the Bank / M-Pesa page.`);
-      }
-      if (insights.length) {
-        document.getElementById("insights").innerHTML = insights.map(i => `<li>${i}</li>`).join("");
+
+      const { data: insights, error: iErr } = await supabaseClient.rpc("fn_dashboard_insights", { p_organisation_id: orgId });
+      const box = document.getElementById("insights");
+      if (iErr) {
+        box.innerHTML = `<p class="error">${iErr.message}</p>`;
+      } else if (!insights || !insights.length) {
+        box.innerHTML = `<p class="empty">No observations yet — add members and record contributions to see them here.</p>`;
+      } else {
+        box.innerHTML = insights.map(i => `
+          <div class="insight ${i.severity}">
+            <span class="cat">${i.category}</span>
+            <span>${i.message}</span>
+          </div>`).join("");
       }
     })();
   </script>

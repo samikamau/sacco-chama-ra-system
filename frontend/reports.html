@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Reports — Financial Operating System</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav">
+      <div class="brand">Ledger</div>
+      <a href="index.html">Dashboard</a>
+      <a href="members.html">Members</a>
+      <a href="contributions.html">Contributions</a>
+      <a href="payments.html">Payments</a>
+      <a href="loans.html">Loans</a>
+      <a href="reconcile.html">Bank / M-Pesa</a>
+      <a href="statement.html">Member Statements</a>
+      <a href="reports.html" class="active">Reports</a>
+      <a href="periods.html">Accounting Periods</a>
+      <a href="#" onclick="signOut()">Sign out</a>
+    </nav>
+    <main class="main">
+      <h1>Reports</h1>
+
+      <div class="card">
+        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end">
+          <div class="field" style="margin-bottom:0"><label>Report</label>
+            <select id="report-type" onchange="run()">
+              <option value="trial">Trial Balance</option>
+              <option value="ie">Income &amp; Expenditure</option>
+              <option value="bs">Balance Sheet</option>
+              <option value="cf">Cash Flow</option>
+            </select>
+          </div>
+          <div class="field" style="margin-bottom:0"><label>From (optional)</label><input id="from" type="date"></div>
+          <div class="field" style="margin-bottom:0"><label>To (optional)</label><input id="to" type="date"></div>
+          <button class="btn" onclick="run()">Run</button>
+          <button class="btn accent" onclick="downloadPdf()">Download PDF</button>
+        </div>
+      </div>
+
+      <div class="card" id="report-card">
+        <h2 id="report-title">Trial Balance</h2>
+        <div id="report-body"><p class="empty">Loading…</p></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let orgId, orgName, lastRows = [], lastKind = "trial";
+
+    function dates() {
+      return {
+        from: document.getElementById("from").value || null,
+        to: document.getElementById("to").value || null,
+      };
+    }
+
+    async function run() {
+      const kind = document.getElementById("report-type").value;
+      lastKind = kind;
+      const { from, to } = dates();
+      const body = document.getElementById("report-body");
+      body.innerHTML = `<p class="empty">Loading…</p>`;
+
+      if (kind === "trial") {
+        document.getElementById("report-title").textContent = "Trial Balance";
+        const { data, error } = await supabaseClient.rpc("fn_trial_balance", {
+          p_organisation_id: orgId, p_from: from, p_to: to,
+        });
+        if (error) { body.innerHTML = `<p class="error">${error.message}</p>`; return; }
+        lastRows = data || [];
+        renderTrial(lastRows);
+      } else if (kind === "ie") {
+        document.getElementById("report-title").textContent = "Income & Expenditure";
+        const { data, error } = await supabaseClient.rpc("fn_income_expenditure", {
+          p_organisation_id: orgId, p_from: from, p_to: to,
+        });
+        if (error) { body.innerHTML = `<p class="error">${error.message}</p>`; return; }
+        lastRows = data || [];
+        renderIE(lastRows);
+      } else if (kind === "bs") {
+        document.getElementById("report-title").textContent = "Balance Sheet (as at " + (to || "today") + ")";
+        const { data, error } = await supabaseClient.rpc("fn_balance_sheet", {
+          p_organisation_id: orgId, p_as_at: to,
+        });
+        if (error) { body.innerHTML = `<p class="error">${error.message}</p>`; return; }
+        lastRows = data || [];
+        renderBS(lastRows);
+      } else {
+        document.getElementById("report-title").textContent = "Cash Flow";
+        const { data, error } = await supabaseClient.rpc("fn_cash_flow", {
+          p_organisation_id: orgId, p_from: from, p_to: to,
+        });
+        if (error) { body.innerHTML = `<p class="error">${error.message}</p>`; return; }
+        lastRows = data || [];
+        renderCF(lastRows);
+      }
+    }
+
+    function renderBS(rows) {
+      const body = document.getElementById("report-body");
+      if (!rows.length) { body.innerHTML = `<p class="empty">No posted balances yet.</p>`; return; }
+      const assets = rows.filter(r => r.section === "asset");
+      const liabilities = rows.filter(r => r.section === "liability");
+      const equity = rows.filter(r => r.section === "equity");
+      const sum = list => list.reduce((s,r) => s + Number(r.amount), 0);
+      const totalAssets = sum(assets);
+      const totalLE = sum(liabilities) + sum(equity);
+
+      const section = (title, list) => `
+        <h3>${title}</h3>
+        <table style="margin-bottom:16px"><tbody>
+          ${list.length ? list.map(r => `<tr><td>${r.account_name}</td><td class="num">${money(r.amount)}</td></tr>`).join("")
+            : `<tr><td colspan="2" class="empty">None.</td></tr>`}
+          <tr style="font-weight:bold;border-top:1px solid var(--color-ink)"><td>Total ${title}</td><td class="num">${money(sum(list))}</td></tr>
+        </tbody></table>`;
+
+      const balanced = Math.abs(totalAssets - totalLE) < 0.005;
+      body.innerHTML =
+        section("Assets", assets) +
+        section("Liabilities", liabilities) +
+        section("Equity", equity) +
+        `<table><tbody>
+           <tr style="font-weight:bold;border-top:2px solid var(--color-ink);font-size:15px">
+             <td>Total liabilities and equity</td>
+             <td class="num">${money(totalLE)}</td>
+           </tr>
+         </tbody></table>
+         <p style="margin-top:8px;color:${balanced ? 'var(--color-success)' : 'var(--color-alert)'}">
+           ${balanced ? '✓ Balanced.' : '⚠ Does not balance by KES ' + money(Math.abs(totalAssets - totalLE)) + ' — investigate.'}</p>`;
+    }
+
+    function renderCF(rows) {
+      const body = document.getElementById("report-body");
+      if (!rows.length) { body.innerHTML = `<p class="empty">No cash movements in this range.</p>`; return; }
+      const inflow = rows.filter(r => r.direction === "inflow");
+      const outflow = rows.filter(r => r.direction === "outflow");
+      const sum = list => list.reduce((s,r) => s + Number(r.amount), 0);
+      const net = sum(inflow) - sum(outflow);
+
+      const section = (title, list) => `
+        <h3>${title}</h3>
+        <table style="margin-bottom:16px"><tbody>
+          ${list.length ? list.map(r => `<tr><td>${r.category}</td><td class="num">${money(r.amount)}</td></tr>`).join("")
+            : `<tr><td colspan="2" class="empty">None.</td></tr>`}
+          <tr style="font-weight:bold;border-top:1px solid var(--color-ink)"><td>Total ${title}</td><td class="num">${money(sum(list))}</td></tr>
+        </tbody></table>`;
+
+      body.innerHTML =
+        section("Cash inflows", inflow) +
+        section("Cash outflows", outflow) +
+        `<p style="font-weight:bold;font-size:16px;color:${net >= 0 ? 'var(--color-success)' : 'var(--color-alert)'}">
+           Net cash movement: KES ${money(net)}</p>`;
+    }
+
+    function renderTrial(rows) {
+      const body = document.getElementById("report-body");
+      if (!rows.length) { body.innerHTML = `<p class="empty">No posted transactions in this range.</p>`; return; }
+      let totalDr = 0, totalCr = 0;
+      const trs = rows.map(r => {
+        totalDr += Number(r.total_debit); totalCr += Number(r.total_credit);
+        return `<tr>
+          <td>${r.account_code}</td>
+          <td>${r.account_name}</td>
+          <td class="num">${Number(r.total_debit) ? money(r.total_debit) : ""}</td>
+          <td class="num">${Number(r.total_credit) ? money(r.total_credit) : ""}</td>
+        </tr>`;
+      }).join("");
+      const balanced = Math.abs(totalDr - totalCr) < 0.005;
+      body.innerHTML = `
+        <table>
+          <thead><tr><th>Code</th><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead>
+          <tbody>${trs}</tbody>
+          <tfoot>
+            <tr style="font-weight:bold;border-top:2px solid var(--color-ink)">
+              <td colspan="2">Totals</td>
+              <td class="num">${money(totalDr)}</td>
+              <td class="num">${money(totalCr)}</td>
+            </tr>
+          </tfoot>
+        </table>
+        <p style="margin-top:12px;color:${balanced ? 'var(--color-success)' : 'var(--color-alert)'}">
+          ${balanced ? '✓ In balance — total debits equal total credits.' : '⚠ Out of balance by KES ' + money(Math.abs(totalDr - totalCr)) + ' — investigate before relying on this.'}
+        </p>`;
+    }
+
+    function renderIE(rows) {
+      const body = document.getElementById("report-body");
+      if (!rows.length) { body.innerHTML = `<p class="empty">No posted income or expenses in this range.</p>`; return; }
+      const income = rows.filter(r => r.account_type === "income");
+      const expense = rows.filter(r => r.account_type === "expense");
+      const totalIncome = income.reduce((s,r) => s + Number(r.amount), 0);
+      const totalExpense = expense.reduce((s,r) => s + Number(r.amount), 0);
+      const surplus = totalIncome - totalExpense;
+
+      const section = (title, list, total) => `
+        <h3>${title}</h3>
+        <table style="margin-bottom:16px">
+          <tbody>
+            ${list.length ? list.map(r => `<tr><td>${r.account_code}</td><td>${r.account_name}</td><td class="num">${money(r.amount)}</td></tr>`).join("")
+              : `<tr><td colspan="3" class="empty">None.</td></tr>`}
+            <tr style="font-weight:bold;border-top:1px solid var(--color-ink)"><td colspan="2">Total ${title}</td><td class="num">${money(total)}</td></tr>
+          </tbody>
+        </table>`;
+
+      body.innerHTML = section("Income", income, totalIncome) + section("Expenditure", expense, totalExpense) + `
+        <p style="font-weight:bold;font-size:16px;color:${surplus >= 0 ? 'var(--color-success)' : 'var(--color-alert)'}">
+          ${surplus >= 0 ? 'Surplus' : 'Deficit'}: KES ${money(Math.abs(surplus))}
+        </p>`;
+    }
+
+    function downloadPdf() {
+      if (!lastRows.length) { alert("Run a report with data first."); return; }
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      const { from, to } = dates();
+      const title = lastKind === "trial" ? "Trial Balance"
+                  : lastKind === "ie" ? "Income & Expenditure"
+                  : lastKind === "bs" ? "Balance Sheet"
+                  : "Cash Flow";
+      const rangeTxt = (from || to) ? `${from || "start"} to ${to || "today"}` : "All time";
+
+      doc.setFontSize(16); doc.text(orgName || "Report", 14, 18);
+      doc.setFontSize(11); doc.text(title, 14, 26);
+      doc.setFontSize(9); doc.setTextColor(100); doc.text(`Period: ${rangeTxt}`, 14, 32); doc.setTextColor(0);
+
+      if (lastKind === "trial") {
+        let totalDr = 0, totalCr = 0;
+        const rowsData = lastRows.map(r => {
+          totalDr += Number(r.total_debit); totalCr += Number(r.total_credit);
+          return [r.account_code, r.account_name, money(r.total_debit), money(r.total_credit)];
+        });
+        rowsData.push(["", "TOTALS", money(totalDr), money(totalCr)]);
+        doc.autoTable({ startY: 38, head: [["Code","Account","Debit","Credit"]], body: rowsData,
+          styles: { fontSize: 9 }, headStyles: { fillColor: [27,58,52] } });
+      } else if (lastKind === "ie") {
+        const rowsData = lastRows.map(r => [r.account_code, r.account_name, r.account_type, money(r.amount)]);
+        doc.autoTable({ startY: 38, head: [["Code","Account","Type","Amount"]], body: rowsData,
+          styles: { fontSize: 9 }, headStyles: { fillColor: [27,58,52] } });
+      } else if (lastKind === "bs") {
+        const rowsData = lastRows.map(r => [r.section, r.account_name, money(r.amount)]);
+        doc.autoTable({ startY: 38, head: [["Section","Account","Amount"]], body: rowsData,
+          styles: { fontSize: 9 }, headStyles: { fillColor: [27,58,52] } });
+      } else {
+        const rowsData = lastRows.map(r => [r.direction, r.category, money(r.amount)]);
+        doc.autoTable({ startY: 38, head: [["Direction","Category","Amount"]], body: rowsData,
+          styles: { fontSize: 9 }, headStyles: { fillColor: [27,58,52] } });
+      }
+      doc.save(`${title.replace(/\W+/g,"_")}.pdf`);
+    }
+
+    (async () => {
+      const session = await requireSession();
+      if (!session) return;
+      const org = await currentOrg();
+      if (!org) return;
+      orgId = org.organisation_id;
+      orgName = org.organisations.name;
+      run();
+    })();
+  </script>
+</body>
+</html>

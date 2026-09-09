@@ -14,8 +14,11 @@
       <a href="members.html">Members</a>
       <a href="contributions.html" class="active">Contributions</a>
       <a href="payments.html">Payments</a>
+      <a href="loans.html">Loans</a>
       <a href="reconcile.html">Bank / M-Pesa</a>
       <a href="statement.html">Member Statements</a>
+      <a href="reports.html">Reports</a>
+      <a href="periods.html">Accounting Periods</a>
       <a href="#" onclick="signOut()">Sign out</a>
     </nav>
     <main class="main">
@@ -30,9 +33,8 @@
         <details>
           <summary style="cursor:pointer;color:var(--color-muted)">Add a fund type</summary>
           <div style="margin-top:12px">
-            <div class="field"><label>Name (e.g. Development Fund)</label><input id="ft-name"></div>
-            <div class="field">
-              <label>Category</label>
+            <div class="field"><label>Name</label><input id="ft-name"></div>
+            <div class="field"><label>Category</label>
               <select id="ft-category">
                 <option value="share_capital">Share Capital</option>
                 <option value="share_deposit">Share Deposits</option>
@@ -42,10 +44,7 @@
                 <option value="other">Other</option>
               </select>
             </div>
-            <div class="field">
-              <label>Which ledger account should this post to?</label>
-              <select id="ft-account"></select>
-            </div>
+            <div class="field"><label>Ledger account</label><select id="ft-account"></select></div>
             <button class="btn accent" onclick="createFundType()">Save fund type</button>
             <p id="ft-error" class="error" style="display:none"></p>
           </div>
@@ -53,46 +52,66 @@
       </div>
 
       <div class="card">
-        <h2>Contribution rules</h2>
+        <h2>Contribution rules &amp; versions</h2>
         <table style="margin-bottom:16px">
-          <thead><tr><th>Fund</th><th>Rule name</th><th class="num">Amount</th><th>Due day</th></tr></thead>
-          <tbody id="rule-rows"><tr><td colspan="4" class="empty">No rules yet.</td></tr></tbody>
+          <thead><tr><th>Fund</th><th>Rule</th><th>Method</th><th class="num">Amount</th><th>Effective from</th><th>Status</th></tr></thead>
+          <tbody id="rule-rows"><tr><td colspan="6" class="empty">No rules yet.</td></tr></tbody>
         </table>
+
         <details>
-          <summary style="cursor:pointer;color:var(--color-muted)">Add a rule</summary>
+          <summary style="cursor:pointer;color:var(--color-muted)">Add a new rule</summary>
           <div style="margin-top:12px">
-            <div class="field">
-              <label>Fund</label>
-              <select id="r-fund"></select>
-            </div>
+            <div class="field"><label>Fund</label><select id="r-fund"></select></div>
             <div class="field"><label>Rule name</label><input id="r-name" value="Monthly contribution"></div>
-            <div class="field"><label>Amount (KES, used when a member has no individual amount set)</label><input id="r-amount" type="number"></div>
-            <div class="field"><label>Due day of month</label><input id="r-due-day" type="number" value="5"></div>
-            <button class="btn accent" onclick="createRule()">Save rule</button>
+            <button class="btn accent" onclick="createRule()">Create rule (then add a version below)</button>
             <p id="rule-error" class="error" style="display:none"></p>
+          </div>
+        </details>
+
+        <details style="margin-top:12px">
+          <summary style="cursor:pointer;color:var(--color-muted)">Add / change a rule version</summary>
+          <div style="margin-top:12px">
+            <p style="color:var(--color-muted);font-size:13px">Adding a version with a later effective date preserves history — periods already generated under the old version keep their old amounts.</p>
+            <div class="field"><label>Rule</label><select id="v-rule"></select></div>
+            <div class="field"><label>Calculation method</label>
+              <select id="v-method" onchange="toggleMethodFields()">
+                <option value="fixed">Fixed amount</option>
+                <option value="category">By member category</option>
+                <option value="percentage">Percentage (falls back to fixed until member base is captured)</option>
+              </select>
+            </div>
+            <div class="field" id="fld-fixed"><label>Fixed amount (KES)</label><input id="v-fixed" type="number"></div>
+            <div class="field" id="fld-pct" style="display:none"><label>Percentage rate (e.g. 5 for 5%)</label><input id="v-pct" type="number" step="0.01"></div>
+            <div class="field" id="fld-cat" style="display:none">
+              <label>Category amounts (one per line, e.g. A=1000)</label>
+              <textarea id="v-cat" rows="3" style="width:100%;font-family:var(--font-mono)"></textarea>
+            </div>
+            <div class="field"><label>Frequency</label>
+              <select id="v-freq"><option value="monthly">Monthly</option><option value="weekly">Weekly</option><option value="quarterly">Quarterly</option><option value="annual">Annual</option></select>
+            </div>
+            <div class="field"><label>Due day of month</label><input id="v-due-day" type="number" value="5"></div>
+            <div class="field"><label>Grace days</label><input id="v-grace" type="number" value="5"></div>
+            <div class="field"><label>Effective from</label><input id="v-eff" type="date"></div>
+            <button class="btn accent" onclick="addVersion()">Save version</button>
+            <p id="version-error" class="error" style="display:none"></p>
           </div>
         </details>
       </div>
 
       <div class="card">
         <h2>Generate a period</h2>
-        <div class="field">
-          <label>Which rule</label>
-          <select id="p-rule"></select>
-        </div>
+        <div class="field"><label>Rule</label><select id="p-rule"></select></div>
         <div class="field"><label>Period start</label><input id="p-start" type="date"></div>
         <div class="field"><label>Period end</label><input id="p-end" type="date"></div>
         <div class="field"><label>Due date</label><input id="p-due" type="date"></div>
         <button class="btn accent" onclick="generatePeriod()">Generate for all active members</button>
         <p id="period-error" class="error" style="display:none"></p>
+        <p id="period-success" style="display:none;color:var(--color-success)"></p>
       </div>
 
       <div class="card">
         <h2>Status by member (most recent period for selected rule)</h2>
-        <div class="field" style="max-width:320px">
-          <label>Rule</label>
-          <select id="s-rule" onchange="loadStatus()"></select>
-        </div>
+        <div class="field" style="max-width:320px"><label>Rule</label><select id="s-rule" onchange="loadStatus()"></select></div>
         <table>
           <thead><tr><th>Member</th><th class="num">Expected</th><th class="num">Paid</th><th>Status</th></tr></thead>
           <tbody id="rows"><tr><td colspan="4" class="empty">No periods generated yet.</td></tr></tbody>
@@ -104,9 +123,14 @@
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
   <script>
-    let orgId;
-    let fundTypes = [];
-    let rules = [];
+    let orgId, fundTypes = [], rules = [];
+
+    function toggleMethodFields() {
+      const m = document.getElementById("v-method").value;
+      document.getElementById("fld-fixed").style.display = (m === "fixed" || m === "percentage") ? "block" : "none";
+      document.getElementById("fld-pct").style.display = m === "percentage" ? "block" : "none";
+      document.getElementById("fld-cat").style.display = m === "category" ? "block" : "none";
+    }
 
     async function loadAccounts() {
       const { data } = await supabaseClient.from("chart_of_accounts")
@@ -116,18 +140,15 @@
     }
 
     async function loadFundTypes() {
-      const { data, error } = await supabaseClient.from("contribution_types")
+      const { data } = await supabaseClient.from("contribution_types")
         .select("id, name, category, chart_of_accounts(code, name)")
         .eq("organisation_id", orgId).eq("active", true).order("name");
       fundTypes = data || [];
       const tbody = document.getElementById("fund-rows");
-      if (error) { tbody.innerHTML = `<tr><td colspan="3" class="error">${error.message}</td></tr>`; return; }
-      if (!fundTypes.length) { tbody.innerHTML = `<tr><td colspan="3" class="empty">No fund types yet.</td></tr>`; return; }
-      tbody.innerHTML = fundTypes.map(f => `
-        <tr><td>${f.name}</td><td>${f.category}</td><td>${f.chart_of_accounts.code} — ${f.chart_of_accounts.name}</td></tr>`).join("");
-
-      document.getElementById("r-fund").innerHTML =
-        fundTypes.map(f => `<option value="${f.id}">${f.name}</option>`).join("");
+      tbody.innerHTML = fundTypes.length
+        ? fundTypes.map(f => `<tr><td>${f.name}</td><td>${f.category}</td><td>${f.chart_of_accounts.code} — ${f.chart_of_accounts.name}</td></tr>`).join("")
+        : `<tr><td colspan="3" class="empty">No fund types yet.</td></tr>`;
+      document.getElementById("r-fund").innerHTML = fundTypes.map(f => `<option value="${f.id}">${f.name}</option>`).join("");
     }
 
     async function createFundType() {
@@ -146,61 +167,105 @@
     }
 
     async function loadRules() {
-      const { data, error } = await supabaseClient.from("contribution_rules")
-        .select("id, name, amount, due_day, contribution_types(name)")
-        .eq("organisation_id", orgId).eq("active", true).order("name");
+      const { data } = await supabaseClient.from("contribution_rules")
+        .select("id, name, contribution_types(name), contribution_rule_versions(version_no, calc_method, fixed_amount, effective_from, status)")
+        .eq("organisation_id", orgId).order("name");
       rules = data || [];
       const tbody = document.getElementById("rule-rows");
-      if (error) { tbody.innerHTML = `<tr><td colspan="4" class="error">${error.message}</td></tr>`; return; }
-      if (!rules.length) { tbody.innerHTML = `<tr><td colspan="4" class="empty">No rules yet.</td></tr>`; return; }
-      tbody.innerHTML = rules.map(r => `
-        <tr>
-          <td>${r.contribution_types ? r.contribution_types.name : "— (legacy/generic) —"}</td>
-          <td>${r.name}</td>
-          <td class="num">${money(r.amount)}</td>
-          <td>${r.due_day}</td>
-        </tr>`).join("");
 
-      const options = rules.map(r => `<option value="${r.id}">${r.contribution_types ? r.contribution_types.name : "Generic"} — ${r.name}</option>`).join("");
-      document.getElementById("p-rule").innerHTML = options;
-      document.getElementById("s-rule").innerHTML = options;
+      const flatRows = [];
+      rules.forEach(r => {
+        const fund = r.contribution_types ? r.contribution_types.name : "— (generic) —";
+        const versions = (r.contribution_rule_versions || []).sort((a,b) => a.version_no - b.version_no);
+        if (!versions.length) {
+          flatRows.push(`<tr><td>${fund}</td><td>${r.name} (v?)</td><td class="empty" colspan="4">No version yet — add one below.</td></tr>`);
+        } else {
+          versions.forEach(v => {
+            flatRows.push(`<tr>
+              <td>${fund}</td><td>${r.name} (v${v.version_no})</td>
+              <td>${v.calc_method}</td>
+              <td class="num">${v.calc_method === 'fixed' ? money(v.fixed_amount) : '—'}</td>
+              <td>${v.effective_from}</td>
+              <td><span class="status ${v.status === 'active' ? 'paid' : 'partial'}">${v.status}</span></td>
+            </tr>`);
+          });
+        }
+      });
+      tbody.innerHTML = flatRows.length ? flatRows.join("") : `<tr><td colspan="6" class="empty">No rules yet.</td></tr>`;
+
+      const ruleOptions = rules.map(r => `<option value="${r.id}">${r.contribution_types ? r.contribution_types.name : 'Generic'} — ${r.name}</option>`).join("");
+      document.getElementById("v-rule").innerHTML = ruleOptions;
+      document.getElementById("p-rule").innerHTML = ruleOptions;
+      document.getElementById("s-rule").innerHTML = ruleOptions;
       if (rules.length) loadStatus();
     }
 
     async function createRule() {
       const errorEl = document.getElementById("rule-error");
-      const payload = {
+      const fundId = document.getElementById("r-fund").value;
+      if (!fundId) { showError(errorEl, "Add a fund type first."); return; }
+      const { error } = await supabaseClient.from("contribution_rules").insert({
         organisation_id: orgId,
-        contribution_type_id: document.getElementById("r-fund").value,
+        contribution_type_id: fundId,
         name: document.getElementById("r-name").value.trim(),
-        amount: document.getElementById("r-amount").value,
-        due_day: document.getElementById("r-due-day").value,
-      };
-      if (!payload.contribution_type_id) { showError(errorEl, "Add a fund type first."); return; }
-      if (!payload.amount) { showError(errorEl, "Amount is required."); return; }
-      const { error } = await supabaseClient.from("contribution_rules").insert(payload);
+        amount: 0, // legacy column; real amounts live in versions
+      });
+      if (error) { showError(errorEl, error.message); return; }
+      loadRules();
+    }
+
+    function parseCategoryAmounts(text) {
+      const obj = {};
+      text.split("\n").forEach(line => {
+        const [k, v] = line.split("=").map(s => s.trim());
+        if (k && v && !isNaN(Number(v))) obj[k] = Number(v);
+      });
+      return obj;
+    }
+
+    async function addVersion() {
+      const errorEl = document.getElementById("version-error");
+      errorEl.style.display = "none";
+      const method = document.getElementById("v-method").value;
+      const eff = document.getElementById("v-eff").value;
+      if (!eff) { showError(errorEl, "Effective from date is required."); return; }
+
+      let categoryAmounts = null;
+      if (method === "category") categoryAmounts = parseCategoryAmounts(document.getElementById("v-cat").value);
+
+      const { error } = await supabaseClient.rpc("fn_add_rule_version", {
+        p_rule_id: document.getElementById("v-rule").value,
+        p_calc_method: method,
+        p_fixed_amount: document.getElementById("v-fixed").value || 0,
+        p_percentage_rate: document.getElementById("v-pct").value || 0,
+        p_category_amounts: categoryAmounts,
+        p_frequency: document.getElementById("v-freq").value,
+        p_due_day: document.getElementById("v-due-day").value,
+        p_grace_days: document.getElementById("v-grace").value,
+        p_effective_from: eff,
+      });
       if (error) { showError(errorEl, error.message); return; }
       loadRules();
     }
 
     async function generatePeriod() {
       const errorEl = document.getElementById("period-error");
-      errorEl.style.display = "none";
+      const successEl = document.getElementById("period-success");
+      errorEl.style.display = "none"; successEl.style.display = "none";
       const ruleId = document.getElementById("p-rule").value;
-      if (!ruleId) { showError(errorEl, "Create a rule first."); return; }
       const start = document.getElementById("p-start").value;
       const end = document.getElementById("p-end").value;
       const due = document.getElementById("p-due").value;
+      if (!ruleId) { showError(errorEl, "Create a rule and a version first."); return; }
       if (!start || !end || !due) { showError(errorEl, "All three dates are required."); return; }
 
       const { error } = await supabaseClient.rpc("fn_generate_contribution_period", {
-        p_organisation_id: orgId,
-        p_rule_id: ruleId,
-        p_period_start: start,
-        p_period_end: end,
-        p_due_date: due,
+        p_organisation_id: orgId, p_rule_id: ruleId,
+        p_period_start: start, p_period_end: end, p_due_date: due,
       });
       if (error) { showError(errorEl, error.message); return; }
+      successEl.textContent = "Period generated.";
+      successEl.style.display = "block";
       loadStatus();
     }
 
@@ -208,20 +273,13 @@
       const ruleId = document.getElementById("s-rule").value;
       const tbody = document.getElementById("rows");
       if (!ruleId) { tbody.innerHTML = `<tr><td colspan="4" class="empty">No periods generated yet.</td></tr>`; return; }
-
-      const { data: periods } = await supabaseClient
-        .from("contribution_periods").select("id, period_start")
-        .eq("organisation_id", orgId).eq("rule_id", ruleId).order("period_start", { ascending: false }).limit(1);
-
+      const { data: periods } = await supabaseClient.from("contribution_periods")
+        .select("id").eq("organisation_id", orgId).eq("rule_id", ruleId).order("period_start", { ascending: false }).limit(1);
       if (!periods || !periods.length) { tbody.innerHTML = `<tr><td colspan="4" class="empty">No periods generated yet for this rule.</td></tr>`; return; }
-
-      const { data, error } = await supabaseClient
-        .from("contributions")
+      const { data } = await supabaseClient.from("contributions")
         .select("amount_expected, amount_paid, status, members(full_name)")
         .eq("organisation_id", orgId).eq("period_id", periods[0].id);
-
-      if (error) { tbody.innerHTML = `<tr><td colspan="4" class="error">${error.message}</td></tr>`; return; }
-      tbody.innerHTML = data.map(c => `
+      tbody.innerHTML = (data || []).map(c => `
         <tr>
           <td>${c.members.full_name}</td>
           <td class="num">${money(c.amount_expected)}</td>
@@ -239,6 +297,7 @@
       await loadAccounts();
       await loadFundTypes();
       await loadRules();
+      toggleMethodFields();
     })();
   </script>
 </body>

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Member Profile — Financial Operating System</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .profile-head { display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px; }
+  .kv { display:grid; grid-template-columns: 150px 1fr; gap:6px 12px; font-size:14px; }
+  .kv .k { color: var(--color-muted); }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--space-3); }
+  .kpi { background: var(--color-surface); border: 1px solid var(--color-line); border-radius: var(--radius); padding: var(--space-3); }
+  .kpi .value { font-family: var(--font-mono); font-size: 20px; font-variant-numeric: tabular-nums; }
+  .kpi .label { color: var(--color-muted); font-size: 12px; margin-top: 2px; }
+  .back { color: var(--color-muted); text-decoration:none; font-size:13px; }
+</style>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav">
+      <div class="brand">Ledger</div>
+      <a href="index.html">Dashboard</a>
+      <a href="members.html" class="active">Members</a>
+      <a href="contributions.html">Contributions</a>
+      <a href="payments.html">Payments</a>
+      <a href="loans.html">Loans</a>
+      <a href="reconcile.html">Bank / M-Pesa</a>
+      <a href="statement.html">Member Statements</a>
+      <a href="reports.html">Reports</a>
+      <a href="periods.html">Accounting Periods</a>
+      <a href="#" onclick="signOut()">Sign out</a>
+    </nav>
+    <main class="main">
+      <a class="back" href="members.html">&larr; Back to members</a>
+      <div id="content"><p class="empty" style="margin-top:16px">Loading…</p></div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let orgId;
+
+    function getMemberId() {
+      return new URLSearchParams(window.location.search).get("id");
+    }
+
+    async function load() {
+      const memberId = getMemberId();
+      const content = document.getElementById("content");
+      if (!memberId) { content.innerHTML = `<p class="error">No member selected.</p>`; return; }
+
+      const { data: m, error } = await supabaseClient
+        .from("members")
+        .select("*, member_kyc(*), next_of_kin(full_name, relationship, phone)")
+        .eq("id", memberId).eq("organisation_id", orgId).single();
+
+      if (error || !m) { content.innerHTML = `<p class="error">${error ? error.message : "Member not found."}</p>`; return; }
+
+      const kyc = m.member_kyc && m.member_kyc.length ? m.member_kyc[0] : {};
+
+      // Contributions (expected vs paid across all periods)
+      const { data: contribs } = await supabaseClient
+        .from("contributions")
+        .select("amount_expected, amount_paid, status, contribution_periods(period_start, period_end, contribution_rules(contribution_types(name, category)))")
+        .eq("member_id", memberId);
+
+      const expected = (contribs || []).reduce((s,c) => s + Number(c.amount_expected), 0);
+      const paidC = (contribs || []).reduce((s,c) => s + Number(c.amount_paid), 0);
+
+      // Fund balances from posted allocations
+      const { data: allocs } = await supabaseClient
+        .from("payment_allocations")
+        .select("amount, contribution_types(category), payments!inner(member_id, status)")
+        .eq("payments.member_id", memberId)
+        .eq("payments.status", "posted");
+
+      const fundTotal = cat => (allocs || []).filter(a => a.contribution_types.category === cat).reduce((s,a) => s + Number(a.amount), 0);
+      const shares = fundTotal("share_capital");
+      const deposits = fundTotal("share_deposit");
+      const welfare = fundTotal("welfare");
+
+      // Recent payments
+      const { data: payments } = await supabaseClient
+        .from("payments")
+        .select("transaction_date, channel, reference, amount, status")
+        .eq("member_id", memberId).order("transaction_date", { ascending: false }).limit(15);
+
+      const kycClass = kyc.kyc_status === "verified" ? "paid" : kyc.kyc_status === "rejected" ? "unpaid" : "partial";
+
+      content.innerHTML = `
+        <div class="card">
+          <div class="profile-head">
+            <div>
+              <h1 style="margin-bottom:4px">${m.full_name}</h1>
+              <div style="color:var(--color-muted)">${m.member_number}</div>
+            </div>
+            <div style="text-align:right">
+              <span class="status ${m.status === 'active' ? 'paid' : 'unpaid'}">${m.status}</span>
+              <span class="status ${kycClass}" style="margin-left:6px">KYC: ${kyc.kyc_status || 'pending'}</span>
+            </div>
+          </div>
+          <div class="kv" style="margin-top:16px">
+            <div class="k">Phone</div><div>${m.phone ?? "—"}</div>
+            <div class="k">Email</div><div>${m.email ?? "—"}</div>
+            <div class="k">Date joined</div><div>${m.date_joined ?? "—"}</div>
+            <div class="k">Category</div><div>${m.membership_category ?? "—"}</div>
+            <div class="k">Occupation</div><div>${m.occupation ?? "—"}</div>
+            <div class="k">ID (${kyc.id_type ?? "—"})</div><div>${kyc.id_number ?? "—"}</div>
+            <div class="k">KYC verified on</div><div>${kyc.verification_date ?? "—"}</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Fund balances (posted)</h2>
+          <div class="kpi-grid">
+            <div class="kpi"><div class="value">${money(shares)}</div><div class="label">Shares</div></div>
+            <div class="kpi"><div class="value">${money(deposits)}</div><div class="label">Deposits</div></div>
+            <div class="kpi"><div class="value">${money(welfare)}</div><div class="label">Welfare</div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Contribution status (all periods)</h2>
+          <div class="kpi-grid" style="margin-bottom:16px">
+            <div class="kpi"><div class="value">${money(expected)}</div><div class="label">Expected</div></div>
+            <div class="kpi"><div class="value">${money(paidC)}</div><div class="label">Paid</div></div>
+            <div class="kpi"><div class="value">${money(expected - paidC)}</div><div class="label">Outstanding</div></div>
+          </div>
+          <table>
+            <thead><tr><th>Fund</th><th>Period</th><th class="num">Expected</th><th class="num">Paid</th><th>Status</th></tr></thead>
+            <tbody>
+              ${(contribs && contribs.length) ? contribs.map(c => {
+                const rule = c.contribution_periods && c.contribution_periods.contribution_rules;
+                const fund = rule && rule.contribution_types ? rule.contribution_types.name : "Generic";
+                return `<tr>
+                  <td>${fund}</td>
+                  <td>${c.contribution_periods.period_start} to ${c.contribution_periods.period_end}</td>
+                  <td class="num">${money(c.amount_expected)}</td>
+                  <td class="num">${money(c.amount_paid)}</td>
+                  <td><span class="status ${c.status === 'paid' ? 'paid' : c.status === 'partial' ? 'partial' : 'unpaid'}">${c.status}</span></td>
+                </tr>`;
+              }).join("") : `<tr><td colspan="5" class="empty">No contribution periods yet.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h2>Recent payments</h2>
+          <table>
+            <thead><tr><th>Date</th><th>Channel</th><th>Reference</th><th class="num">Amount</th><th>Status</th></tr></thead>
+            <tbody>
+              ${(payments && payments.length) ? payments.map(p => `
+                <tr>
+                  <td>${p.transaction_date}</td>
+                  <td>${p.channel}</td>
+                  <td>${p.reference ?? "—"}</td>
+                  <td class="num">${money(p.amount)}</td>
+                  <td><span class="status ${p.status === 'posted' ? 'paid' : 'partial'}">${p.status}</span></td>
+                </tr>`).join("") : `<tr><td colspan="5" class="empty">No payments recorded yet.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h2>Next of kin</h2>
+          <table>
+            <thead><tr><th>Name</th><th>Relationship</th><th>Phone</th></tr></thead>
+            <tbody>
+              ${(m.next_of_kin && m.next_of_kin.length) ? m.next_of_kin.map(n => `
+                <tr><td>${n.full_name}</td><td>${n.relationship ?? "—"}</td><td>${n.phone ?? "—"}</td></tr>`).join("")
+                : `<tr><td colspan="3" class="empty">None recorded.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    (async () => {
+      const session = await requireSession();
+      if (!session) return;
+      const org = await currentOrg();
+      if (!org) return;
+      orgId = org.organisation_id;
+      load();
+    })();
+  </script>
+</body>
+</html>
