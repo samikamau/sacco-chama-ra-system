@@ -36,6 +36,7 @@
               <option value="ie">Income &amp; Expenditure</option>
               <option value="bs">Balance Sheet</option>
               <option value="cf">Cash Flow</option>
+              <option value="gl">General Ledger</option>
             </select>
           </div>
           <div class="field" style="margin-bottom:0"><label>Period</label>
@@ -53,6 +54,10 @@
           </div>
           <div class="field" style="margin-bottom:0" id="fld-from"><label>From</label><input id="from" type="date"></div>
           <div class="field" style="margin-bottom:0" id="fld-to"><label>To</label><input id="to" type="date"></div>
+          <div class="field" style="margin-bottom:0" id="fld-account" style="display:none">
+            <label>Account (GL only)</label>
+            <select id="gl-account"><option value="">All accounts</option></select>
+          </div>
           <button class="btn" onclick="run()">Run</button>
           <button class="btn accent" onclick="downloadPdf()">Download PDF</button>
         </div>
@@ -68,26 +73,60 @@
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
   <script>
-    let orgId, orgName, lastRows = [], lastKind = "trial";
+    let orgId, orgName, lastRows = [], lastKind = "trial", glAccounts = [];
+
+    async function loadGLAccounts() {
+      const { data } = await supabaseClient.from("chart_of_accounts")
+        .select("id, code, name").eq("organisation_id", orgId).eq("is_active", true).order("code");
+      glAccounts = data || [];
+      document.getElementById("gl-account").innerHTML =
+        `<option value="">All accounts</option>` +
+        glAccounts.map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join("");
+    }
+
+    document.getElementById("report-type").addEventListener("change", function() {
+      document.getElementById("fld-account").style.display = this.value === "gl" ? "block" : "none";
+    });
 
     function applyPreset() {
       const p = document.getElementById("rpt-preset").value;
       const now = new Date();
-      const y = now.getFullYear(), m = now.getMonth();
+      const y = now.getFullYear(), m = now.getMonth(); // m is 0-based
       let from = null, to = null;
-      if (p === "this_month") { from = new Date(y,m,1); to = new Date(y,m+1,0); }
-      else if (p === "last_month") { from = new Date(y,m-1,1); to = new Date(y,m,0); }
-      else if (p === "this_quarter") { const q=Math.floor(m/3)*3; from=new Date(y,q,1); to=new Date(y,q+3,0); }
-      else if (p === "last_quarter") { const q=Math.floor(m/3)*3-3; from=new Date(y,q,1); to=new Date(y,q+3,0); }
-      else if (p === "this_year") { from=new Date(y,0,1); to=new Date(y,11,31); }
-      else if (p === "last_year") { from=new Date(y-1,0,1); to=new Date(y-1,11,31); }
-      else if (p === "ytd") { from=new Date(y,0,1); to=now; }
-      const custom = p === "custom";
-      document.getElementById("fld-from").style.display = (custom || from) ? "block" : "none";
-      document.getElementById("fld-to").style.display = (custom || to) ? "block" : "none";
+
+      if (p === "this_month") {
+        from = new Date(y, m, 1);
+        to   = new Date(y, m + 1, 0); // last day of current month
+      } else if (p === "last_month") {
+        from = new Date(y, m - 1, 1);
+        to   = new Date(y, m, 0);     // last day of previous month
+      } else if (p === "this_quarter") {
+        const qStart = Math.floor(m / 3) * 3;
+        from = new Date(y, qStart, 1);
+        to   = new Date(y, qStart + 3, 0); // last day of quarter
+      } else if (p === "last_quarter") {
+        const qStart = Math.floor(m / 3) * 3 - 3;
+        const qYear  = qStart < 0 ? y - 1 : y;
+        const qAdj   = ((qStart % 12) + 12) % 12;
+        from = new Date(qYear, qAdj, 1);
+        to   = new Date(qYear, qAdj + 3, 0);
+      } else if (p === "this_year") {
+        from = new Date(y, 0, 1);           // 1 Jan
+        to   = new Date(y, 11, 31);         // 31 Dec
+      } else if (p === "last_year") {
+        from = new Date(y - 1, 0, 1);      // 1 Jan last year
+        to   = new Date(y - 1, 11, 31);    // 31 Dec last year
+      } else if (p === "ytd") {
+        from = new Date(y, 0, 1);
+        to   = now;
+      }
+
+      const show = (p === "custom");
+      document.getElementById("fld-from").style.display = (show || from) ? "block" : "none";
+      document.getElementById("fld-to").style.display   = (show || to)   ? "block" : "none";
       if (from) document.getElementById("from").value = from.toISOString().slice(0,10);
-      if (to) document.getElementById("to").value = to.toISOString().slice(0,10);
-      if (!custom) run();
+      if (to)   document.getElementById("to").value   = to.toISOString().slice(0,10);
+      if (!show) run();
     }
 
     function dates() {
@@ -128,7 +167,7 @@
         if (error) { body.innerHTML = `<p class="error">${error.message}</p>`; return; }
         lastRows = data || [];
         renderBS(lastRows);
-      } else {
+      } else if (kind === "cf") {
         document.getElementById("report-title").textContent = "Cash Flow";
         const { data, error } = await supabaseClient.rpc("fn_cash_flow", {
           p_organisation_id: orgId, p_from: from, p_to: to,
@@ -136,8 +175,54 @@
         if (error) { body.innerHTML = `<p class="error">${error.message}</p>`; return; }
         lastRows = data || [];
         renderCF(lastRows);
+      } else {
+        document.getElementById("report-title").textContent = "General Ledger";
+        const acctId = document.getElementById("gl-account").value || null;
+        const { data, error } = await supabaseClient.rpc("fn_general_ledger", {
+          p_organisation_id: orgId, p_from: from, p_to: to,
+          p_account_id: acctId,
+        });
+        if (error) { body.innerHTML = `<p class="error">${error.message}</p>`; return; }
+        lastRows = data || [];
+        renderGL(lastRows);
       }
     }
+
+    function renderGL(rows) {
+      const body = document.getElementById("report-body");
+      if (!rows.length) { body.innerHTML = `<p class="empty">No posted transactions in this range.</p>`; return; }
+
+      // Group by account
+      const byAccount = {};
+      rows.forEach(r => {
+        const key = r.account_code;
+        if (!byAccount[key]) byAccount[key] = { name: r.account_name, type: r.account_type, rows: [] };
+        byAccount[key].rows.push(r);
+      });
+
+      body.innerHTML = Object.entries(byAccount).map(([code, acct]) => {
+        const lastRow = acct.rows[acct.rows.length - 1];
+        const closing = lastRow ? Number(lastRow.running_balance) : 0;
+        const rowsHTML = acct.rows.map(r => `
+          <tr>
+            <td>${r.entry_date}</td>
+            <td><code style="font-size:11px">${r.journal_number || "—"}</code></td>
+            <td>${r.description}</td>
+            <td class="num">${Number(r.debit)  ? money(r.debit)  : ""}</td>
+            <td class="num">${Number(r.credit) ? money(r.credit) : ""}</td>
+            <td class="num" style="font-family:var(--font-mono)">${money(r.running_balance)}</td>
+          </tr>`).join("");
+        return `
+          <h3>${code} — ${acct.name} <span style="font-size:12px;color:var(--color-muted);font-weight:400">(${acct.type})</span></h3>
+          <table style="margin-bottom:20px">
+            <thead><tr><th>Date</th><th>Journal</th><th>Description</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
+            <tbody>
+              <tr style="color:var(--color-muted);font-style:italic"><td colspan="5">Opening balance</td><td class="num">0.00</td></tr>
+              ${rowsHTML}
+            </tbody>
+            <tfoot><tr style="font-weight:bold"><td colspan="5">Closing balance</td><td class="num">${money(closing)}</td></tr></tfoot>
+          </table>`;
+      }).join("");
 
     function renderBS(rows) {
       const body = document.getElementById("report-body");
@@ -257,9 +342,10 @@
       const doc = new jsPDF();
       const { from, to } = dates();
       const title = lastKind === "trial" ? "Trial Balance"
-                  : lastKind === "ie" ? "Income & Expenditure"
-                  : lastKind === "bs" ? "Balance Sheet"
-                  : "Cash Flow";
+                  : lastKind === "ie"    ? "Income & Expenditure"
+                  : lastKind === "bs"    ? "Balance Sheet"
+                  : lastKind === "cf"    ? "Cash Flow"
+                  : "General Ledger";
       const rangeTxt = (from || to) ? `${from || "start"} to ${to || "today"}` : "All time";
 
       doc.setFontSize(16); doc.text(orgName || "Report", 14, 18);
@@ -283,10 +369,14 @@
         const rowsData = lastRows.map(r => [r.section, r.account_name, money(r.amount)]);
         doc.autoTable({ startY: 38, head: [["Section","Account","Amount"]], body: rowsData,
           styles: { fontSize: 9 }, headStyles: { fillColor: [27,58,52] } });
-      } else {
+      } else if (lastKind === "cf") {
         const rowsData = lastRows.map(r => [r.direction, r.category, money(r.amount)]);
         doc.autoTable({ startY: 38, head: [["Direction","Category","Amount"]], body: rowsData,
           styles: { fontSize: 9 }, headStyles: { fillColor: [27,58,52] } });
+      } else if (lastKind === "gl") {
+        const rowsData = lastRows.map(r => [r.account_code, r.entry_date, r.journal_number || "—", r.description, money(r.debit), money(r.credit), money(r.running_balance)]);
+        doc.autoTable({ startY: 38, head:[["Account","Date","Journal","Description","Debit","Credit","Balance"]], body: rowsData,
+          styles:{fontSize:8}, headStyles:{fillColor:[27,58,52]} });
       }
       doc.save(`${title.replace(/\W+/g,"_")}.pdf`);
     }
@@ -298,6 +388,8 @@
       if (!org) return;
       orgId = org.organisation_id;
       orgName = org.organisations.name;
+      await loadGLAccounts();
+      applyPreset();
       run();
     })();
   </script>
