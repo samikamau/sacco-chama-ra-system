@@ -38,9 +38,10 @@
         <h2>New journal entry</h2>
         <div style="display:flex;gap:12px;flex-wrap:wrap">
           <div class="field" style="flex:1;min-width:160px"><label>Date *</label><input id="j-date" type="date"></div>
-          <div class="field" style="flex:2;min-width:240px"><label>Description *</label><input id="j-desc" placeholder="e.g. Correction of bank charge"></div>
-          <div class="field" style="flex:1;min-width:140px"><label>Reference</label><input id="j-ref"></div>
+          <div class="field" style="flex:2;min-width:240px"><label>Description * (adjusting entry only)</label><input id="j-desc" placeholder="e.g. Correction — accrued interest reversal"></div>
+          <div class="field" style="flex:1;min-width:140px"><label>Reference number *</label><input id="j-ref" placeholder="e.g. ADJ-2026-001"></div>
         </div>
+        <p style="color:var(--color-muted);font-size:12px;margin-top:4px">The General Journal is for <strong>adjusting entries only</strong>. Payments, loan disbursements, and contributions are posted automatically by the system and appear in the list below as read-only.</p>
 
         <h3>Lines</h3>
         <table class="lines-table" style="margin-bottom:8px">
@@ -160,7 +161,9 @@
 
       const date = document.getElementById("j-date").value;
       const desc = document.getElementById("j-desc").value.trim();
+      const ref  = document.getElementById("j-ref").value.trim();
       if (!date || !desc) { showError(errorEl, "Date and description are required."); return; }
+      if (!ref) { showError(errorEl, "A reference number is required for all adjusting entries (e.g. ADJ-2026-001)."); return; }
 
       const lines = collectLines();
       if (lines.length < 2) { showError(errorEl, "At least two lines (one debit, one credit) are required."); return; }
@@ -214,17 +217,28 @@
       const tbody = document.getElementById("journal-rows");
       if (error) { tbody.innerHTML = `<tr><td colspan="5" class="error">${error.message}</td></tr>`; return; }
       if (!data.length) { tbody.innerHTML = `<tr><td colspan="5" class="empty">No journal entries yet.</td></tr>`; return; }
-      tbody.innerHTML = data.map(j => `
-        <tr>
+      const SYSTEM_SOURCES = ['payment','loan_disbursement','loan_repayment','contribution','reallocation','reversal'];
+
+      tbody.innerHTML = data.map(j => {
+        const isSystem = SYSTEM_SOURCES.includes(j.source_type);
+        const badge = isSystem
+          ? `<span class="status partial" style="font-size:11px">${j.source_type}</span>`
+          : `<span class="status paid" style="font-size:11px">adjusting</span>`;
+        return `<tr>
           <td><code>${j.journal_number || "—"}</code></td>
           <td>${j.entry_date}</td>
           <td>${j.description}</td>
-          <td><span class="status ${j.status==='posted'?'paid':j.status==='reversed'?'unpaid':'partial'}">${j.status}</span></td>
-          <td><button class="btn" onclick="openEntry('${j.id}')">Open</button></td>
-        </tr>`).join("");
+          <td>${badge} <span class="status ${j.status==='posted'?'paid':j.status==='reversed'?'unpaid':'partial'}">${j.status}</span></td>
+          <td><button class="btn" onclick="openEntry('${j.id}','${j.source_type}')">View</button></td>
+        </tr>`;
+      }).join("");
     }
 
-    async function openEntry(id) {
+    const SYSTEM_SOURCES = ['payment','loan_disbursement','loan_repayment','contribution','reallocation'];
+
+    async function openEntry(id, sourceType) {
+      sourceType = sourceType || 'manual';
+      const isSystem = SYSTEM_SOURCES.includes(sourceType);
       const card = document.getElementById("detail-card");
       const body = document.getElementById("detail-body");
       card.style.display = "block";
@@ -247,19 +261,23 @@
 
       document.getElementById("detail-title").textContent = je.journal_number || "Entry detail";
       body.innerHTML = `
+        ${isSystem ? `<div style="background:#F3EBD8;padding:10px 14px;border-radius:3px;margin-bottom:12px;font-size:13px">
+          <strong>System entry (${sourceType})</strong> — This was posted automatically. It cannot be edited. Use a manual adjusting entry to correct it if needed.
+        </div>` : ''}
         <p><strong>Date:</strong> ${je.entry_date} &nbsp;|&nbsp; <strong>Status:</strong> <span class="status ${je.status==='posted'?'paid':'partial'}">${je.status}</span></p>
         <p><strong>Description:</strong> ${je.description}</p>
         <table><thead><tr><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead>
           <tbody>${lineRows}</tbody>
           <tfoot><tr style="font-weight:bold"><td>Totals</td><td class="num">${money(totalDr)}</td><td class="num">${money(totalCr)}</td></tr></tfoot>
         </table>
-        ${je.status === 'posted' ? `
+        ${!isSystem && je.status === 'posted' ? `
           <div style="margin-top:12px">
             <button class="btn" style="background:var(--color-alert)" onclick="reverseEntry('${id}')">Reverse this entry</button>
-          </div>` : `
+          </div>` : ''}
+        ${!isSystem && je.status === 'draft' ? `
           <div style="margin-top:12px">
             <button class="btn accent" onclick="postEntry('${id}')">Post draft</button>
-          </div>`}
+          </div>` : ''}
         <p id="entry-error" class="error" style="display:none"></p>`;
     }
 
