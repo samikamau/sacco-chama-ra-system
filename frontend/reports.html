@@ -31,6 +31,8 @@
             <select id="report-type" onchange="run()">
               <option value="trial">Trial Balance</option>
               <option value="ie">Income &amp; Expenditure</option>
+              <option value="bs">Balance Sheet</option>
+              <option value="cf">Cash Flow</option>
             </select>
           </div>
           <div class="field" style="margin-bottom:0"><label>From (optional)</label><input id="from" type="date"></div>
@@ -74,7 +76,7 @@
         if (error) { body.innerHTML = `<p class="error">${error.message}</p>`; return; }
         lastRows = data || [];
         renderTrial(lastRows);
-      } else {
+      } else if (kind === "ie") {
         document.getElementById("report-title").textContent = "Income & Expenditure";
         const { data, error } = await supabaseClient.rpc("fn_income_expenditure", {
           p_organisation_id: orgId, p_from: from, p_to: to,
@@ -82,7 +84,74 @@
         if (error) { body.innerHTML = `<p class="error">${error.message}</p>`; return; }
         lastRows = data || [];
         renderIE(lastRows);
+      } else if (kind === "bs") {
+        document.getElementById("report-title").textContent = "Balance Sheet (as at " + (to || "today") + ")";
+        const { data, error } = await supabaseClient.rpc("fn_balance_sheet", {
+          p_organisation_id: orgId, p_as_at: to,
+        });
+        if (error) { body.innerHTML = `<p class="error">${error.message}</p>`; return; }
+        lastRows = data || [];
+        renderBS(lastRows);
+      } else {
+        document.getElementById("report-title").textContent = "Cash Flow";
+        const { data, error } = await supabaseClient.rpc("fn_cash_flow", {
+          p_organisation_id: orgId, p_from: from, p_to: to,
+        });
+        if (error) { body.innerHTML = `<p class="error">${error.message}</p>`; return; }
+        lastRows = data || [];
+        renderCF(lastRows);
       }
+    }
+
+    function renderBS(rows) {
+      const body = document.getElementById("report-body");
+      if (!rows.length) { body.innerHTML = `<p class="empty">No posted balances yet.</p>`; return; }
+      const assets = rows.filter(r => r.section === "asset");
+      const liabilities = rows.filter(r => r.section === "liability");
+      const equity = rows.filter(r => r.section === "equity");
+      const sum = list => list.reduce((s,r) => s + Number(r.amount), 0);
+      const totalAssets = sum(assets);
+      const totalLE = sum(liabilities) + sum(equity);
+
+      const section = (title, list) => `
+        <h3>${title}</h3>
+        <table style="margin-bottom:16px"><tbody>
+          ${list.length ? list.map(r => `<tr><td>${r.account_name}</td><td class="num">${money(r.amount)}</td></tr>`).join("")
+            : `<tr><td colspan="2" class="empty">None.</td></tr>`}
+          <tr style="font-weight:bold;border-top:1px solid var(--color-ink)"><td>Total ${title}</td><td class="num">${money(sum(list))}</td></tr>
+        </tbody></table>`;
+
+      const balanced = Math.abs(totalAssets - totalLE) < 0.005;
+      body.innerHTML =
+        section("Assets", assets) +
+        section("Liabilities", liabilities) +
+        section("Equity", equity) +
+        `<p style="font-weight:bold;font-size:15px">Total assets: KES ${money(totalAssets)} &nbsp;|&nbsp; Total liabilities + equity: KES ${money(totalLE)}</p>
+         <p style="color:${balanced ? 'var(--color-success)' : 'var(--color-alert)'}">
+           ${balanced ? '✓ Balanced.' : '⚠ Does not balance by KES ' + money(Math.abs(totalAssets - totalLE)) + ' — investigate.'}</p>`;
+    }
+
+    function renderCF(rows) {
+      const body = document.getElementById("report-body");
+      if (!rows.length) { body.innerHTML = `<p class="empty">No cash movements in this range.</p>`; return; }
+      const inflow = rows.filter(r => r.direction === "inflow");
+      const outflow = rows.filter(r => r.direction === "outflow");
+      const sum = list => list.reduce((s,r) => s + Number(r.amount), 0);
+      const net = sum(inflow) - sum(outflow);
+
+      const section = (title, list) => `
+        <h3>${title}</h3>
+        <table style="margin-bottom:16px"><tbody>
+          ${list.length ? list.map(r => `<tr><td>${r.category}</td><td class="num">${money(r.amount)}</td></tr>`).join("")
+            : `<tr><td colspan="2" class="empty">None.</td></tr>`}
+          <tr style="font-weight:bold;border-top:1px solid var(--color-ink)"><td>Total ${title}</td><td class="num">${money(sum(list))}</td></tr>
+        </tbody></table>`;
+
+      body.innerHTML =
+        section("Cash inflows", inflow) +
+        section("Cash outflows", outflow) +
+        `<p style="font-weight:bold;font-size:16px;color:${net >= 0 ? 'var(--color-success)' : 'var(--color-alert)'}">
+           Net cash movement: KES ${money(net)}</p>`;
     }
 
     function renderTrial(rows) {
@@ -146,7 +215,10 @@
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
       const { from, to } = dates();
-      const title = lastKind === "trial" ? "Trial Balance" : "Income & Expenditure";
+      const title = lastKind === "trial" ? "Trial Balance"
+                  : lastKind === "ie" ? "Income & Expenditure"
+                  : lastKind === "bs" ? "Balance Sheet"
+                  : "Cash Flow";
       const rangeTxt = (from || to) ? `${from || "start"} to ${to || "today"}` : "All time";
 
       doc.setFontSize(16); doc.text(orgName || "Report", 14, 18);
@@ -162,9 +234,17 @@
         rowsData.push(["", "TOTALS", money(totalDr), money(totalCr)]);
         doc.autoTable({ startY: 38, head: [["Code","Account","Debit","Credit"]], body: rowsData,
           styles: { fontSize: 9 }, headStyles: { fillColor: [27,58,52] } });
-      } else {
+      } else if (lastKind === "ie") {
         const rowsData = lastRows.map(r => [r.account_code, r.account_name, r.account_type, money(r.amount)]);
         doc.autoTable({ startY: 38, head: [["Code","Account","Type","Amount"]], body: rowsData,
+          styles: { fontSize: 9 }, headStyles: { fillColor: [27,58,52] } });
+      } else if (lastKind === "bs") {
+        const rowsData = lastRows.map(r => [r.section, r.account_name, money(r.amount)]);
+        doc.autoTable({ startY: 38, head: [["Section","Account","Amount"]], body: rowsData,
+          styles: { fontSize: 9 }, headStyles: { fillColor: [27,58,52] } });
+      } else {
+        const rowsData = lastRows.map(r => [r.direction, r.category, money(r.amount)]);
+        doc.autoTable({ startY: 38, head: [["Direction","Category","Amount"]], body: rowsData,
           styles: { fontSize: 9 }, headStyles: { fillColor: [27,58,52] } });
       }
       doc.save(`${title.replace(/\W+/g,"_")}.pdf`);
