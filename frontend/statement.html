@@ -7,6 +7,19 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+  .filter-row { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+  .filter-row .field { margin-bottom:0; min-width:160px; }
+  .stmt-header { background:var(--color-primary); color:#fff; padding:var(--space-4); border-radius:var(--radius) var(--radius) 0 0; }
+  .stmt-header h2 { color:#fff; margin-bottom:4px; font-size:20px; }
+  .stmt-header .sub { opacity:0.75; font-size:13px; }
+  .stmt-section { border:1px solid var(--color-line); border-top:none; }
+  .stmt-section-title { background:#F3EBD8; padding:8px 16px; font-weight:600; font-size:13px; letter-spacing:0.03em; }
+  .running-balance { font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+  .component-check { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
+  .component-check label { display:flex; align-items:center; gap:4px; font-size:13px; cursor:pointer; background:var(--color-bg); padding:4px 10px; border-radius:999px; border:1px solid var(--color-line); }
+  .component-check input[type=checkbox] { accent-color:var(--color-primary); }
+</style>
 </head>
 <body>
   <div class="app-shell">
@@ -17,6 +30,7 @@
       <a href="contributions.html">Contributions</a>
       <a href="payments.html">Payments</a>
       <a href="loans.html">Loans</a>
+      <a href="journal.html">General Journal</a>
       <a href="reconcile.html">Bank / M-Pesa</a>
       <a href="statement.html" class="active">Member Statements</a>
       <a href="reports.html">Reports</a>
@@ -27,268 +41,377 @@
       <h1>Member statement</h1>
 
       <div class="card">
-        <div class="field">
-          <label>Member</label>
-          <select id="f-member" onchange="loadStatement()"></select>
+        <div class="filter-row">
+          <div class="field">
+            <label>Member</label>
+            <select id="f-member"></select>
+          </div>
+          <div class="field">
+            <label>Date range</label>
+            <select id="f-preset" onchange="applyPreset()">
+              <option value="all">All time</option>
+              <option value="this_month">This month</option>
+              <option value="last_month">Last month</option>
+              <option value="this_quarter">This quarter</option>
+              <option value="last_quarter">Last quarter</option>
+              <option value="this_year">This year</option>
+              <option value="last_year">Last year</option>
+              <option value="ytd">Year to date</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div class="field" id="fld-from" style="display:none"><label>From</label><input id="f-from" type="date"></div>
+          <div class="field" id="fld-to" style="display:none"><label>To</label><input id="f-to" type="date"></div>
         </div>
-        <button class="btn accent" onclick="downloadPdf()">Download PDF</button>
+
+        <div style="margin-top:14px">
+          <label style="font-size:13px;color:var(--color-muted)">Components</label>
+          <div class="component-check" id="components"></div>
+          <label style="font-size:12px;cursor:pointer"><input type="checkbox" id="chk-all" onchange="toggleAll()"> Select all</label>
+        </div>
+
+        <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" onclick="generateStatement()">Generate</button>
+          <button class="btn accent" onclick="downloadPdf()">Download PDF</button>
+          <button class="btn" onclick="window.print()">Print</button>
+        </div>
       </div>
 
-      <div id="fund-cards"></div>
-
-      <div class="card" id="legacy-card" style="display:none">
-        <h2>Other payments (not linked to a fund)</h2>
-        <p style="color:var(--color-muted);font-size:13px">These were recorded before fund types existed, so they were never split by account. Pick a fund and reallocate them.</p>
-        <table>
-          <thead><tr><th>Date</th><th>Channel</th><th>Reference</th><th class="num">Amount</th><th>Reallocate to</th><th></th></tr></thead>
-          <tbody id="legacy-rows"></tbody>
-        </table>
-        <p id="legacy-error" class="error" style="display:none"></p>
-      </div>
-
-      <p style="color:var(--color-muted);font-size:13px">Loans will appear here as their own account once Phase 2 is built — not shown yet.</p>
+      <div id="statement-output"></div>
     </main>
   </div>
 
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
   <script>
-    let orgId, orgName;
-    let currentFunds = [], currentLegacyPayments = [], currentMemberLabel = "";
+    let orgId, orgName, fundTypes = [], members = [], loans = [];
+    let lastStatement = null;
 
-    async function loadMembers() {
-      const { data } = await supabaseClient.from("members")
-        .select("id, member_number, full_name").eq("organisation_id", orgId).order("full_name");
-      document.getElementById("f-member").innerHTML =
-        (data || []).map(m => `<option value="${m.id}">${m.member_number} — ${m.full_name}</option>`).join("");
-      if (data && data.length) loadStatement();
+    // -------------------------------------------------------------------------
+    // DATE PRESET LOGIC
+    // -------------------------------------------------------------------------
+    function applyPreset() {
+      const p = document.getElementById("f-preset").value;
+      const now = new Date();
+      let from = null, to = null;
+      const y = now.getFullYear(), m = now.getMonth();
+
+      if (p === "this_month") {
+        from = new Date(y, m, 1); to = new Date(y, m + 1, 0);
+      } else if (p === "last_month") {
+        from = new Date(y, m - 1, 1); to = new Date(y, m, 0);
+      } else if (p === "this_quarter") {
+        const qStart = Math.floor(m / 3) * 3;
+        from = new Date(y, qStart, 1); to = new Date(y, qStart + 3, 0);
+      } else if (p === "last_quarter") {
+        const qStart = Math.floor(m / 3) * 3 - 3;
+        from = new Date(y, qStart, 1); to = new Date(y, qStart + 3, 0);
+      } else if (p === "this_year") {
+        from = new Date(y, 0, 1); to = new Date(y, 11, 31);
+      } else if (p === "last_year") {
+        from = new Date(y - 1, 0, 1); to = new Date(y - 1, 11, 31);
+      } else if (p === "ytd") {
+        from = new Date(y, 0, 1); to = now;
+      }
+
+      const show = p === "custom";
+      document.getElementById("fld-from").style.display = show ? "block" : "none";
+      document.getElementById("fld-to").style.display = show ? "block" : "none";
+      if (from) document.getElementById("f-from").value = from.toISOString().slice(0,10);
+      if (to) document.getElementById("f-to").value = to.toISOString().slice(0,10);
     }
 
-    function fundCardHTML(fund) {
-      const expected = fund.contributions.reduce((s, c) => s + Number(c.amount_expected), 0);
-      const paid = fund.contributions.reduce((s, c) => s + Number(c.amount_paid), 0);
-      const received = fund.transactions.reduce((s, t) => s + Number(t.amount), 0);
+    function getDateRange() {
+      const p = document.getElementById("f-preset").value;
+      if (p === "all") return { from: null, to: null };
+      return {
+        from: document.getElementById("f-from").value || null,
+        to: document.getElementById("f-to").value || null,
+      };
+    }
 
-      const periodRows = fund.contributions.length
-        ? fund.contributions.map(c => `
-            <tr>
-              <td>${c.period_start} to ${c.period_end}</td>
-              <td>${c.due_date}</td>
-              <td class="num">${money(c.amount_expected)}</td>
-              <td class="num">${money(c.amount_paid)}</td>
-              <td><span class="status ${c.status === 'paid' ? 'paid' : c.status === 'partial' ? 'partial' : 'unpaid'}">${c.status}</span></td>
-            </tr>`).join("")
-        : `<tr><td colspan="5" class="empty">No recurring periods set up for this fund.</td></tr>`;
+    function toggleAll() {
+      const checked = document.getElementById("chk-all").checked;
+      document.querySelectorAll(".comp-check").forEach(c => c.checked = checked);
+    }
 
-      const txnRows = fund.transactions.length
-        ? fund.transactions.map(t => `
-            <tr>
-              <td>${t.transaction_date}</td>
-              <td>${t.channel}</td>
-              <td>${t.reference ?? "—"}</td>
-              <td class="num">${money(t.amount)}</td>
-            </tr>`).join("")
-        : `<tr><td colspan="4" class="empty">No payments into this fund yet.</td></tr>`;
+    // -------------------------------------------------------------------------
+    // LOAD INITIAL DATA
+    // -------------------------------------------------------------------------
+    async function loadFilters() {
+      const { data: m } = await supabaseClient.from("members")
+        .select("id, member_number, full_name").eq("organisation_id", orgId).order("full_name");
+      members = m || [];
+      document.getElementById("f-member").innerHTML =
+        members.map(mb => `<option value="${mb.id}">${mb.member_number} — ${mb.full_name}</option>`).join("");
+
+      const { data: ft } = await supabaseClient.from("contribution_types")
+        .select("id, name, category").eq("organisation_id", orgId).eq("active", true).order("name");
+      fundTypes = ft || [];
+
+      const comps = [
+        ...fundTypes.map(f => ({ key: "fund_" + f.id, label: f.name })),
+        { key: "loans", label: "Loans & Repayments" },
+      ];
+      document.getElementById("components").innerHTML = comps.map(c => `
+        <label><input type="checkbox" class="comp-check" value="${c.key}" checked> ${c.label}</label>`).join("");
+      document.getElementById("chk-all").checked = true;
+    }
+
+    function selectedComponents() {
+      return [...document.querySelectorAll(".comp-check:checked")].map(c => c.value);
+    }
+
+    // -------------------------------------------------------------------------
+    // DATA FETCHING
+    // -------------------------------------------------------------------------
+    async function fetchFundTransactions(memberId, fundTypeId, from, to) {
+      let q = supabaseClient.from("payment_allocations")
+        .select("amount, contribution_types!inner(name, category), payments!inner(transaction_date, channel, reference, member_id, status)")
+        .eq("payments.member_id", memberId)
+        .eq("payments.status", "posted")
+        .eq("contribution_type_id", fundTypeId);
+      const rows = (await q).data || [];
+      return rows.filter(r => {
+        const d = r.payments.transaction_date;
+        return (!from || d >= from) && (!to || d <= to);
+      }).map(r => ({
+        date: r.payments.transaction_date,
+        reference: r.payments.reference ?? "—",
+        description: r.contribution_types.name + " payment",
+        debit: 0,
+        credit: Number(r.amount),   // money in for liability/equity accounts
+      }));
+    }
+
+    async function fetchContributions(memberId, fundTypeId, from, to) {
+      const { data } = await supabaseClient.from("contributions")
+        .select("amount_expected, amount_paid, status, contribution_periods(period_start, period_end, due_date, contribution_rules(contribution_type_id))")
+        .eq("member_id", memberId);
+      return (data || []).filter(c =>
+        c.contribution_periods?.contribution_rules?.contribution_type_id === fundTypeId &&
+        (!from || c.contribution_periods.period_start >= from) &&
+        (!to || c.contribution_periods.period_end <= to)
+      );
+    }
+
+    async function fetchLoans(memberId, from, to) {
+      const { data: lns } = await supabaseClient.from("loans")
+        .select("id, principal, term_months, status, application_date, loan_products(name)")
+        .eq("member_id", memberId).order("application_date");
+      const result = [];
+      for (const l of (lns || [])) {
+        if (from && l.application_date < from) continue;
+        if (to && l.application_date > to) continue;
+        const { data: reps } = await supabaseClient.from("loan_repayments")
+          .select("payment_date, amount, principal_portion, interest_portion, reference")
+          .eq("loan_id", l.id).order("payment_date");
+        const filtReps = (reps || []).filter(r => (!from || r.payment_date >= from) && (!to || r.payment_date <= to));
+        result.push({ ...l, repayments: filtReps });
+      }
+      return result;
+    }
+
+    // -------------------------------------------------------------------------
+    // BUILD STATEMENT SECTIONS WITH RUNNING BALANCE
+    // -------------------------------------------------------------------------
+    function buildLedgerRows(txns, accountNature) {
+      // accountNature: 'credit' = liability/equity (credits increase balance)
+      //                'debit' = asset (debits increase balance)
+      let balance = 0;
+      return txns.sort((a,b) => a.date.localeCompare(b.date)).map(t => {
+        if (accountNature === "credit") {
+          balance += (Number(t.credit) - Number(t.debit));
+        } else {
+          balance += (Number(t.debit) - Number(t.credit));
+        }
+        return { ...t, balance };
+      });
+    }
+
+    function sectionHTML(title, rows, nature) {
+      const withBalance = buildLedgerRows(rows, nature);
+      const opening = 0; // opening balance is 0 for now (pre-system transactions not in ledger)
+      const closing = withBalance.length ? withBalance[withBalance.length - 1].balance : 0;
+      const rowsHTML = withBalance.length
+        ? withBalance.map(r => `<tr>
+            <td>${r.date}</td><td>${r.reference}</td><td>${r.description}</td>
+            <td class="num">${r.debit ? money(r.debit) : ""}</td>
+            <td class="num">${r.credit ? money(r.credit) : ""}</td>
+            <td class="num running-balance">${money(r.balance)}</td>
+          </tr>`).join("")
+        : `<tr><td colspan="6" class="empty">No transactions in this period.</td></tr>`;
 
       return `
-        <div class="card">
-          <h2>${fund.name}</h2>
-          <div class="metric" style="margin-bottom:16px">
-            ${fund.contributions.length ? `
-              <div class="item"><div class="value">${money(expected)}</div><div class="label">Expected</div></div>
-              <div class="item"><div class="value">${money(paid)}</div><div class="label">Paid</div></div>
-              <div class="item"><div class="value">${money(expected - paid)}</div><div class="label">Outstanding</div></div>
-            ` : ``}
-            <div class="item"><div class="value">${money(received)}</div><div class="label">Total received</div></div>
-          </div>
-          ${fund.contributions.length ? `
-            <h3>Periods</h3>
-            <table style="margin-bottom:16px">
-              <thead><tr><th>Period</th><th>Due</th><th class="num">Expected</th><th class="num">Paid</th><th>Status</th></tr></thead>
-              <tbody>${periodRows}</tbody>
-            </table>` : ``}
-          <h3>Transactions</h3>
+        <div class="stmt-section">
+          <div class="stmt-section-title">${title}</div>
           <table>
-            <thead><tr><th>Date</th><th>Channel</th><th>Reference</th><th class="num">Amount</th></tr></thead>
-            <tbody>${txnRows}</tbody>
+            <thead><tr><th>Date</th><th>Reference</th><th>Description</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
+            <tbody>
+              <tr style="font-style:italic;color:var(--color-muted)"><td colspan="5">Opening balance</td><td class="num running-balance">${money(opening)}</td></tr>
+              ${rowsHTML}
+            </tbody>
+            <tfoot>
+              <tr style="font-weight:bold">
+                <td colspan="5">Closing balance</td>
+                <td class="num running-balance">${money(closing)}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>`;
     }
 
-    async function loadStatement() {
+    // -------------------------------------------------------------------------
+    // GENERATE STATEMENT
+    // -------------------------------------------------------------------------
+    async function generateStatement() {
       const memberId = document.getElementById("f-member").value;
-      if (!memberId) return;
-
-      const { data: fundTypes } = await supabaseClient
-        .from("contribution_types")
-        .select("id, name")
-        .eq("organisation_id", orgId).eq("active", true).order("name");
-
-      const { data: contributions } = await supabaseClient
-        .from("contributions")
-        .select("amount_expected, amount_paid, status, contribution_periods(period_start, period_end, due_date, contribution_rules(contribution_type_id))")
-        .eq("member_id", memberId);
-
-      const { data: allocations } = await supabaseClient
-        .from("payment_allocations")
-        .select("amount, contribution_type_id, payments!inner(transaction_date, channel, reference, member_id, id)")
-        .eq("payments.member_id", memberId);
-
-      const { data: allPayments } = await supabaseClient
-        .from("payments")
-        .select("id, transaction_date, channel, reference, amount")
-        .eq("member_id", memberId);
-
-      const allocatedPaymentIds = new Set((allocations || []).map(a => a.payments.id));
-      const legacyPayments = (allPayments || []).filter(p => !allocatedPaymentIds.has(p.id));
-
-      const funds = (fundTypes || []).map(ft => ({
-        id: ft.id,
-        name: ft.name,
-        contributions: (contributions || [])
-          .filter(c => c.contribution_periods && c.contribution_periods.contribution_rules &&
-                       c.contribution_periods.contribution_rules.contribution_type_id === ft.id)
-          .map(c => ({
-            amount_expected: c.amount_expected,
-            amount_paid: c.amount_paid,
-            status: c.status,
-            period_start: c.contribution_periods.period_start,
-            period_end: c.contribution_periods.period_end,
-            due_date: c.contribution_periods.due_date,
-          })),
-        transactions: (allocations || [])
-          .filter(a => a.contribution_type_id === ft.id)
-          .map(a => ({
-            amount: a.amount,
-            transaction_date: a.payments.transaction_date,
-            channel: a.payments.channel,
-            reference: a.payments.reference,
-          })),
-      }));
-
-      currentFunds = funds;
-      currentLegacyPayments = legacyPayments;
-      currentMemberLabel = document.getElementById("f-member").selectedOptions[0]?.textContent || "";
-
-      document.getElementById("fund-cards").innerHTML =
-        funds.length ? funds.map(fundCardHTML).join("") : `<div class="card"><p class="empty">No fund types set up for this organisation yet.</p></div>`;
-
-      const legacyCard = document.getElementById("legacy-card");
-      if (legacyPayments.length) {
-        legacyCard.style.display = "block";
-        const fundOptions = (fundTypes || []).map(f => `<option value="${f.id}">${f.name}</option>`).join("");
-        document.getElementById("legacy-rows").innerHTML = legacyPayments.map(p => `
-          <tr>
-            <td>${p.transaction_date}</td>
-            <td>${p.channel}</td>
-            <td>${p.reference ?? "—"}</td>
-            <td class="num">${money(p.amount)}</td>
-            <td><select id="realloc-${p.id}">${fundOptions}</select></td>
-            <td><button class="btn" onclick="reallocate('${p.id}')">Reallocate</button></td>
-          </tr>`).join("");
-      } else {
-        legacyCard.style.display = "none";
-      }
-    }
-
-    async function reallocate(paymentId) {
-      const errorEl = document.getElementById("legacy-error");
-      errorEl.style.display = "none";
-      const fundId = document.getElementById(`realloc-${paymentId}`).value;
-      const { error } = await supabaseClient.rpc("fn_reallocate_legacy_payment", {
-        p_payment_id: paymentId,
-        p_contribution_type_id: fundId,
-      });
-      if (error) { showError(errorEl, error.message); return; }
-      loadStatement();
-    }
-
-    function downloadPdf() {
-      if (!currentFunds.length && !currentLegacyPayments.length) {
-        alert("Nothing to export yet — select a member with some activity first.");
+      const { from, to } = getDateRange();
+      const chosen = selectedComponents();
+      const output = document.getElementById("statement-output");
+      if (!memberId || !chosen.length) {
+        output.innerHTML = `<div class="card"><p class="error">Select a member and at least one component.</p></div>`;
         return;
       }
+      output.innerHTML = `<div class="card"><p class="empty">Generating…</p></div>`;
 
+      const member = members.find(m => m.id === memberId);
+      const preset = document.getElementById("f-preset");
+      const periodLabel = preset.options[preset.selectedIndex].text + (from ? ` (${from} to ${to || "today"})` : "");
+
+      let sectionsHTML = "";
+      lastStatement = { member, orgName, periodLabel, sections: [] };
+
+      for (const comp of chosen) {
+        if (comp.startsWith("fund_")) {
+          const ftId = comp.replace("fund_", "");
+          const ft = fundTypes.find(f => f.id === ftId);
+          if (!ft) continue;
+          const txns = await fetchFundTransactions(memberId, ftId, from, to);
+          const nature = (ft.category === "share_capital") ? "credit" : "credit";
+          sectionsHTML += sectionHTML(ft.name, txns, nature);
+          lastStatement.sections.push({ title: ft.name, rows: buildLedgerRows(txns, nature) });
+        } else if (comp === "loans") {
+          const lns = await fetchLoans(memberId, from, to);
+          let loanHTML = `<div class="stmt-section"><div class="stmt-section-title">Loans</div>`;
+          lastStatement.sections.push({ title: "Loans", loans: lns });
+          if (!lns.length) {
+            loanHTML += `<p class="empty" style="padding:12px">No loans in this period.</p>`;
+          } else {
+            for (const l of lns) {
+              const repaid = l.repayments.reduce((s,r) => s + Number(r.principal_portion), 0);
+              const outstanding = Number(l.principal) - repaid;
+              loanHTML += `<div style="padding:12px 16px;border-bottom:1px solid var(--color-line)">
+                <strong>${l.loan_products.name}</strong> — Applied: ${l.application_date} — Status: ${l.status}
+                &nbsp;|&nbsp; Principal: KES ${money(l.principal)} &nbsp;|&nbsp; Outstanding: KES ${money(outstanding)}
+              </div>
+              <table>
+                <thead><tr><th>Date</th><th>Reference</th><th>Description</th><th class="num">Principal</th><th class="num">Interest</th><th class="num">Balance</th></tr></thead>
+                <tbody>
+                  <tr style="font-style:italic;color:var(--color-muted)"><td colspan="5">Loan disbursed</td><td class="num">${money(l.principal)}</td></tr>`;
+              let bal = Number(l.principal);
+              for (const r of l.repayments) {
+                bal -= Number(r.principal_portion);
+                loanHTML += `<tr>
+                  <td>${r.payment_date}</td><td>${r.reference ?? "—"}</td><td>Repayment</td>
+                  <td class="num">${money(r.principal_portion)}</td>
+                  <td class="num">${money(r.interest_portion)}</td>
+                  <td class="num running-balance">${money(bal)}</td>
+                </tr>`;
+              }
+              loanHTML += `<tr style="font-weight:bold"><td colspan="5">Outstanding balance</td><td class="num running-balance">${money(outstanding)}</td></tr></tbody></table>`;
+            }
+          }
+          loanHTML += `</div>`;
+          sectionsHTML += loanHTML;
+        }
+      }
+
+      output.innerHTML = `
+        <div style="background:white;border:1px solid var(--color-line);border-radius:var(--radius);overflow:hidden;margin-bottom:16px">
+          <div class="stmt-header">
+            <h2>${orgName}</h2>
+            <div class="sub">Member Statement &nbsp;|&nbsp; ${periodLabel}</div>
+            <div style="margin-top:8px;font-size:14px">
+              <strong>${member.full_name}</strong> &nbsp;|&nbsp; ${member.member_number}
+            </div>
+          </div>
+          ${sectionsHTML || `<div class="stmt-section"><p class="empty" style="padding:16px">No data found for the selected components and period.</p></div>`}
+          <div style="padding:12px 16px;text-align:right;color:var(--color-muted);font-size:12px">
+            Generated: ${new Date().toLocaleDateString("en-KE", {year:"numeric",month:"long",day:"numeric"})}
+          </div>
+        </div>`;
+    }
+
+    // -------------------------------------------------------------------------
+    // PDF EXPORT
+    // -------------------------------------------------------------------------
+    function downloadPdf() {
+      if (!lastStatement) { alert("Generate a statement first."); return; }
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
-      const today = new Date().toLocaleDateString("en-KE", { year: "numeric", month: "long", day: "numeric" });
-      let firstPage = true;
+      const today = new Date().toLocaleDateString("en-KE", {year:"numeric",month:"long",day:"numeric"});
+      let y = 14;
 
-      function newPage() {
-        if (!firstPage) doc.addPage();
-        firstPage = false;
-        doc.setFontSize(16);
-        doc.text(orgName || "Member Statement", 14, 18);
-        doc.setFontSize(10);
-        doc.setTextColor(100);
-        doc.text(`Member: ${currentMemberLabel}`, 14, 25);
-        doc.text(`Generated: ${today}`, 14, 30);
-        doc.setTextColor(0);
-        return 40;
+      // Header
+      doc.setFontSize(18); doc.setFont(undefined, "bold");
+      doc.text(lastStatement.orgName || "Finlens Africa", 14, y); y += 8;
+      doc.setFontSize(11); doc.setFont(undefined, "normal");
+      doc.text("Member Statement", 14, y); y += 6;
+      doc.setFontSize(10); doc.setTextColor(100);
+      doc.text(`Member: ${lastStatement.member.full_name} (${lastStatement.member.member_number})`, 14, y); y += 5;
+      doc.text(`Period: ${lastStatement.periodLabel}`, 14, y); y += 5;
+      doc.text(`Generated: ${today}`, 14, y); y += 8;
+      doc.setTextColor(0);
+
+      for (const sec of lastStatement.sections) {
+        if (sec.loans !== undefined) {
+          // Loans section
+          doc.setFontSize(12); doc.setFont(undefined, "bold");
+          doc.text("Loans", 14, y); y += 5; doc.setFont(undefined, "normal");
+          if (!sec.loans.length) {
+            doc.setFontSize(9); doc.text("No loans in this period.", 14, y); y += 6;
+          } else {
+            for (const l of sec.loans) {
+              const repaid = l.repayments.reduce((s,r) => s + Number(r.principal_portion), 0);
+              const outstanding = Number(l.principal) - repaid;
+              doc.setFontSize(10); doc.setFont(undefined, "bold");
+              doc.text(`${l.loan_products.name} — Principal: KES ${money(l.principal)} | Outstanding: KES ${money(outstanding)}`, 14, y);
+              y += 4; doc.setFont(undefined, "normal");
+              let bal = Number(l.principal);
+              const rows = [["(Disbursement)", "", money(l.principal), "", money(l.principal)]];
+              for (const r of l.repayments) {
+                bal -= Number(r.principal_portion);
+                rows.push([r.payment_date, r.reference ?? "—", money(r.principal_portion), money(r.interest_portion), money(bal)]);
+              }
+              doc.autoTable({ startY: y, head:[["Date","Reference","Principal","Interest","Balance"]], body: rows,
+                styles:{fontSize:8}, headStyles:{fillColor:[27,58,52]}, margin:{left:14,right:14} });
+              y = doc.lastAutoTable.finalY + 8;
+            }
+          }
+        } else {
+          // Fund section
+          doc.setFontSize(12); doc.setFont(undefined, "bold");
+          doc.text(sec.title, 14, y); y += 5; doc.setFont(undefined, "normal");
+          const rows = sec.rows.length
+            ? sec.rows.map(r => [r.date, r.reference, r.description, r.debit ? money(r.debit) : "", r.credit ? money(r.credit) : "", money(r.balance)])
+            : [["—","—","No transactions","","","0.00"]];
+          rows.unshift(["(Opening balance)", "", "", "", "", "0.00"]);
+          const closing = sec.rows.length ? sec.rows[sec.rows.length-1].balance : 0;
+          rows.push(["Closing balance", "", "", "", "", money(closing)]);
+          doc.autoTable({ startY: y, head:[["Date","Reference","Description","Debit","Credit","Balance"]], body: rows,
+            styles:{fontSize:8}, headStyles:{fillColor:[27,58,52]}, margin:{left:14,right:14} });
+          y = doc.lastAutoTable.finalY + 8;
+          if (y > 250) { doc.addPage(); y = 14; }
+        }
       }
 
-      currentFunds.forEach(fund => {
-        let y = newPage();
-        doc.setFontSize(13);
-        doc.text(fund.name, 14, y);
-        y += 8;
+      // Footer
+      doc.setFontSize(8); doc.setTextColor(130);
+      doc.text(`Generated by Finlens Africa | ${today}`, 14, doc.internal.pageSize.height - 10);
 
-        const expected = fund.contributions.reduce((s, c) => s + Number(c.amount_expected), 0);
-        const paid = fund.contributions.reduce((s, c) => s + Number(c.amount_paid), 0);
-        const received = fund.transactions.reduce((s, t) => s + Number(t.amount), 0);
-
-        doc.setFontSize(10);
-        if (fund.contributions.length) {
-          doc.text(`Expected: KES ${money(expected)}    Paid: KES ${money(paid)}    Outstanding: KES ${money(expected - paid)}`, 14, y);
-          y += 6;
-        }
-        doc.text(`Total received: KES ${money(received)}`, 14, y);
-        y += 8;
-
-        if (fund.contributions.length) {
-          doc.autoTable({
-            startY: y,
-            head: [["Period", "Due", "Expected", "Paid", "Status"]],
-            body: fund.contributions.map(c => [
-              `${c.period_start} to ${c.period_end}`, c.due_date,
-              money(c.amount_expected), money(c.amount_paid), c.status
-            ]),
-            styles: { fontSize: 9 },
-            headStyles: { fillColor: [27, 58, 52] },
-          });
-          y = doc.lastAutoTable.finalY + 10;
-        }
-
-        doc.setFontSize(11);
-        doc.text("Transactions", 14, y);
-        y += 4;
-        doc.autoTable({
-          startY: y,
-          head: [["Date", "Channel", "Reference", "Amount"]],
-          body: fund.transactions.length
-            ? fund.transactions.map(t => [t.transaction_date, t.channel, t.reference ?? "—", money(t.amount)])
-            : [["—", "—", "No payments into this fund yet", "—"]],
-          styles: { fontSize: 9 },
-          headStyles: { fillColor: [27, 58, 52] },
-        });
-      });
-
-      if (currentLegacyPayments.length) {
-        let y = newPage();
-        doc.setFontSize(13);
-        doc.text("Other payments (not linked to a fund)", 14, y);
-        y += 8;
-        doc.autoTable({
-          startY: y,
-          head: [["Date", "Channel", "Reference", "Amount"]],
-          body: currentLegacyPayments.map(p => [p.transaction_date, p.channel, p.reference ?? "—", money(p.amount)]),
-          styles: { fontSize: 9 },
-          headStyles: { fillColor: [160, 90, 40] },
-        });
-      }
-
-      const safeName = currentMemberLabel.replace(/[^\w\- ]/g, "").trim().replace(/\s+/g, "_");
-      doc.save(`statement-${safeName || "member"}.pdf`);
+      const safe = lastStatement.member.full_name.replace(/[^\w\- ]/g,"").replace(/\s+/g,"_");
+      doc.save(`statement-${safe}.pdf`);
     }
 
     (async () => {
@@ -298,7 +421,8 @@
       if (!org) return;
       orgId = org.organisation_id;
       orgName = org.organisations.name;
-      loadMembers();
+      applyPreset();
+      loadFilters();
     })();
   </script>
 </body>

@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>General Journal — Financial Operating System</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .lines-table input { width:100%; box-sizing:border-box; }
+  .lines-table td { vertical-align:middle; }
+  .balance-bar { padding:10px 16px; border-radius:var(--radius); font-family:var(--font-mono); margin-top:8px; }
+  .balance-bar.ok { background:#E4EEE6; color:var(--color-success); }
+  .balance-bar.bad { background:#F3E4E0; color:var(--color-alert); }
+</style>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav">
+      <div class="brand">Ledger</div>
+      <a href="index.html">Dashboard</a>
+      <a href="members.html">Members</a>
+      <a href="contributions.html">Contributions</a>
+      <a href="payments.html">Payments</a>
+      <a href="loans.html">Loans</a>
+      <a href="journal.html" class="active">General Journal</a>
+      <a href="reconcile.html">Bank / M-Pesa</a>
+      <a href="statement.html">Member Statements</a>
+      <a href="reports.html">Reports</a>
+      <a href="periods.html">Accounting Periods</a>
+      <a href="#" onclick="signOut()">Sign out</a>
+    </nav>
+    <main class="main">
+      <h1>General Journal</h1>
+
+      <!-- NEW ENTRY FORM -->
+      <div class="card">
+        <h2>New journal entry</h2>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:160px"><label>Date *</label><input id="j-date" type="date"></div>
+          <div class="field" style="flex:2;min-width:240px"><label>Description *</label><input id="j-desc" placeholder="e.g. Correction of bank charge"></div>
+          <div class="field" style="flex:1;min-width:140px"><label>Reference</label><input id="j-ref"></div>
+        </div>
+
+        <h3>Lines</h3>
+        <table class="lines-table" style="margin-bottom:8px">
+          <thead><tr><th>Account</th><th>Description</th><th class="num">Debit</th><th class="num">Credit</th><th></th></tr></thead>
+          <tbody id="lines-body">
+            <!-- rows added by addLine() -->
+          </tbody>
+        </table>
+        <button class="btn" onclick="addLine()">+ Add line</button>
+
+        <div id="balance-bar" class="balance-bar bad" style="margin-top:8px">
+          Debits: 0.00 &nbsp;|&nbsp; Credits: 0.00 &nbsp;|&nbsp; Difference: 0.00 — not balanced
+        </div>
+
+        <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" onclick="saveDraft()">Save draft</button>
+          <button class="btn accent" onclick="saveAndPost()">Save &amp; post</button>
+        </div>
+        <p id="form-error" class="error" style="display:none"></p>
+        <p id="form-success" style="display:none;color:var(--color-success)"></p>
+      </div>
+
+      <!-- JOURNAL LIST -->
+      <div class="card">
+        <h2>Journal entries</h2>
+        <table>
+          <thead><tr><th>Number</th><th>Date</th><th>Description</th><th>Status</th><th></th></tr></thead>
+          <tbody id="journal-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+
+      <!-- DETAIL PANEL -->
+      <div class="card" id="detail-card" style="display:none">
+        <h2 id="detail-title">Entry detail</h2>
+        <div id="detail-body"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let orgId, accounts = [], members = [], lineCount = 0;
+
+    async function loadFilters() {
+      const { data: accts } = await supabaseClient.from("chart_of_accounts")
+        .select("id, code, name, account_type").eq("organisation_id", orgId)
+        .eq("is_active", true).order("code");
+      accounts = accts || [];
+      const { data: mbs } = await supabaseClient.from("members")
+        .select("id, member_number, full_name").eq("organisation_id", orgId).eq("status","active").order("full_name");
+      members = mbs || [];
+
+      // Set default date
+      document.getElementById("j-date").value = new Date().toISOString().slice(0,10);
+      addLine(); addLine(); // start with two empty lines
+    }
+
+    function accountOptions() {
+      return accounts.map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join("");
+    }
+    function memberOptions() {
+      return `<option value="">— none —</option>` +
+        members.map(m => `<option value="${m.id}">${m.member_number} ${m.full_name}</option>`).join("");
+    }
+
+    function addLine() {
+      lineCount++;
+      const id = lineCount;
+      const tr = document.createElement("tr");
+      tr.id = "line-" + id;
+      tr.innerHTML = `
+        <td><select class="l-account">${accountOptions()}</select></td>
+        <td><input class="l-desc" placeholder="Line description"></td>
+        <td><input class="l-debit" type="number" min="0" placeholder="0.00" oninput="updateBalance()"></td>
+        <td><input class="l-credit" type="number" min="0" placeholder="0.00" oninput="updateBalance()"></td>
+        <td><button class="btn" style="background:var(--color-alert);padding:2px 8px" onclick="removeLine(${id})">×</button></td>`;
+      document.getElementById("lines-body").appendChild(tr);
+      updateBalance();
+    }
+
+    function removeLine(id) {
+      document.getElementById("line-" + id)?.remove();
+      updateBalance();
+    }
+
+    function updateBalance() {
+      let dr = 0, cr = 0;
+      document.querySelectorAll("#lines-body tr").forEach(row => {
+        dr += Number(row.querySelector(".l-debit")?.value || 0);
+        cr += Number(row.querySelector(".l-credit")?.value || 0);
+      });
+      const diff = Math.abs(dr - cr);
+      const bar = document.getElementById("balance-bar");
+      bar.textContent = `Debits: ${money(dr)} | Credits: ${money(cr)} | Difference: ${money(diff)} — ${diff < 0.005 ? "✓ balanced" : "not balanced"}`;
+      bar.className = "balance-bar " + (diff < 0.005 ? "ok" : "bad");
+    }
+
+    function collectLines() {
+      const rows = [];
+      document.querySelectorAll("#lines-body tr").forEach(row => {
+        const acct = row.querySelector(".l-account")?.value;
+        const dr = Number(row.querySelector(".l-debit")?.value || 0);
+        const cr = Number(row.querySelector(".l-credit")?.value || 0);
+        if (acct && (dr > 0 || cr > 0)) rows.push({ account_id: acct, debit: dr, credit: cr });
+      });
+      return rows;
+    }
+
+    async function saveDraft() { await save(false); }
+    async function saveAndPost() { await save(true); }
+
+    async function save(post) {
+      const errorEl = document.getElementById("form-error");
+      const successEl = document.getElementById("form-success");
+      errorEl.style.display = "none"; successEl.style.display = "none";
+
+      const date = document.getElementById("j-date").value;
+      const desc = document.getElementById("j-desc").value.trim();
+      if (!date || !desc) { showError(errorEl, "Date and description are required."); return; }
+
+      const lines = collectLines();
+      if (lines.length < 2) { showError(errorEl, "At least two lines (one debit, one credit) are required."); return; }
+
+      // Create draft via RPC
+      const { data: je, error: jeErr } = await supabaseClient.rpc("fn_create_draft_journal", {
+        p_organisation_id: orgId,
+        p_entry_date: date,
+        p_description: desc,
+        p_reference: document.getElementById("j-ref").value || null,
+      });
+      if (jeErr) { showError(errorEl, jeErr.message); return; }
+      const entryId = je.id;
+
+      // Add lines
+      for (const line of lines) {
+        const { error: lErr } = await supabaseClient.rpc("fn_add_journal_line", {
+          p_entry_id: entryId,
+          p_account_id: line.account_id,
+          p_debit: line.debit,
+          p_credit: line.credit,
+        });
+        if (lErr) { showError(errorEl, "Line error: " + lErr.message); return; }
+      }
+
+      if (post) {
+        const { error: pErr } = await supabaseClient.rpc("fn_post_journal", { p_entry_id: entryId });
+        if (pErr) { showError(errorEl, pErr.message); return; }
+        successEl.textContent = `Journal ${je.journal_number} saved and posted.`;
+      } else {
+        successEl.textContent = `Draft ${je.journal_number} saved.`;
+      }
+      successEl.style.display = "block";
+      resetForm();
+      loadJournals();
+    }
+
+    function resetForm() {
+      document.getElementById("j-desc").value = "";
+      document.getElementById("j-ref").value = "";
+      document.getElementById("lines-body").innerHTML = "";
+      lineCount = 0; addLine(); addLine();
+    }
+
+    async function loadJournals() {
+      const { data, error } = await supabaseClient.from("journal_entries")
+        .select("id, journal_number, entry_date, description, status")
+        .eq("organisation_id", orgId)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      const tbody = document.getElementById("journal-rows");
+      if (error) { tbody.innerHTML = `<tr><td colspan="5" class="error">${error.message}</td></tr>`; return; }
+      if (!data.length) { tbody.innerHTML = `<tr><td colspan="5" class="empty">No journal entries yet.</td></tr>`; return; }
+      tbody.innerHTML = data.map(j => `
+        <tr>
+          <td><code>${j.journal_number || "—"}</code></td>
+          <td>${j.entry_date}</td>
+          <td>${j.description}</td>
+          <td><span class="status ${j.status==='posted'?'paid':j.status==='reversed'?'unpaid':'partial'}">${j.status}</span></td>
+          <td><button class="btn" onclick="openEntry('${j.id}')">Open</button></td>
+        </tr>`).join("");
+    }
+
+    async function openEntry(id) {
+      const card = document.getElementById("detail-card");
+      const body = document.getElementById("detail-body");
+      card.style.display = "block";
+      body.innerHTML = "Loading…";
+      card.scrollIntoView({ behavior: "smooth" });
+
+      const { data: je } = await supabaseClient.from("journal_entries")
+        .select("*").eq("id", id).single();
+      const { data: lines } = await supabaseClient.from("journal_lines")
+        .select("debit, credit, member_id, account_id, chart_of_accounts(code, name)")
+        .eq("journal_entry_id", id);
+
+      let totalDr = 0, totalCr = 0;
+      const lineRows = (lines || []).map(l => {
+        totalDr += Number(l.debit); totalCr += Number(l.credit);
+        return `<tr><td>${l.chart_of_accounts.code} — ${l.chart_of_accounts.name}</td>
+          <td class="num">${Number(l.debit) ? money(l.debit) : ""}</td>
+          <td class="num">${Number(l.credit) ? money(l.credit) : ""}</td></tr>`;
+      }).join("");
+
+      document.getElementById("detail-title").textContent = je.journal_number || "Entry detail";
+      body.innerHTML = `
+        <p><strong>Date:</strong> ${je.entry_date} &nbsp;|&nbsp; <strong>Status:</strong> <span class="status ${je.status==='posted'?'paid':'partial'}">${je.status}</span></p>
+        <p><strong>Description:</strong> ${je.description}</p>
+        <table><thead><tr><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead>
+          <tbody>${lineRows}</tbody>
+          <tfoot><tr style="font-weight:bold"><td>Totals</td><td class="num">${money(totalDr)}</td><td class="num">${money(totalCr)}</td></tr></tfoot>
+        </table>
+        ${je.status === 'posted' ? `
+          <div style="margin-top:12px">
+            <button class="btn" style="background:var(--color-alert)" onclick="reverseEntry('${id}')">Reverse this entry</button>
+          </div>` : `
+          <div style="margin-top:12px">
+            <button class="btn accent" onclick="postEntry('${id}')">Post draft</button>
+          </div>`}
+        <p id="entry-error" class="error" style="display:none"></p>`;
+    }
+
+    async function reverseEntry(id) {
+      if (!confirm("Create a reversing entry? This posts a mirrored entry and marks the original as reversed.")) return;
+      const { error } = await supabaseClient.rpc("fn_reverse_journal_entry", {
+        p_entry_id: id, p_reason: "User-initiated reversal"
+      });
+      if (error) { showError(document.getElementById("entry-error"), error.message); return; }
+      loadJournals(); openEntry(id);
+    }
+
+    async function postEntry(id) {
+      const { error } = await supabaseClient.rpc("fn_post_journal", { p_entry_id: id });
+      if (error) { showError(document.getElementById("entry-error"), error.message); return; }
+      loadJournals(); openEntry(id);
+    }
+
+    (async () => {
+      const session = await requireSession();
+      if (!session) return;
+      const org = await currentOrg();
+      if (!org) return;
+      orgId = org.organisation_id;
+      await loadFilters();
+      loadJournals();
+    })();
+  </script>
+</body>
+</html>

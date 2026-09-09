@@ -17,6 +17,7 @@
       <a href="contributions.html">Contributions</a>
       <a href="payments.html">Payments</a>
       <a href="loans.html">Loans</a>
+      <a href="journal.html">General Journal</a>
       <a href="reconcile.html">Bank / M-Pesa</a>
       <a href="statement.html">Member Statements</a>
       <a href="reports.html" class="active">Reports</a>
@@ -36,8 +37,21 @@
               <option value="cf">Cash Flow</option>
             </select>
           </div>
-          <div class="field" style="margin-bottom:0"><label>From (optional)</label><input id="from" type="date"></div>
-          <div class="field" style="margin-bottom:0"><label>To (optional)</label><input id="to" type="date"></div>
+          <div class="field" style="margin-bottom:0"><label>Period</label>
+            <select id="rpt-preset" onchange="applyPreset()">
+              <option value="all">All time</option>
+              <option value="this_month">This month</option>
+              <option value="last_month">Last month</option>
+              <option value="this_quarter">This quarter</option>
+              <option value="last_quarter">Last quarter</option>
+              <option value="this_year">This year</option>
+              <option value="last_year">Last year</option>
+              <option value="ytd">Year to date</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div class="field" style="margin-bottom:0" id="fld-from"><label>From</label><input id="from" type="date"></div>
+          <div class="field" style="margin-bottom:0" id="fld-to"><label>To</label><input id="to" type="date"></div>
           <button class="btn" onclick="run()">Run</button>
           <button class="btn accent" onclick="downloadPdf()">Download PDF</button>
         </div>
@@ -54,6 +68,26 @@
   <script src="js/auth.js"></script>
   <script>
     let orgId, orgName, lastRows = [], lastKind = "trial";
+
+    function applyPreset() {
+      const p = document.getElementById("rpt-preset").value;
+      const now = new Date();
+      const y = now.getFullYear(), m = now.getMonth();
+      let from = null, to = null;
+      if (p === "this_month") { from = new Date(y,m,1); to = new Date(y,m+1,0); }
+      else if (p === "last_month") { from = new Date(y,m-1,1); to = new Date(y,m,0); }
+      else if (p === "this_quarter") { const q=Math.floor(m/3)*3; from=new Date(y,q,1); to=new Date(y,q+3,0); }
+      else if (p === "last_quarter") { const q=Math.floor(m/3)*3-3; from=new Date(y,q,1); to=new Date(y,q+3,0); }
+      else if (p === "this_year") { from=new Date(y,0,1); to=new Date(y,11,31); }
+      else if (p === "last_year") { from=new Date(y-1,0,1); to=new Date(y-1,11,31); }
+      else if (p === "ytd") { from=new Date(y,0,1); to=now; }
+      const custom = p === "custom";
+      document.getElementById("fld-from").style.display = (custom || from) ? "block" : "none";
+      document.getElementById("fld-to").style.display = (custom || to) ? "block" : "none";
+      if (from) document.getElementById("from").value = from.toISOString().slice(0,10);
+      if (to) document.getElementById("to").value = to.toISOString().slice(0,10);
+      if (!custom) run();
+    }
 
     function dates() {
       return {
