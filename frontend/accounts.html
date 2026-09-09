@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Chart of Accounts — Financial Operating System</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .coa-row { display:grid; grid-template-columns:130px 1fr 110px 110px 80px; gap:8px; align-items:center; padding:6px 0; border-bottom:1px solid var(--color-line); }
+  .coa-row:hover { background:var(--color-bg); }
+  .coa-code { font-family:var(--font-mono); font-size:13px; color:var(--color-muted); }
+  .coa-name { font-size:14px; }
+  .coa-group { font-weight:700; background:#F3EBD8; padding:2px 0; }
+  .coa-indent-1 .coa-name { padding-left:20px; }
+  .coa-indent-2 .coa-name { padding-left:40px; }
+  .coa-indent-3 .coa-name { padding-left:60px; }
+  .coa-inactive .coa-name { text-decoration:line-through; color:var(--color-muted); }
+  .filter-bar { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:16px; }
+  .filter-bar .field { margin-bottom:0; }
+  .drawer-backdrop { position:fixed;inset:0;background:rgba(0,0,0,0.35);display:none;z-index:40; }
+  .drawer-backdrop.open { display:block; }
+  .drawer { position:fixed;top:0;right:0;height:100vh;width:400px;max-width:92vw;background:var(--color-surface);z-index:50;transform:translateX(100%);transition:transform 0.2s ease;overflow-y:auto;padding:var(--space-4);box-shadow:-2px 0 12px rgba(0,0,0,0.12); }
+  .drawer.open { transform:translateX(0); }
+  .drawer h2 { border-bottom:1px solid var(--color-line);padding-bottom:var(--space-3); }
+</style>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav">
+      <div class="brand">Ledger</div>
+      <a href="index.html">Dashboard</a>
+      <a href="members.html">Members</a>
+      <a href="contributions.html">Contributions</a>
+      <a href="payments.html">Payments</a>
+      <a href="loans.html">Loans</a>
+      <a href="journal.html">General Journal</a>
+      <a href="accounts.html" class="active">Chart of Accounts</a>
+      <a href="reconcile.html">Bank / M-Pesa</a>
+      <a href="statement.html">Member Statements</a>
+      <a href="reports.html">Reports</a>
+      <a href="periods.html">Accounting Periods</a>
+      <a href="#" onclick="signOut()">Sign out</a>
+    </nav>
+    <main class="main">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h1>Chart of Accounts</h1>
+        <button class="btn accent" onclick="openDrawer(null)">+ Add account</button>
+      </div>
+
+      <div class="card">
+        <div class="filter-bar">
+          <div class="field"><label>Search</label><input id="f-search" placeholder="Code or name…" oninput="renderTree()"></div>
+          <div class="field"><label>Type</label>
+            <select id="f-type" onchange="renderTree()">
+              <option value="">All types</option>
+              <option value="asset">Asset</option>
+              <option value="liability">Liability</option>
+              <option value="equity">Equity</option>
+              <option value="income">Income</option>
+              <option value="expense">Expense</option>
+            </select>
+          </div>
+          <div class="field"><label>Status</label>
+            <select id="f-status" onchange="renderTree()">
+              <option value="">All</option>
+              <option value="active">Active only</option>
+              <option value="inactive">Inactive only</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="coa-row" style="font-weight:600;color:var(--color-muted);font-size:12px;border-bottom:2px solid var(--color-line)">
+          <div>Code</div><div>Name</div><div>Type</div><div>Balance</div><div></div>
+        </div>
+        <div id="coa-tree"><p class="empty">Loading…</p></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ADD / EDIT DRAWER -->
+  <div class="drawer-backdrop" id="backdrop" onclick="closeDrawer()"></div>
+  <div class="drawer" id="drawer">
+    <h2 id="drawer-title">Add account</h2>
+    <div class="field"><label>Account code *</label><input id="d-code"></div>
+    <div class="field"><label>Account name *</label><input id="d-name"></div>
+    <div class="field"><label>Account type *</label>
+      <select id="d-type" onchange="filterParents()">
+        <option value="asset">Asset</option>
+        <option value="liability">Liability</option>
+        <option value="equity">Equity</option>
+        <option value="income">Income</option>
+        <option value="expense">Expense</option>
+      </select>
+    </div>
+    <div class="field"><label>Parent account (optional)</label><select id="d-parent"><option value="">— top level —</option></select></div>
+    <div class="field"><label>Normal balance</label>
+      <select id="d-normal"><option value="debit">Debit</option><option value="credit">Credit</option></select>
+    </div>
+    <div class="field"><label>Description</label><input id="d-desc"></div>
+    <div class="field" id="d-active-field" style="display:none">
+      <label><input type="checkbox" id="d-active" checked> Active</label>
+    </div>
+    <p id="drawer-error" class="error" style="display:none"></p>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn accent" onclick="saveAccount()">Save</button>
+      <button class="btn" style="background:#888" onclick="closeDrawer()">Cancel</button>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let orgId, allAccounts = [], editingId = null;
+
+    async function loadAccounts() {
+      const { data, error } = await supabaseClient
+        .from("v_coa_hierarchy")
+        .select("*")
+        .eq("organisation_id", orgId);
+      if (error) {
+        // Fallback if view isn't deployed yet: flat query
+        const { data: flat } = await supabaseClient.from("chart_of_accounts")
+          .select("*").eq("organisation_id", orgId).order("code");
+        allAccounts = (flat || []).map(a => ({ ...a, depth: 0 }));
+      } else {
+        allAccounts = data || [];
+      }
+      renderTree();
+    }
+
+    function renderTree() {
+      const search = document.getElementById("f-search").value.toLowerCase();
+      const typeFilter = document.getElementById("f-type").value;
+      const statusFilter = document.getElementById("f-status").value;
+
+      const filtered = allAccounts.filter(a => {
+        if (search && !a.code.toLowerCase().includes(search) && !a.name.toLowerCase().includes(search)) return false;
+        if (typeFilter && a.account_type !== typeFilter) return false;
+        if (statusFilter === "active" && !a.is_active) return false;
+        if (statusFilter === "inactive" && a.is_active) return false;
+        return true;
+      });
+
+      const container = document.getElementById("coa-tree");
+      if (!filtered.length) { container.innerHTML = `<p class="empty">No accounts match your filter.</p>`; return; }
+
+      container.innerHTML = filtered.map(a => {
+        const isGroup = a.subtype === "group";
+        const depthClass = a.depth ? `coa-indent-${Math.min(a.depth, 3)}` : "";
+        const inactiveClass = a.is_active ? "" : "coa-inactive";
+        return `<div class="coa-row ${isGroup ? "coa-group" : ""} ${depthClass} ${inactiveClass}">
+          <div class="coa-code">${a.code}</div>
+          <div class="coa-name">${isGroup ? "" : ""}${a.name}</div>
+          <div style="font-size:12px;color:var(--color-muted)">${a.account_type}</div>
+          <div style="font-size:12px;color:var(--color-muted)">${a.normal_balance || ""}</div>
+          <div style="display:flex;gap:4px">
+            <button class="btn" style="padding:2px 8px;font-size:12px" onclick="openDrawer('${a.id}')">Edit</button>
+            ${!isGroup ? `<button class="btn" style="padding:2px 8px;font-size:12px;background:${a.is_active ? 'var(--color-muted)' : 'var(--color-success)'}" onclick="toggleActive('${a.id}',${!a.is_active})">${a.is_active ? "Deactivate" : "Activate"}</button>` : ""}
+          </div>
+        </div>`;
+      }).join("");
+    }
+
+    function filterParents() {
+      const type = document.getElementById("d-type").value;
+      const matching = allAccounts.filter(a => a.account_type === type && a.is_active);
+      document.getElementById("d-parent").innerHTML =
+        `<option value="">— top level —</option>` +
+        matching.map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join("");
+    }
+
+    function openDrawer(id) {
+      editingId = id;
+      const errorEl = document.getElementById("drawer-error");
+      errorEl.style.display = "none";
+      document.getElementById("drawer-title").textContent = id ? "Edit account" : "Add account";
+      document.getElementById("d-active-field").style.display = id ? "block" : "none";
+
+      if (id) {
+        const acct = allAccounts.find(a => a.id === id);
+        if (!acct) return;
+        document.getElementById("d-code").value = acct.code;
+        document.getElementById("d-name").value = acct.name;
+        document.getElementById("d-type").value = acct.account_type;
+        document.getElementById("d-normal").value = acct.normal_balance || "debit";
+        document.getElementById("d-desc").value = acct.description || "";
+        document.getElementById("d-active").checked = acct.is_active;
+        filterParents();
+        document.getElementById("d-parent").value = acct.parent_account_id || "";
+      } else {
+        document.getElementById("d-code").value = "";
+        document.getElementById("d-name").value = "";
+        document.getElementById("d-desc").value = "";
+        filterParents();
+      }
+      document.getElementById("backdrop").classList.add("open");
+      document.getElementById("drawer").classList.add("open");
+    }
+
+    function closeDrawer() {
+      document.getElementById("backdrop").classList.remove("open");
+      document.getElementById("drawer").classList.remove("open");
+      editingId = null;
+    }
+
+    async function saveAccount() {
+      const errorEl = document.getElementById("drawer-error");
+      errorEl.style.display = "none";
+      const code = document.getElementById("d-code").value.trim();
+      const name = document.getElementById("d-name").value.trim();
+      if (!code || !name) { showError(errorEl, "Code and name are required."); return; }
+
+      const payload = {
+        organisation_id: orgId,
+        code,
+        name,
+        account_type: document.getElementById("d-type").value,
+        normal_balance: document.getElementById("d-normal").value,
+        description: document.getElementById("d-desc").value || null,
+        parent_account_id: document.getElementById("d-parent").value || null,
+        is_active: editingId ? document.getElementById("d-active").checked : true,
+      };
+
+      let error;
+      if (editingId) {
+        ({ error } = await supabaseClient.from("chart_of_accounts").update(payload).eq("id", editingId));
+      } else {
+        ({ error } = await supabaseClient.from("chart_of_accounts").insert(payload));
+      }
+      if (error) { showError(errorEl, error.message); return; }
+      closeDrawer();
+      loadAccounts();
+    }
+
+    async function toggleActive(id, active) {
+      // Check if account has posted transactions before deactivating
+      if (!active) {
+        const { count } = await supabaseClient.from("journal_lines")
+          .select("*", { count: "exact", head: true }).eq("account_id", id);
+        if (count > 0 && !confirm(`This account has ${count} posted transaction(s). Deactivating prevents future use but preserves all history. Continue?`)) return;
+      }
+      const { error } = await supabaseClient.from("chart_of_accounts")
+        .update({ is_active: active }).eq("id", id);
+      if (error) { alert(error.message); return; }
+      loadAccounts();
+    }
+
+    (async () => {
+      const session = await requireSession();
+      if (!session) return;
+      const org = await currentOrg();
+      if (!org) return;
+      orgId = org.organisation_id;
+      loadAccounts();
+    })();
+  </script>
+</body>
+</html>
