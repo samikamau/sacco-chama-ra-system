@@ -45,6 +45,14 @@
         <p id="loan-error" class="error" style="display:none"></p>
       </div>
 
+      <div class="card">
+        <h2>Loans in arrears</h2>
+        <table>
+          <thead><tr><th>Member</th><th>Product</th><th class="num">Overdue</th><th class="num">Days</th><th class="num">Missed</th></tr></thead>
+          <tbody id="arrears-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+
       <div class="card" id="detail-card" style="display:none">
         <h2 id="detail-title">Loan detail</h2>
         <div id="detail-body"></div>
@@ -297,6 +305,21 @@
       loadProducts();
     }
 
+    async function loadArrears() {
+      const { data, error } = await supabaseClient.rpc("fn_loan_arrears", { p_organisation_id: orgId });
+      const tbody = document.getElementById("arrears-rows");
+      if (error) { tbody.innerHTML = `<tr><td colspan="5" class="error">${error.message}</td></tr>`; return; }
+      if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="5" class="empty">No loans in arrears.</td></tr>`; return; }
+      tbody.innerHTML = data.map(a => `
+        <tr>
+          <td>${a.member_name}</td>
+          <td>${a.product_name}</td>
+          <td class="num">${money(a.overdue_amount)}</td>
+          <td class="num">${a.days_overdue}</td>
+          <td class="num">${a.installments_overdue}</td>
+        </tr>`).join("");
+    }
+
     (async () => {
       const session = await requireSession();
       if (!session) return;
@@ -306,6 +329,7 @@
       await loadAccounts();
       await Promise.all([loadMembers(), loadProducts()]);
       loadLoans();
+      loadArrears();
     })();
   </script>
 </body>

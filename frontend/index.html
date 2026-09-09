@@ -69,6 +69,16 @@
         </div>
       </div>
 
+      <div class="kpi-group">
+        <h2>Loan portfolio</h2>
+        <div class="kpi-grid">
+          <div class="kpi"><div class="value" id="k-active-loans">—</div><div class="label">Active loans</div></div>
+          <div class="kpi"><div class="value" id="k-outstanding-loans">—</div><div class="label">Outstanding (KES)</div></div>
+          <div class="kpi accent"><div class="value" id="k-overdue-loans">—</div><div class="label">Loans in arrears</div></div>
+          <div class="kpi"><div class="value" id="k-overdue-amount">—</div><div class="label">Overdue amount (KES)</div></div>
+        </div>
+      </div>
+
       <div class="card">
         <h2>Observations</h2>
         <div id="insights"><p class="empty">Loading…</p></div>
@@ -105,12 +115,30 @@
 
       const { data: insights, error: iErr } = await supabaseClient.rpc("fn_dashboard_insights", { p_organisation_id: orgId });
       const box = document.getElementById("insights");
-      if (iErr) {
+
+      // Loan portfolio KPIs + arrears insight
+      let extraInsights = [];
+      try {
+        const { data: port } = await supabaseClient.rpc("fn_loan_portfolio_summary", { p_organisation_id: orgId });
+        if (port) {
+          document.getElementById("k-active-loans").textContent = port.active_loans;
+          document.getElementById("k-outstanding-loans").textContent = money(port.total_outstanding);
+          document.getElementById("k-overdue-loans").textContent = port.overdue_loans;
+          document.getElementById("k-overdue-amount").textContent = money(port.overdue_amount);
+          if (port.overdue_loans > 0) {
+            extraInsights.push({ category: "Loans", severity: "warning",
+              message: `${port.overdue_loans} loan(s) are in arrears, totalling KES ${money(port.overdue_amount)} overdue.` });
+          }
+        }
+      } catch (e) { /* loans functions may not be deployed yet */ }
+
+      const allInsights = (insights || []).concat(extraInsights);
+      if (iErr && !allInsights.length) {
         box.innerHTML = `<p class="error">${iErr.message}</p>`;
-      } else if (!insights || !insights.length) {
+      } else if (!allInsights.length) {
         box.innerHTML = `<p class="empty">No observations yet — add members and record contributions to see them here.</p>`;
       } else {
-        box.innerHTML = insights.map(i => `
+        box.innerHTML = allInsights.map(i => `
           <div class="insight ${i.severity}">
             <span class="cat">${i.category}</span>
             <span>${i.message}</span>
