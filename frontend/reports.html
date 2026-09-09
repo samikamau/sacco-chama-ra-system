@@ -126,8 +126,13 @@
         section("Assets", assets) +
         section("Liabilities", liabilities) +
         section("Equity", equity) +
-        `<p style="font-weight:bold;font-size:15px">Total assets: KES ${money(totalAssets)} &nbsp;|&nbsp; Total liabilities + equity: KES ${money(totalLE)}</p>
-         <p style="color:${balanced ? 'var(--color-success)' : 'var(--color-alert)'}">
+        `<table><tbody>
+           <tr style="font-weight:bold;border-top:2px solid var(--color-ink);font-size:15px">
+             <td>Total liabilities and equity</td>
+             <td class="num">${money(totalLE)}</td>
+           </tr>
+         </tbody></table>
+         <p style="margin-top:8px;color:${balanced ? 'var(--color-success)' : 'var(--color-alert)'}">
            ${balanced ? '✓ Balanced.' : '⚠ Does not balance by KES ' + money(Math.abs(totalAssets - totalLE)) + ' — investigate.'}</p>`;
     }
 
