@@ -601,78 +601,116 @@ alter table audit_logs              enable row level security;
 -- DELETE financial rows via the API (only the reversal functions, which
 -- run as security definer and bypass RLS deliberately).
 
+drop policy if exists p_org_select on organisations;
 create policy p_org_select on organisations for select
   using (is_org_member(id));
 
+drop policy if exists p_org_settings_select on organisation_settings;
 create policy p_org_settings_select on organisation_settings for select
   using (is_org_member(organisation_id));
+drop policy if exists p_org_settings_update on organisation_settings;
 create policy p_org_settings_update on organisation_settings for update
   using (has_org_role(organisation_id, array['org_admin']::org_role[]));
 
+drop policy if exists p_org_users_select on organisation_users;
 create policy p_org_users_select on organisation_users for select
   using (is_org_member(organisation_id));
+drop policy if exists p_org_users_write on organisation_users;
 create policy p_org_users_write on organisation_users for insert
   with check (has_org_role(organisation_id, array['org_admin']::org_role[]));
+drop policy if exists p_org_users_update on organisation_users;
 create policy p_org_users_update on organisation_users for update
   using (has_org_role(organisation_id, array['org_admin']::org_role[]));
 
+drop policy if exists p_members_select on members;
 create policy p_members_select on members for select
   using (is_org_member(organisation_id));
+drop policy if exists p_members_write on members;
 create policy p_members_write on members for insert
   with check (has_org_role(organisation_id, array['org_admin','secretary']::org_role[]));
+drop policy if exists p_members_update on members;
 create policy p_members_update on members for update
   using (has_org_role(organisation_id, array['org_admin','secretary']::org_role[]));
 
+drop policy if exists p_contrib_rules_select on contribution_rules;
 create policy p_contrib_rules_select on contribution_rules for select
   using (is_org_member(organisation_id));
+drop policy if exists p_contrib_rules_write on contribution_rules;
 create policy p_contrib_rules_write on contribution_rules for insert
   with check (has_org_role(organisation_id, array['org_admin']::org_role[]));
 
+drop policy if exists p_contrib_periods_select on contribution_periods;
 create policy p_contrib_periods_select on contribution_periods for select
   using (is_org_member(organisation_id));
 
+drop policy if exists p_contributions_select on contributions;
 create policy p_contributions_select on contributions for select
   using (is_org_member(organisation_id));
+drop policy if exists p_contributions_update on contributions;
 create policy p_contributions_update on contributions for update
   using (has_org_role(organisation_id, array['org_admin','treasurer','accountant']::org_role[]));
 
+drop policy if exists p_payments_select on payments;
 create policy p_payments_select on payments for select
   using (is_org_member(organisation_id));
+drop policy if exists p_payments_write on payments;
 create policy p_payments_write on payments for insert
   with check (has_org_role(organisation_id, array['org_admin','treasurer']::org_role[]));
 
+drop policy if exists p_bank_accounts_select on bank_accounts;
 create policy p_bank_accounts_select on bank_accounts for select
   using (is_org_member(organisation_id));
+drop policy if exists p_mpesa_accounts_select on mpesa_accounts;
 create policy p_mpesa_accounts_select on mpesa_accounts for select
   using (is_org_member(organisation_id));
 
+drop policy if exists p_bank_accounts_write on bank_accounts;
+create policy p_bank_accounts_write on bank_accounts for insert
+  with check (has_org_role(organisation_id, array['org_admin','treasurer','accountant']::org_role[]));
+
+drop policy if exists p_mpesa_accounts_write on mpesa_accounts;
+create policy p_mpesa_accounts_write on mpesa_accounts for insert
+  with check (has_org_role(organisation_id, array['org_admin','treasurer','accountant']::org_role[]));
+
+drop policy if exists p_bank_txn_select on bank_transactions;
 create policy p_bank_txn_select on bank_transactions for select
   using (is_org_member(organisation_id));
+drop policy if exists p_bank_txn_write on bank_transactions;
 create policy p_bank_txn_write on bank_transactions for insert
   with check (has_org_role(organisation_id, array['org_admin','treasurer','accountant']::org_role[]));
+drop policy if exists p_bank_txn_update on bank_transactions;
 create policy p_bank_txn_update on bank_transactions for update
   using (has_org_role(organisation_id, array['org_admin','treasurer','accountant']::org_role[]));
 
+drop policy if exists p_mpesa_txn_select on mpesa_transactions;
 create policy p_mpesa_txn_select on mpesa_transactions for select
   using (is_org_member(organisation_id));
+drop policy if exists p_mpesa_txn_write on mpesa_transactions;
 create policy p_mpesa_txn_write on mpesa_transactions for insert
   with check (has_org_role(organisation_id, array['org_admin','treasurer','accountant']::org_role[]));
+drop policy if exists p_mpesa_txn_update on mpesa_transactions;
 create policy p_mpesa_txn_update on mpesa_transactions for update
   using (has_org_role(organisation_id, array['org_admin','treasurer','accountant']::org_role[]));
 
+drop policy if exists p_reconciliations_select on reconciliations;
 create policy p_reconciliations_select on reconciliations for select
   using (is_org_member(organisation_id));
+drop policy if exists p_reconciliations_write on reconciliations;
 create policy p_reconciliations_write on reconciliations for insert
   with check (has_org_role(organisation_id, array['org_admin','accountant']::org_role[]));
 
+drop policy if exists p_coa_select on chart_of_accounts;
 create policy p_coa_select on chart_of_accounts for select
   using (is_org_member(organisation_id));
+drop policy if exists p_coa_write on chart_of_accounts;
 create policy p_coa_write on chart_of_accounts for insert
   with check (has_org_role(organisation_id, array['org_admin','accountant']::org_role[]));
 
+drop policy if exists p_periods_select on accounting_periods;
 create policy p_periods_select on accounting_periods for select
   using (is_org_member(organisation_id));
 
+drop policy if exists p_journal_entries_select on journal_entries;
 create policy p_journal_entries_select on journal_entries for select
   using (is_org_member(organisation_id));
 -- No direct insert policy for journal_entries/journal_lines: they are only
@@ -680,6 +718,7 @@ create policy p_journal_entries_select on journal_entries for select
 -- with elevated privilege and bypass RLS for the insert itself while still
 -- checking is_org_member() in application logic.
 
+drop policy if exists p_journal_lines_select on journal_lines;
 create policy p_journal_lines_select on journal_lines for select
   using (exists (
     select 1 from journal_entries je
@@ -687,11 +726,14 @@ create policy p_journal_lines_select on journal_lines for select
       and is_org_member(je.organisation_id)
   ));
 
+drop policy if exists p_documents_select on documents;
 create policy p_documents_select on documents for select
   using (is_org_member(organisation_id));
+drop policy if exists p_documents_write on documents;
 create policy p_documents_write on documents for insert
   with check (is_org_member(organisation_id));
 
+drop policy if exists p_audit_select on audit_logs;
 create policy p_audit_select on audit_logs for select
   using (organisation_id is not null and has_org_role(organisation_id, array['org_admin','accountant']::org_role[]));
 

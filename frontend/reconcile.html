@@ -2,10 +2,22 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Bank / M-Pesa — Financial Operating System</title>
+<title>Reconciliation — Financial Operating System</title>
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  .tabs { display:flex; gap:4px; border-bottom:2px solid var(--color-line); margin-bottom:20px; }
+  .tab { padding:8px 16px; cursor:pointer; border-bottom:3px solid transparent; font-size:14px; }
+  .tab.active { border-bottom-color:var(--color-accent); font-weight:600; }
+  .recon-summary { background:#fff; border:1px solid var(--color-line); border-radius:var(--radius); padding:16px; }
+  .recon-line { display:flex; justify-content:space-between; padding:6px 0; font-size:14px; }
+  .recon-line.total { font-weight:700; border-top:1px solid var(--color-ink); margin-top:4px; padding-top:8px; }
+  .recon-line.grand { font-weight:700; font-size:16px; border-top:3px double var(--color-ink); margin-top:8px; padding-top:10px; }
+  .recon-line .amt { font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+  .diff-ok { color:var(--color-success); }
+  .diff-bad { color:var(--color-alert); }
+</style>
 </head>
 <body>
   <div class="app-shell">
@@ -16,36 +28,92 @@
       <a href="contributions.html">Contributions</a>
       <a href="payments.html">Payments</a>
       <a href="loans.html">Loans</a>
+      <a href="expenditure.html">Expenditure</a>
       <a href="accounts.html">Chart of Accounts</a>
       <a href="journal.html">General Journal</a>
-      <a href="reconcile.html" class="active">Bank / M-Pesa</a>
+      <a href="reconcile.html" class="active">Reconciliation</a>
       <a href="statement.html">Member Statements</a>
       <a href="reports.html">Reports</a>
       <a href="periods.html">Accounting Periods</a>
+      <a href="users.html">Users</a>
       <a href="#" onclick="signOut()">Sign out</a>
     </nav>
     <main class="main">
-      <h1>Bank / M-Pesa import and matching</h1>
+      <h1>Bank &amp; M-Pesa Reconciliation</h1>
 
-      <div class="card">
-        <h2>Import a statement</h2>
-        <p style="color:var(--color-muted);font-size:13px">
-          CSV columns expected: <code>date, reference, description, amount, type</code>
-          (type is "credit" or "debit"). Export this from your bank/M-Pesa portal first.
-        </p>
-        <input type="file" id="f-file" accept=".csv">
-        <button class="btn accent" onclick="importFile()" style="margin-top:12px">Import as bank transactions</button>
-        <p id="import-error" class="error" style="display:none"></p>
-        <p id="import-success" style="display:none;color:var(--color-success)"></p>
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('new')">New reconciliation</div>
+        <div class="tab" onclick="switchTab('list')">Reconciliations</div>
+        <div class="tab" onclick="switchTab('import')">Import statement</div>
       </div>
 
-      <div class="card">
-        <h2>Review matches</h2>
-        <button class="btn" onclick="runMatching()">Re-run matching</button>
-        <table style="margin-top:12px">
-          <thead><tr><th>Date</th><th>Reference</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead>
-          <tbody id="rows"><tr><td colspan="5" class="empty">No imported transactions yet.</td></tr></tbody>
-        </table>
+      <!-- NEW RECONCILIATION -->
+      <div id="tab-new">
+        <div class="card">
+          <h2>Start a reconciliation</h2>
+          <div class="field"><label>Account type</label>
+            <select id="n-acct-type" onchange="loadAccountOptions()">
+              <option value="bank">Bank account</option>
+              <option value="mpesa">M-Pesa account</option>
+            </select>
+          </div>
+          <div class="field"><label>Account</label><select id="n-account"></select></div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div class="field" style="flex:1;min-width:150px"><label>Period start</label><input id="n-start" type="date"></div>
+            <div class="field" style="flex:1;min-width:150px"><label>Period end</label><input id="n-end" type="date"></div>
+          </div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div class="field" style="flex:1;min-width:150px"><label>Statement opening balance</label><input id="n-open" type="number" step="0.01" value="0"></div>
+            <div class="field" style="flex:1;min-width:150px"><label>Statement closing balance *</label><input id="n-close" type="number" step="0.01"></div>
+          </div>
+          <button class="btn accent" onclick="createReconciliation()">Create reconciliation</button>
+          <p id="new-error" class="error" style="display:none"></p>
+        </div>
+      </div>
+
+      <!-- LIST -->
+      <div id="tab-list" style="display:none">
+        <div class="card">
+          <h2>Reconciliations</h2>
+          <table>
+            <thead><tr><th>Account</th><th>Period</th><th class="num">Statement</th><th class="num">Book</th><th class="num">Difference</th><th>Status</th><th></th></tr></thead>
+            <tbody id="recon-rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- IMPORT -->
+      <div id="tab-import" style="display:none">
+        <div class="card">
+          <h2>Import statement</h2>
+          <p style="color:var(--color-muted);font-size:13px">CSV columns: <code>date, reference, description, amount, type</code> (type = credit or debit)</p>
+          <div class="field"><label>Import into</label>
+            <select id="i-acct-type" onchange="loadImportAccounts()">
+              <option value="bank">Bank account</option>
+              <option value="mpesa">M-Pesa account</option>
+            </select>
+          </div>
+          <div class="field"><label>Account</label><select id="i-account"></select></div>
+          <input type="file" id="i-file" accept=".csv">
+          <button class="btn accent" onclick="importStatement()" style="margin-top:12px">Import</button>
+          <p id="import-error" class="error" style="display:none"></p>
+          <p id="import-success" style="display:none;color:var(--color-success)"></p>
+        </div>
+
+        <div class="card">
+          <h2>Imported transactions</h2>
+          <button class="btn" onclick="runMatching()">Suggest matches</button>
+          <table style="margin-top:12px">
+            <thead><tr><th>Date</th><th>Reference</th><th class="num">Amount</th><th>Status</th><th></th></tr></thead>
+            <tbody id="txn-rows"><tr><td colspan="5" class="empty">No transactions imported yet.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- DETAIL -->
+      <div class="card" id="detail-card" style="display:none">
+        <h2 id="detail-title">Reconciliation</h2>
+        <div id="detail-body"></div>
       </div>
     </main>
   </div>
@@ -53,130 +121,324 @@
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
   <script>
-    let orgId, bankAccountId, thresholds;
+    let orgId, bankAccounts = [], mpesaAccounts = [], currentRecon = null;
 
-    async function ensureBankAccount() {
-      let { data } = await supabaseClient.from("bank_accounts").select("id").eq("organisation_id", orgId).limit(1);
-      if (data && data.length) return data[0].id;
-      const { data: created, error } = await supabaseClient.from("bank_accounts")
-        .insert({ organisation_id: orgId, account_name: "Main account" }).select("id").single();
-      if (error) throw error;
-      return created.id;
+    function switchTab(name) {
+      ['new','list','import'].forEach(t => {
+        document.getElementById('tab-'+t).style.display = (t===name) ? 'block' : 'none';
+      });
+      document.querySelectorAll('.tab').forEach((el,i) => {
+        el.classList.toggle('active', ['new','list','import'][i]===name);
+      });
+      if (name==='list') loadReconciliations();
+      if (name==='import') loadTransactions();
     }
 
-    async function loadThresholds() {
-      const { data } = await supabaseClient.from("organisation_settings")
-        .select("match_auto_threshold, match_suggest_threshold").eq("organisation_id", orgId).single();
-      thresholds = data || { match_auto_threshold: 0.9, match_suggest_threshold: 0.6 };
+    async function loadAccounts() {
+      const {data: banks} = await supabaseClient.from("bank_accounts")
+        .select("id, account_name, bank_name, chart_account_id").eq("organisation_id", orgId);
+      bankAccounts = banks || [];
+      const {data: mpesas} = await supabaseClient.from("mpesa_accounts")
+        .select("id, account_name, till_or_paybill, chart_account_id").eq("organisation_id", orgId);
+      mpesaAccounts = mpesas || [];
+
+      // Auto-create a default account if none exists
+      if (!bankAccounts.length) {
+        const {data: coa} = await supabaseClient.from("chart_of_accounts")
+          .select("id").eq("organisation_id", orgId).eq("code","1010").single();
+        const {data: created} = await supabaseClient.from("bank_accounts")
+          .insert({organisation_id: orgId, account_name:"Main bank account", chart_account_id: coa?.id})
+          .select("id, account_name, bank_name, chart_account_id").single();
+        if (created) bankAccounts = [created];
+      }
+      if (!mpesaAccounts.length) {
+        const {data: coa} = await supabaseClient.from("chart_of_accounts")
+          .select("id").eq("organisation_id", orgId).eq("code","1020").single();
+        const {data: created} = await supabaseClient.from("mpesa_accounts")
+          .insert({organisation_id: orgId, account_name:"Main M-Pesa account", chart_account_id: coa?.id})
+          .select("id, account_name, till_or_paybill, chart_account_id").single();
+        if (created) mpesaAccounts = [created];
+      }
+      loadAccountOptions(); loadImportAccounts();
     }
 
-    async function importFile() {
+    function loadAccountOptions() {
+      const type = document.getElementById("n-acct-type").value;
+      const list = type==="bank" ? bankAccounts : mpesaAccounts;
+      document.getElementById("n-account").innerHTML =
+        list.map(a=>`<option value="${a.id}">${a.account_name}</option>`).join("");
+    }
+
+    function loadImportAccounts() {
+      const type = document.getElementById("i-acct-type").value;
+      const list = type==="bank" ? bankAccounts : mpesaAccounts;
+      document.getElementById("i-account").innerHTML =
+        list.map(a=>`<option value="${a.id}">${a.account_name}</option>`).join("");
+    }
+
+    async function createReconciliation() {
+      const errorEl = document.getElementById("new-error");
+      errorEl.style.display = "none";
+      const type = document.getElementById("n-acct-type").value;
+      const acctId = document.getElementById("n-account").value;
+      const start = document.getElementById("n-start").value;
+      const end = document.getElementById("n-end").value;
+      const closing = document.getElementById("n-close").value;
+      if (!acctId || !start || !end || closing==="") {
+        showError(errorEl, "Account, period dates and closing balance are all required."); return;
+      }
+      const {data, error} = await supabaseClient.rpc("fn_create_reconciliation", {
+        p_organisation_id: orgId,
+        p_bank_account_id: type==="bank" ? acctId : null,
+        p_mpesa_account_id: type==="mpesa" ? acctId : null,
+        p_period_start: start, p_period_end: end,
+        p_opening_balance: document.getElementById("n-open").value || 0,
+        p_closing_balance: closing,
+      });
+      if (error) { showError(errorEl, error.message); return; }
+      switchTab('list');
+      openReconciliation(data);
+    }
+
+    async function loadReconciliations() {
+      const {data, error} = await supabaseClient.from("reconciliations")
+        .select("id, statement_period_start, statement_period_end, statement_balance, ledger_balance, difference, status, bank_accounts(account_name), mpesa_accounts(account_name)")
+        .eq("organisation_id", orgId).order("created_at",{ascending:false});
+      const tbody = document.getElementById("recon-rows");
+      if (error) { tbody.innerHTML=`<tr><td colspan="7" class="error">${error.message}</td></tr>`; return; }
+      if (!data.length) { tbody.innerHTML=`<tr><td colspan="7" class="empty">No reconciliations yet.</td></tr>`; return; }
+      tbody.innerHTML = data.map(r=>{
+        const acct = r.bank_accounts?.account_name || r.mpesa_accounts?.account_name || "—";
+        const statusClass = r.status==='locked'||r.status==='completed' ? 'paid' : r.status==='in_progress' ? 'partial' : 'unpaid';
+        return `<tr>
+          <td>${acct}</td>
+          <td>${r.statement_period_start||"—"} to ${r.statement_period_end||"—"}</td>
+          <td class="num">${money(r.statement_balance)}</td>
+          <td class="num">${money(r.ledger_balance)}</td>
+          <td class="num">${money(r.difference)}</td>
+          <td><span class="status ${statusClass}">${r.status}</span></td>
+          <td><button class="btn" onclick="openReconciliation('${r.id}')">Open</button></td>
+        </tr>`;
+      }).join("");
+    }
+
+    async function openReconciliation(id) {
+      currentRecon = id;
+      const card = document.getElementById("detail-card");
+      const body = document.getElementById("detail-body");
+      card.style.display="block"; body.innerHTML="Loading…";
+      card.scrollIntoView({behavior:"smooth"});
+
+      const {data: summary, error} = await supabaseClient.rpc("fn_reconciliation_summary",{p_reconciliation_id:id});
+      if (error) { body.innerHTML=`<p class="error">${error.message}</p>`; return; }
+
+      const {data: items} = await supabaseClient.from("reconciliation_items")
+        .select("id, item_type, description, amount, direction, adjusts")
+        .eq("reconciliation_id", id).order("created_at");
+
+      const locked = summary.status==='locked';
+      const completed = summary.status==='completed';
+      const editable = !locked && !completed;
+
+      const itemRows = (items||[]).map(i=>`
+        <tr>
+          <td>${i.item_type.replace(/_/g,' ')}</td>
+          <td>${i.description}</td>
+          <td>${i.adjusts}</td>
+          <td>${i.direction}</td>
+          <td class="num">${money(i.amount)}</td>
+          <td>${editable?`<button class="btn" style="padding:2px 8px;background:var(--color-alert)" onclick="deleteItem('${i.id}')">×</button>`:''}</td>
+        </tr>`).join("");
+
+      body.innerHTML = `
+        <div class="recon-summary" style="margin-bottom:16px">
+          <div class="recon-line"><span>Statement closing balance</span><span class="amt">${money(summary.statement_balance)}</span></div>
+          <div class="recon-line"><span>Add: deposits in transit / bank items</span><span class="amt">${money(summary.bank_add)}</span></div>
+          <div class="recon-line"><span>Less: outstanding payments / bank items</span><span class="amt">(${money(summary.bank_less)})</span></div>
+          <div class="recon-line total"><span>Adjusted bank balance</span><span class="amt">${money(summary.adjusted_bank_balance)}</span></div>
+
+          <div class="recon-line" style="margin-top:16px"><span>Book (ledger) balance</span><span class="amt">${money(summary.book_balance)}</span></div>
+          <div class="recon-line"><span>Add: book adjustments</span><span class="amt">${money(summary.book_add)}</span></div>
+          <div class="recon-line"><span>Less: bank charges / book adjustments</span><span class="amt">(${money(summary.book_less)})</span></div>
+          <div class="recon-line total"><span>Adjusted book balance</span><span class="amt">${money(summary.adjusted_book_balance)}</span></div>
+
+          <div class="recon-line grand ${summary.is_reconciled?'diff-ok':'diff-bad'}">
+            <span>Difference</span><span class="amt">${money(summary.difference)}</span>
+          </div>
+          <p class="${summary.is_reconciled?'diff-ok':'diff-bad'}" style="font-size:13px;margin-top:4px">
+            ${summary.is_reconciled?'✓ Reconciled — the difference is zero.':'⚠ Not yet reconciled. Add reconciling items until the difference is zero.'}
+          </p>
+        </div>
+
+        <h3>Reconciling items</h3>
+        <table style="margin-bottom:12px">
+          <thead><tr><th>Type</th><th>Description</th><th>Adjusts</th><th>Direction</th><th class="num">Amount</th><th></th></tr></thead>
+          <tbody>${itemRows || `<tr><td colspan="6" class="empty">No reconciling items.</td></tr>`}</tbody>
+        </table>
+
+        ${editable ? `
+        <details><summary style="cursor:pointer;color:var(--color-muted)">Add a reconciling item</summary>
+          <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+            <div class="field" style="margin-bottom:0"><label>Type</label>
+              <select id="it-type">
+                <option value="deposit_in_transit">Deposit in transit</option>
+                <option value="outstanding_payment">Outstanding payment</option>
+                <option value="bank_charge">Bank charge</option>
+                <option value="bank_interest">Bank interest</option>
+                <option value="bank_error">Bank error</option>
+                <option value="book_error">Book error</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="field" style="margin-bottom:0"><label>Description</label><input id="it-desc"></div>
+            <div class="field" style="margin-bottom:0"><label>Adjusts</label>
+              <select id="it-adjusts"><option value="bank">Bank side</option><option value="book">Book side</option></select>
+            </div>
+            <div class="field" style="margin-bottom:0"><label>Direction</label>
+              <select id="it-dir"><option value="add">Add</option><option value="less">Less</option></select>
+            </div>
+            <div class="field" style="margin-bottom:0"><label>Amount</label><input id="it-amt" type="number" step="0.01"></div>
+            <button class="btn" onclick="addItem()">Add</button>
+          </div>
+        </details>` : ''}
+
+        <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+          ${editable && summary.is_reconciled ? `<button class="btn accent" onclick="completeRecon()">Complete reconciliation</button>` : ''}
+          ${completed ? `<button class="btn accent" onclick="lockRecon()">Lock</button>` : ''}
+          ${locked ? `<button class="btn" onclick="unlockRecon()">Unlock (admin only)</button>` : ''}
+        </div>
+        <p id="detail-error" class="error" style="display:none"></p>`;
+    }
+
+    async function addItem() {
+      const errorEl = document.getElementById("detail-error");
+      const {error} = await supabaseClient.from("reconciliation_items").insert({
+        reconciliation_id: currentRecon,
+        organisation_id: orgId,
+        item_type: document.getElementById("it-type").value,
+        description: document.getElementById("it-desc").value || "Reconciling item",
+        adjusts: document.getElementById("it-adjusts").value,
+        direction: document.getElementById("it-dir").value,
+        amount: document.getElementById("it-amt").value,
+      });
+      if (error) { showError(errorEl, error.message); return; }
+      openReconciliation(currentRecon);
+    }
+
+    async function deleteItem(id) {
+      const {error} = await supabaseClient.from("reconciliation_items").delete().eq("id", id);
+      if (error) { alert(error.message); return; }
+      openReconciliation(currentRecon);
+    }
+
+    async function completeRecon() {
+      if (!confirm("Complete this reconciliation? It can then be locked.")) return;
+      const {error} = await supabaseClient.rpc("fn_complete_reconciliation",{p_reconciliation_id:currentRecon});
+      if (error) { showError(document.getElementById("detail-error"), error.message); return; }
+      loadReconciliations(); openReconciliation(currentRecon);
+    }
+
+    async function lockRecon() {
+      if (!confirm("Lock this reconciliation? Reconciled items cannot then be altered without an admin unlock.")) return;
+      const {error} = await supabaseClient.rpc("fn_lock_reconciliation",{p_reconciliation_id:currentRecon});
+      if (error) { showError(document.getElementById("detail-error"), error.message); return; }
+      loadReconciliations(); openReconciliation(currentRecon);
+    }
+
+    async function unlockRecon() {
+      const reason = prompt("Reason for unlocking this reconciliation (recorded in the audit trail):");
+      if (!reason) return;
+      const {error} = await supabaseClient.rpc("fn_unlock_reconciliation",{p_reconciliation_id:currentRecon, p_reason:reason});
+      if (error) { showError(document.getElementById("detail-error"), error.message); return; }
+      loadReconciliations(); openReconciliation(currentRecon);
+    }
+
+    // ── STATEMENT IMPORT & MATCHING ───────────────────────────────────────
+    async function importStatement() {
       const errorEl = document.getElementById("import-error");
       const successEl = document.getElementById("import-success");
-      errorEl.style.display = "none"; successEl.style.display = "none";
-      const file = document.getElementById("f-file").files[0];
-      if (!file) { showError(errorEl, "Choose a CSV file first."); return; }
+      errorEl.style.display="none"; successEl.style.display="none";
+      const file = document.getElementById("i-file").files[0];
+      const type = document.getElementById("i-acct-type").value;
+      const acctId = document.getElementById("i-account").value;
+      if (!file) { showError(errorEl,"Choose a CSV file first."); return; }
+      if (!acctId) { showError(errorEl,"Select an account."); return; }
 
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: async (results) => {
-          const rows = results.data.map(r => ({
+      Papa.parse(file, { header:true, skipEmptyLines:true, complete: async (res) => {
+        const rows = res.data.map(r=>{
+          const base = {
             organisation_id: orgId,
-            bank_account_id: bankAccountId,
             txn_date: r.date,
-            reference: r.reference || null,
-            description: r.description || null,
+            reference: r.reference||null,
             amount: Math.abs(parseFloat(r.amount)),
-            txn_type: (r.type || "credit").toLowerCase(),
-          })).filter(r => r.txn_date && !isNaN(r.amount));
+          };
+          if (type==="bank") return {...base, bank_account_id:acctId, description:r.description||null, txn_type:(r.type||"credit").toLowerCase()};
+          return {...base, mpesa_account_id:acctId, payer_name:r.description||null, phone:r.phone||null};
+        }).filter(r=>r.txn_date && !isNaN(r.amount));
 
-          if (!rows.length) { showError(errorEl, "No valid rows found in that file."); return; }
-
-          const { error } = await supabaseClient.from("bank_transactions").insert(rows);
-          if (error) { showError(errorEl, error.message); return; }
-          successEl.textContent = `Imported ${rows.length} transaction(s).`;
-          successEl.style.display = "block";
-          runMatching();
-        }
-      });
+        if (!rows.length) { showError(errorEl,"No valid rows found."); return; }
+        const table = type==="bank" ? "bank_transactions" : "mpesa_transactions";
+        const {error} = await supabaseClient.from(table).insert(rows);
+        if (error) { showError(errorEl, error.message); return; }
+        successEl.textContent = `Imported ${rows.length} transaction(s).`;
+        successEl.style.display="block";
+        loadTransactions();
+      }});
     }
 
-    // Simple client-side scoring: exact reference match against a payment's
-    // reference scores 1.0; amount+date within 3 days scores 0.65. This is
-    // the placeholder logic flagged in the deployment notes — replace with
-    // a proper SQL matching function once you have real statement formats
-    // to test against.
-    async function runMatching() {
-      const { data: txns } = await supabaseClient.from("bank_transactions")
+    async function loadTransactions() {
+      const type = document.getElementById("i-acct-type").value;
+      const table = type==="bank" ? "bank_transactions" : "mpesa_transactions";
+      const {data, error} = await supabaseClient.from(table)
         .select("id, txn_date, reference, amount, match_status")
-        .eq("organisation_id", orgId).in("match_status", ["unmatched", "suggested"]);
-
-      const { data: payments } = await supabaseClient.from("payments")
-        .select("id, transaction_date, reference, amount, status")
-        .eq("organisation_id", orgId);
-
-      for (const t of (txns || [])) {
-        let best = { score: 0, paymentId: null, exact: false };
-        for (const p of (payments || [])) {
-          let score = 0;
-          let exact = false;
-          if (t.reference && p.reference && t.reference.trim() === p.reference.trim()) { score = 1.0; exact = true; }
-          else if (Number(t.amount) === Number(p.amount) &&
-                   Math.abs(new Date(t.txn_date) - new Date(p.transaction_date)) <= 3 * 86400000) score = 0.65;
-          if (score > best.score) best = { score, paymentId: p.id, exact };
-        }
-
-        // Safety rule (not just a threshold): ONLY an exact reference match
-        // may auto-confirm as "matched". Amount+date proximity alone is
-        // ambiguous by nature — two members could pay the same amount on
-        // the same day — so it can only ever land as "suggested", requiring
-        // a human to click Confirm. This is enforced here regardless of
-        // organisation_settings values, per Section 12 of the architecture.
-        let status = "unmatched";
-        if (best.exact) status = "matched";
-        else if (best.score >= thresholds.match_suggest_threshold) status = "suggested";
-
-        if (status !== "unmatched") {
-          await supabaseClient.from("bank_transactions").update({
-            match_status: status, matched_payment_id: best.paymentId, match_score: best.score
-          }).eq("id", t.id);
-        }
-      }
-      loadRows();
-    }
-
-    async function loadRows() {
-      const { data, error } = await supabaseClient.from("bank_transactions")
-        .select("id, txn_date, reference, amount, match_status")
-        .eq("organisation_id", orgId).order("txn_date", { ascending: false });
-      const tbody = document.getElementById("rows");
-      if (error) { tbody.innerHTML = `<tr><td colspan="5" class="error">${error.message}</td></tr>`; return; }
-      if (!data.length) { tbody.innerHTML = `<tr><td colspan="5" class="empty">No imported transactions yet.</td></tr>`; return; }
-      tbody.innerHTML = data.map(t => `
+        .eq("organisation_id", orgId).order("txn_date",{ascending:false}).limit(100);
+      const tbody = document.getElementById("txn-rows");
+      if (error) { tbody.innerHTML=`<tr><td colspan="5" class="error">${error.message}</td></tr>`; return; }
+      if (!data.length) { tbody.innerHTML=`<tr><td colspan="5" class="empty">No transactions imported yet.</td></tr>`; return; }
+      tbody.innerHTML = data.map(t=>`
         <tr>
-          <td>${t.txn_date}</td>
-          <td>${t.reference ?? "—"}</td>
+          <td>${t.txn_date}</td><td>${t.reference??"—"}</td>
           <td class="num">${money(t.amount)}</td>
-          <td><span class="status ${t.match_status}">${t.match_status}</span></td>
-          <td>${t.match_status === "suggested" ? `<button class="btn" onclick="confirmMatch('${t.id}')">Confirm</button>` : ""}</td>
+          <td><span class="status ${t.match_status==='matched'?'paid':t.match_status==='suggested'?'partial':'unpaid'}">${t.match_status}</span></td>
+          <td>${t.match_status==='suggested'?`<button class="btn" style="padding:2px 8px" onclick="confirmMatch('${table}','${t.id}')">Confirm</button>`:''}</td>
         </tr>`).join("");
     }
 
-    async function confirmMatch(id) {
-      await supabaseClient.from("bank_transactions").update({ match_status: "matched" }).eq("id", id);
-      loadRows();
+    async function runMatching() {
+      const type = document.getElementById("i-acct-type").value;
+      const table = type==="bank" ? "bank_transactions" : "mpesa_transactions";
+      const {data: txns} = await supabaseClient.from(table)
+        .select("id, txn_date, reference, amount").eq("organisation_id",orgId).in("match_status",["unmatched","suggested"]);
+      const {data: payments} = await supabaseClient.from("payments")
+        .select("id, transaction_date, reference, amount").eq("organisation_id",orgId);
+
+      for (const t of (txns||[])) {
+        let best = {score:0, id:null, exact:false};
+        for (const p of (payments||[])) {
+          let score=0, exact=false;
+          if (t.reference && p.reference && t.reference.trim()===p.reference.trim()) { score=1.0; exact=true; }
+          else if (Number(t.amount)===Number(p.amount) && Math.abs(new Date(t.txn_date)-new Date(p.transaction_date))<=3*86400000) score=0.65;
+          if (score>best.score) best={score, id:p.id, exact};
+        }
+        // Only an exact reference match may auto-confirm; everything else needs review.
+        let status = best.exact ? "matched" : (best.score>=0.6 ? "suggested" : "unmatched");
+        if (status!=="unmatched") {
+          await supabaseClient.from(table).update({match_status:status, matched_payment_id:best.id, match_score:best.score}).eq("id",t.id);
+        }
+      }
+      loadTransactions();
+    }
+
+    async function confirmMatch(table, id) {
+      await supabaseClient.from(table).update({match_status:"matched"}).eq("id",id);
+      loadTransactions();
     }
 
     (async () => {
-      const session = await requireSession();
-      if (!session) return;
-      const org = await currentOrg();
-      if (!org) return;
+      const session = await requireSession(); if (!session) return;
+      const org = await currentOrg(); if (!org) return;
       orgId = org.organisation_id;
-      bankAccountId = await ensureBankAccount();
-      await loadThresholds();
-      loadRows();
+      await loadAccounts();
     })();
   </script>
 </body>

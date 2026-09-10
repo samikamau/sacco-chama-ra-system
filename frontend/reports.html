@@ -7,6 +7,17 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  .report-header { background:var(--color-primary); color:#fff; padding:16px 20px; border-radius:var(--radius) var(--radius) 0 0; margin:-24px -24px 20px -24px; }
+  .report-header h2 { color:#fff; margin:0; }
+  .report-header .sub { opacity:0.75; font-size:13px; margin-top:2px; }
+  .section-heading { background:#F3EBD8; padding:6px 12px; font-weight:700; font-size:13px; letter-spacing:0.03em; margin:16px -1px 0; border-top:1px solid var(--color-line); }
+  .total-row td { font-weight:700; border-top:2px solid var(--color-ink); }
+  .grand-total { font-size:15px; font-weight:700; padding:10px 0; border-top:3px solid var(--color-ink); display:flex; justify-content:space-between; }
+  .balance-ok { color:var(--color-success); margin-top:8px; font-size:13px; }
+  .balance-bad { color:var(--color-alert); margin-top:8px; font-size:13px; }
+</style>
 </head>
 <body>
   <div class="app-shell">
@@ -17,21 +28,23 @@
       <a href="contributions.html">Contributions</a>
       <a href="payments.html">Payments</a>
       <a href="loans.html">Loans</a>
+      <a href="expenditure.html">Expenditure</a>
       <a href="accounts.html">Chart of Accounts</a>
       <a href="journal.html">General Journal</a>
-      <a href="reconcile.html">Bank / M-Pesa</a>
+      <a href="reconcile.html">Reconciliation</a>
       <a href="statement.html">Member Statements</a>
       <a href="reports.html" class="active">Reports</a>
       <a href="periods.html">Accounting Periods</a>
+      <a href="users.html">Users</a>
       <a href="#" onclick="signOut()">Sign out</a>
     </nav>
     <main class="main">
       <h1>Reports</h1>
 
       <div class="card">
-        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
           <div class="field" style="margin-bottom:0"><label>Report</label>
-            <select id="report-type" onchange="run()">
+            <select id="report-type">
               <option value="trial">Trial Balance</option>
               <option value="ie">Income &amp; Expenditure</option>
               <option value="bs">Balance Sheet</option>
@@ -52,20 +65,20 @@
               <option value="custom">Custom</option>
             </select>
           </div>
-          <div class="field" style="margin-bottom:0" id="fld-from"><label>From</label><input id="from" type="date"></div>
-          <div class="field" style="margin-bottom:0" id="fld-to"><label>To</label><input id="to" type="date"></div>
+          <div class="field" style="margin-bottom:0" id="fld-from" style="display:none"><label>From</label><input id="from" type="date"></div>
+          <div class="field" style="margin-bottom:0" id="fld-to" style="display:none"><label>To</label><input id="to" type="date"></div>
           <div class="field" style="margin-bottom:0" id="fld-account" style="display:none">
             <label>Account (GL only)</label>
             <select id="gl-account"><option value="">All accounts</option></select>
           </div>
           <button class="btn" onclick="run()">Run</button>
-          <button class="btn accent" onclick="downloadPdf()">Download PDF</button>
+          <button class="btn accent" onclick="exportPdf()">&#8595; PDF</button>
+          <button class="btn accent" onclick="exportExcel()">&#8595; Excel</button>
         </div>
       </div>
 
-      <div class="card" id="report-card">
-        <h2 id="report-title">Trial Balance</h2>
-        <div id="report-body"><p class="empty">Select a report and period, then click Run.</p></div>
+      <div class="card" id="report-card" style="display:none">
+        <div id="report-body"></div>
       </div>
     </main>
   </div>
@@ -73,328 +86,462 @@
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
   <script>
-    let orgId, orgName, lastRows = [], lastKind = "trial", glAccounts = [];
+    let orgId, orgName, lastReport = null, glAccounts = [];
 
-    async function loadGLAccounts() {
-      const { data } = await supabaseClient.from("chart_of_accounts")
-        .select("id, code, name").eq("organisation_id", orgId).eq("is_active", true).order("code");
-      glAccounts = data || [];
-      document.getElementById("gl-account").innerHTML =
-        `<option value="">All accounts</option>` +
-        glAccounts.map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join("");
-    }
-
-    document.getElementById("report-type").addEventListener("change", function() {
-      document.getElementById("fld-account").style.display = this.value === "gl" ? "block" : "none";
-    });
-
-
+    // ── LOCAL DATE FORMATTER (avoids UTC shift in Nairobi UTC+3) ─────────
     function toLocalISO(d) {
       return d.getFullYear() + '-' +
-        String(d.getMonth() + 1).padStart(2, '0') + '-' +
-        String(d.getDate()).padStart(2, '0');
+        String(d.getMonth() + 1).padStart(2,'0') + '-' +
+        String(d.getDate()).padStart(2,'0');
     }
+
+    // ── DATE PRESETS ──────────────────────────────────────────────────────
     function applyPreset() {
       const p = document.getElementById("rpt-preset").value;
       const now = new Date();
-      const y = now.getFullYear(), m = now.getMonth(); // m is 0-based
+      const y = now.getFullYear(), m = now.getMonth();
       let from = null, to = null;
-
-      if (p === "this_month") {
-        from = new Date(y, m, 1);
-        to   = new Date(y, m + 1, 0); // last day of current month
-      } else if (p === "last_month") {
-        from = new Date(y, m - 1, 1);
-        to   = new Date(y, m, 0);     // last day of previous month
-      } else if (p === "this_quarter") {
-        const qStart = Math.floor(m / 3) * 3;
-        from = new Date(y, qStart, 1);
-        to   = new Date(y, qStart + 3, 0); // last day of quarter
-      } else if (p === "last_quarter") {
-        const qStart = Math.floor(m / 3) * 3 - 3;
-        const qYear  = qStart < 0 ? y - 1 : y;
-        const qAdj   = ((qStart % 12) + 12) % 12;
-        from = new Date(qYear, qAdj, 1);
-        to   = new Date(qYear, qAdj + 3, 0);
-      } else if (p === "this_year") {
-        from = new Date(y, 0, 1);           // 1 Jan
-        to   = new Date(y, 11, 31);         // 31 Dec
-      } else if (p === "last_year") {
-        from = new Date(y - 1, 0, 1);      // 1 Jan last year
-        to   = new Date(y - 1, 11, 31);    // 31 Dec last year
-      } else if (p === "ytd") {
-        from = new Date(y, 0, 1);
-        to   = now;
-      }
-
-      const show = (p === "custom");
-      document.getElementById("fld-from").style.display = (show || from) ? "block" : "none";
-      document.getElementById("fld-to").style.display   = (show || to)   ? "block" : "none";
+      if      (p==="this_month")   { from=new Date(y,m,1);        to=new Date(y,m+1,0); }
+      else if (p==="last_month")   { from=new Date(y,m-1,1);      to=new Date(y,m,0); }
+      else if (p==="this_quarter") { const q=Math.floor(m/3)*3;   from=new Date(y,q,1);    to=new Date(y,q+3,0); }
+      else if (p==="last_quarter") { const q=Math.floor(m/3)*3-3; const qy=q<0?y-1:y; const qa=((q%12)+12)%12; from=new Date(qy,qa,1); to=new Date(qy,qa+3,0); }
+      else if (p==="this_year")    { from=new Date(y,0,1);        to=new Date(y,11,31); }
+      else if (p==="last_year")    { from=new Date(y-1,0,1);      to=new Date(y-1,11,31); }
+      else if (p==="ytd")          { from=new Date(y,0,1);        to=now; }
+      const custom = p==="custom";
+      document.getElementById("fld-from").style.display = (custom||from) ? "block" : "none";
+      document.getElementById("fld-to").style.display   = (custom||to)   ? "block" : "none";
       if (from) document.getElementById("from").value = toLocalISO(from);
       if (to)   document.getElementById("to").value   = toLocalISO(to);
-      if (!show && p !== "all" && p !== "custom") {
-        // Populate dates but don't auto-run — user clicks Run
-      }
     }
 
     function dates() {
-      return {
-        from: document.getElementById("from").value || null,
-        to: document.getElementById("to").value || null,
-      };
+      return { from: document.getElementById("from").value||null, to: document.getElementById("to").value||null };
     }
 
+    document.getElementById("report-type").addEventListener("change", function() {
+      document.getElementById("fld-account").style.display = this.value==="gl" ? "block" : "none";
+    });
+
+    // ── REPORT DATA FETCHING ──────────────────────────────────────────────
     async function run() {
       const kind = document.getElementById("report-type").value;
-      lastKind = kind;
-      const { from, to } = dates();
+      const {from,to} = dates();
+      const card = document.getElementById("report-card");
       const body = document.getElementById("report-body");
+      card.style.display = "block";
       body.innerHTML = `<p class="empty">Loading…</p>`;
 
-      if (kind === "trial") {
-        document.getElementById("report-title").textContent = "Trial Balance";
-        const { data, error } = await supabaseClient.rpc("fn_trial_balance", {
-          p_organisation_id: orgId, p_from: from, p_to: to,
-        });
-        if (error) { body.innerHTML = `<p class="error">${error.message}</p>`; return; }
-        lastRows = data || [];
-        renderTrial(lastRows);
-      } else if (kind === "ie") {
-        document.getElementById("report-title").textContent = "Income & Expenditure";
-        const { data, error } = await supabaseClient.rpc("fn_income_expenditure", {
-          p_organisation_id: orgId, p_from: from, p_to: to,
-        });
-        if (error) { body.innerHTML = `<p class="error">${error.message}</p>`; return; }
-        lastRows = data || [];
-        renderIE(lastRows);
-      } else if (kind === "bs") {
-        document.getElementById("report-title").textContent = "Balance Sheet (as at " + (to || "today") + ")";
-        const { data, error } = await supabaseClient.rpc("fn_balance_sheet", {
-          p_organisation_id: orgId, p_as_at: to,
-        });
-        if (error) { body.innerHTML = `<p class="error">${error.message}</p>`; return; }
-        lastRows = data || [];
-        renderBS(lastRows);
-      } else if (kind === "cf") {
-        document.getElementById("report-title").textContent = "Cash Flow";
-        const { data, error } = await supabaseClient.rpc("fn_cash_flow", {
-          p_organisation_id: orgId, p_from: from, p_to: to,
-        });
-        if (error) { body.innerHTML = `<p class="error">${error.message}</p>`; return; }
-        lastRows = data || [];
-        renderCF(lastRows);
+      let data, error;
+      if (kind==="trial") {
+        ({data,error} = await supabaseClient.rpc("fn_trial_balance",{p_organisation_id:orgId,p_from:from,p_to:to}));
+      } else if (kind==="ie") {
+        ({data,error} = await supabaseClient.rpc("fn_income_expenditure",{p_organisation_id:orgId,p_from:from,p_to:to}));
+      } else if (kind==="bs") {
+        ({data,error} = await supabaseClient.rpc("fn_balance_sheet",{p_organisation_id:orgId,p_as_at:to}));
+      } else if (kind==="cf") {
+        ({data,error} = await supabaseClient.rpc("fn_cash_flow",{p_organisation_id:orgId,p_from:from,p_to:to}));
       } else {
-        document.getElementById("report-title").textContent = "General Ledger";
-        const acctId = document.getElementById("gl-account").value || null;
-        const { data, error } = await supabaseClient.rpc("fn_general_ledger", {
-          p_organisation_id: orgId, p_from: from, p_to: to,
-          p_account_id: acctId,
-        });
-        if (error) { body.innerHTML = `<p class="error">${error.message}</p>`; return; }
-        lastRows = data || [];
-        renderGL(lastRows);
+        const acctId = document.getElementById("gl-account").value||null;
+        ({data,error} = await supabaseClient.rpc("fn_general_ledger",{p_organisation_id:orgId,p_from:from,p_to:to,p_account_id:acctId}));
       }
+
+      if (error) { body.innerHTML=`<p class="error">${error.message}</p>`; return; }
+      lastReport = { kind, data:data||[], from, to };
+      renderReport(body, lastReport);
     }
 
-    function renderGL(rows) {
-      const body = document.getElementById("report-body");
-      if (!rows.length) { body.innerHTML = `<p class="empty">No posted transactions in this range.</p>`; return; }
+    // ── PERIOD LABEL ──────────────────────────────────────────────────────
+    function periodLabel() {
+      if (!lastReport) return "";
+      const {from,to} = lastReport;
+      if (!from && !to) return "All time";
+      if (from && to) return `${from} to ${to}`;
+      return from ? `From ${from}` : `To ${to}`;
+    }
 
-      // Group by account
+    // ── RENDER TO SCREEN ─────────────────────────────────────────────────
+    function renderReport(body, rpt) {
+      const {kind, data} = rpt;
+      const titles = {trial:"Trial Balance",ie:"Income & Expenditure",bs:"Balance Sheet",cf:"Cash Flow",gl:"General Ledger"};
+      const title = titles[kind];
+      const now = new Date().toLocaleDateString("en-KE",{year:"numeric",month:"long",day:"numeric"});
+
+      let html = `<div class="report-header"><h2>${orgName}</h2><div class="sub">${title} &nbsp;|&nbsp; ${periodLabel()} &nbsp;|&nbsp; Generated ${now}</div></div>`;
+
+      if (!data.length) { body.innerHTML = html + `<p class="empty">No data in this range.</p>`; return; }
+
+      if (kind==="trial") html += renderTrialHTML(data);
+      else if (kind==="ie") html += renderIEHTML(data);
+      else if (kind==="bs") html += renderBSHTML(data);
+      else if (kind==="cf") html += renderCFHTML(data);
+      else html += renderGLHTML(data);
+
+      body.innerHTML = html;
+    }
+
+    function renderTrialHTML(data) {
+      let totalDr=0, totalCr=0;
+      const rows = data.map(r => {
+        totalDr+=Number(r.total_debit); totalCr+=Number(r.total_credit);
+        return `<tr><td>${r.account_code}</td><td>${r.account_name}</td><td style="color:var(--color-muted);font-size:12px">${r.account_type}</td><td class="num">${r.total_debit>0?money(r.total_debit):""}</td><td class="num">${r.total_credit>0?money(r.total_credit):""}</td></tr>`;
+      }).join("");
+      const balanced = Math.abs(totalDr-totalCr)<0.005;
+      return `<table><thead><tr><th>Code</th><th>Account</th><th>Type</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr class="total-row"><td colspan="3">TOTALS</td><td class="num">${money(totalDr)}</td><td class="num">${money(totalCr)}</td></tr></tfoot>
+      </table>
+      <p class="${balanced?'balance-ok':'balance-bad'}">${balanced?'✓ In balance — total debits equal total credits.':'⚠ Out of balance by KES '+money(Math.abs(totalDr-totalCr))+' — investigate.'}</p>`;
+    }
+
+    function renderIEHTML(data) {
+      const income  = data.filter(r=>r.account_type==="income");
+      const expense = data.filter(r=>r.account_type==="expense");
+      const totI = income.reduce((s,r)=>s+Number(r.amount),0);
+      const totE = expense.reduce((s,r)=>s+Number(r.amount),0);
+      const surplus = totI-totE;
+      const sec = (label,rows,total) => `
+        <div class="section-heading">${label}</div>
+        <table><tbody>
+          ${rows.length ? rows.map(r=>`<tr><td>${r.account_code}</td><td>${r.account_name}</td><td class="num">${money(r.amount)}</td></tr>`).join("") : `<tr><td colspan="3" class="empty">None.</td></tr>`}
+          <tr class="total-row"><td colspan="2">Total ${label}</td><td class="num">${money(total)}</td></tr>
+        </tbody></table>`;
+      return sec("Income",income,totI) + sec("Expenditure",expense,totE) +
+        `<div class="grand-total"><span>${surplus>=0?"Surplus":"Deficit"}</span><span>${money(Math.abs(surplus))}</span></div>`;
+    }
+
+    function renderBSHTML(data) {
+      const assets = data.filter(r=>r.section==="asset");
+      const liab   = data.filter(r=>r.section==="liability");
+      const eq     = data.filter(r=>r.section==="equity");
+      const sum    = l=>l.reduce((s,r)=>s+Number(r.amount),0);
+      const totA=sum(assets), totL=sum(liab), totE=sum(eq), totLE=totL+totE;
+      const sec = (label,rows,total) => `
+        <div class="section-heading">${label}</div>
+        <table><tbody>
+          ${rows.length ? rows.map(r=>`<tr><td>${r.account_name}</td><td class="num">${money(r.amount)}</td></tr>`).join("") : `<tr><td colspan="2" class="empty">None.</td></tr>`}
+          <tr class="total-row"><td>Total ${label}</td><td class="num">${money(total)}</td></tr>
+        </tbody></table>`;
+      const balanced = Math.abs(totA-totLE)<0.005;
+      return sec("Assets",assets,totA) + sec("Liabilities",liab,totL) + sec("Equity",eq,totE) +
+        `<div class="grand-total"><span>Total Liabilities and Equity</span><span>${money(totLE)}</span></div>
+         <p class="${balanced?'balance-ok':'balance-bad'}">${balanced?'✓ Balanced.':'⚠ Does not balance by KES '+money(Math.abs(totA-totLE))+' — investigate.'}</p>`;
+    }
+
+    function renderCFHTML(data) {
+      const inflow  = data.filter(r=>r.direction==="inflow");
+      const outflow = data.filter(r=>r.direction==="outflow");
+      const sum = l=>l.reduce((s,r)=>s+Number(r.amount),0);
+      const net = sum(inflow)-sum(outflow);
+      const sec = (label,rows,total) => `
+        <div class="section-heading">${label}</div>
+        <table><tbody>
+          ${rows.length ? rows.map(r=>`<tr><td>${r.category}</td><td class="num">${money(r.amount)}</td></tr>`).join("") : `<tr><td colspan="2" class="empty">None.</td></tr>`}
+          <tr class="total-row"><td>Total ${label}</td><td class="num">${money(total)}</td></tr>
+        </tbody></table>`;
+      return sec("Cash Inflows",inflow,sum(inflow)) + sec("Cash Outflows",outflow,sum(outflow)) +
+        `<div class="grand-total" style="color:${net>=0?'var(--color-success)':'var(--color-alert)'}"><span>Net Cash Movement</span><span>${money(net)}</span></div>`;
+    }
+
+    function renderGLHTML(data) {
       const byAccount = {};
-      rows.forEach(r => {
-        const key = r.account_code;
-        if (!byAccount[key]) byAccount[key] = { name: r.account_name, type: r.account_type, rows: [] };
-        byAccount[key].rows.push(r);
+      data.forEach(r=>{
+        if (!byAccount[r.account_code]) byAccount[r.account_code]={name:r.account_name,type:r.account_type,rows:[]};
+        byAccount[r.account_code].rows.push(r);
       });
-
-      body.innerHTML = Object.entries(byAccount).map(([code, acct]) => {
-        const lastRow = acct.rows[acct.rows.length - 1];
-        const closing = lastRow ? Number(lastRow.running_balance) : 0;
-        const rowsHTML = acct.rows.map(r => `
-          <tr>
-            <td>${r.entry_date}</td>
-            <td><code style="font-size:11px">${r.journal_number || "—"}</code></td>
-            <td>${r.description}</td>
-            <td class="num">${Number(r.debit)  ? money(r.debit)  : ""}</td>
-            <td class="num">${Number(r.credit) ? money(r.credit) : ""}</td>
-            <td class="num" style="font-family:var(--font-mono)">${money(r.running_balance)}</td>
-          </tr>`).join("");
-        return `
-          <h3>${code} — ${acct.name} <span style="font-size:12px;color:var(--color-muted);font-weight:400">(${acct.type})</span></h3>
-          <table style="margin-bottom:20px">
-            <thead><tr><th>Date</th><th>Journal</th><th>Description</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
-            <tbody>
-              <tr style="color:var(--color-muted);font-style:italic"><td colspan="5">Opening balance</td><td class="num">0.00</td></tr>
-              ${rowsHTML}
-            </tbody>
-            <tfoot><tr style="font-weight:bold"><td colspan="5">Closing balance</td><td class="num">${money(closing)}</td></tr></tfoot>
+      return Object.entries(byAccount).map(([code,acct])=>{
+        const closing = acct.rows.length ? Number(acct.rows[acct.rows.length-1].running_balance) : 0;
+        return `<div class="section-heading">${code} — ${acct.name} <span style="font-weight:400;color:var(--color-muted)">(${acct.type})</span></div>
+          <table><thead><tr><th>Date</th><th>Journal No.</th><th>Description</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
+          <tbody>
+            <tr style="font-style:italic;color:var(--color-muted)"><td colspan="5">Opening balance</td><td class="num">0.00</td></tr>
+            ${acct.rows.map(r=>`<tr>
+              <td>${r.entry_date}</td>
+              <td><code style="font-size:11px">${r.journal_number||"—"}</code></td>
+              <td>${r.description}</td>
+              <td class="num">${r.debit>0?money(r.debit):""}</td>
+              <td class="num">${r.credit>0?money(r.credit):""}</td>
+              <td class="num" style="font-family:var(--font-mono)">${money(r.running_balance)}</td>
+            </tr>`).join("")}
+          </tbody>
+          <tfoot><tr class="total-row"><td colspan="5">Closing balance</td><td class="num">${money(closing)}</td></tr></tfoot>
           </table>`;
       }).join("");
     }
 
-    function renderBS(rows) {
-      const body = document.getElementById("report-body");
-      if (!rows.length) { body.innerHTML = `<p class="empty">No posted balances yet.</p>`; return; }
-      const assets = rows.filter(r => r.section === "asset");
-      const liabilities = rows.filter(r => r.section === "liability");
-      const equity = rows.filter(r => r.section === "equity");
-      const sum = list => list.reduce((s,r) => s + Number(r.amount), 0);
-      const totalAssets = sum(assets);
-      const totalLE = sum(liabilities) + sum(equity);
+    // ── PDF EXPORT ────────────────────────────────────────────────────────
+    function exportPdf() {
+      if (!lastReport) { alert("Run a report first."); return; }
+      const {jsPDF} = window.jspdf;
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const {kind,data} = lastReport;
+      const titles = {trial:"Trial Balance",ie:"Income & Expenditure",bs:"Balance Sheet",cf:"Cash Flow",gl:"General Ledger"};
+      const title = titles[kind];
+      const period = periodLabel();
+      const now = new Date().toLocaleDateString("en-KE",{year:"numeric",month:"long",day:"numeric"});
+      const PRIMARY = [27,58,52], SECTION_BG = [243,235,216], TOTAL_BG = [220,218,206];
+      const W = 182; // usable width in mm
+      let y = 14;
 
-      const section = (title, list) => `
-        <h3>${title}</h3>
-        <table style="margin-bottom:16px"><tbody>
-          ${list.length ? list.map(r => `<tr><td>${r.account_name}</td><td class="num">${money(r.amount)}</td></tr>`).join("")
-            : `<tr><td colspan="2" class="empty">None.</td></tr>`}
-          <tr style="font-weight:bold;border-top:1px solid var(--color-ink)"><td>Total ${title}</td><td class="num">${money(sum(list))}</td></tr>
-        </tbody></table>`;
+      // Header block
+      doc.setFillColor(...PRIMARY);
+      doc.rect(14, y, W, 22, "F");
+      doc.setTextColor(255,255,255);
+      doc.setFontSize(14); doc.setFont(undefined,"bold");
+      doc.text(orgName||"Report", 18, y+8);
+      doc.setFontSize(10); doc.setFont(undefined,"normal");
+      doc.text(`${title}  |  ${period}  |  Generated ${now}`, 18, y+16);
+      doc.setTextColor(0);
+      y += 28;
 
-      const balanced = Math.abs(totalAssets - totalLE) < 0.005;
-      body.innerHTML =
-        section("Assets", assets) +
-        section("Liabilities", liabilities) +
-        section("Equity", equity) +
-        `<table><tbody>
-           <tr style="font-weight:bold;border-top:2px solid var(--color-ink);font-size:15px">
-             <td>Total liabilities and equity</td>
-             <td class="num">${money(totalLE)}</td>
-           </tr>
-         </tbody></table>
-         <p style="margin-top:8px;color:${balanced ? 'var(--color-success)' : 'var(--color-alert)'}">
-           ${balanced ? '✓ Balanced.' : '⚠ Does not balance by KES ' + money(Math.abs(totalAssets - totalLE)) + ' — investigate.'}</p>`;
-    }
-
-    function renderCF(rows) {
-      const body = document.getElementById("report-body");
-      if (!rows.length) { body.innerHTML = `<p class="empty">No cash movements in this range.</p>`; return; }
-      const inflow = rows.filter(r => r.direction === "inflow");
-      const outflow = rows.filter(r => r.direction === "outflow");
-      const sum = list => list.reduce((s,r) => s + Number(r.amount), 0);
-      const net = sum(inflow) - sum(outflow);
-
-      const section = (title, list) => `
-        <h3>${title}</h3>
-        <table style="margin-bottom:16px"><tbody>
-          ${list.length ? list.map(r => `<tr><td>${r.category}</td><td class="num">${money(r.amount)}</td></tr>`).join("")
-            : `<tr><td colspan="2" class="empty">None.</td></tr>`}
-          <tr style="font-weight:bold;border-top:1px solid var(--color-ink)"><td>Total ${title}</td><td class="num">${money(sum(list))}</td></tr>
-        </tbody></table>`;
-
-      body.innerHTML =
-        section("Cash inflows", inflow) +
-        section("Cash outflows", outflow) +
-        `<p style="font-weight:bold;font-size:16px;color:${net >= 0 ? 'var(--color-success)' : 'var(--color-alert)'}">
-           Net cash movement: KES ${money(net)}</p>`;
-    }
-
-    function renderTrial(rows) {
-      const body = document.getElementById("report-body");
-      if (!rows.length) { body.innerHTML = `<p class="empty">No posted transactions in this range.</p>`; return; }
-      let totalDr = 0, totalCr = 0;
-      const trs = rows.map(r => {
-        totalDr += Number(r.total_debit); totalCr += Number(r.total_credit);
-        return `<tr>
-          <td>${r.account_code}</td>
-          <td>${r.account_name}</td>
-          <td class="num">${Number(r.total_debit) ? money(r.total_debit) : ""}</td>
-          <td class="num">${Number(r.total_credit) ? money(r.total_credit) : ""}</td>
-        </tr>`;
-      }).join("");
-      const balanced = Math.abs(totalDr - totalCr) < 0.005;
-      body.innerHTML = `
-        <table>
-          <thead><tr><th>Code</th><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead>
-          <tbody>${trs}</tbody>
-          <tfoot>
-            <tr style="font-weight:bold;border-top:2px solid var(--color-ink)">
-              <td colspan="2">Totals</td>
-              <td class="num">${money(totalDr)}</td>
-              <td class="num">${money(totalCr)}</td>
-            </tr>
-          </tfoot>
-        </table>
-        <p style="margin-top:12px;color:${balanced ? 'var(--color-success)' : 'var(--color-alert)'}">
-          ${balanced ? '✓ In balance — total debits equal total credits.' : '⚠ Out of balance by KES ' + money(Math.abs(totalDr - totalCr)) + ' — investigate before relying on this.'}
-        </p>`;
-    }
-
-    function renderIE(rows) {
-      const body = document.getElementById("report-body");
-      if (!rows.length) { body.innerHTML = `<p class="empty">No posted income or expenses in this range.</p>`; return; }
-      const income = rows.filter(r => r.account_type === "income");
-      const expense = rows.filter(r => r.account_type === "expense");
-      const totalIncome = income.reduce((s,r) => s + Number(r.amount), 0);
-      const totalExpense = expense.reduce((s,r) => s + Number(r.amount), 0);
-      const surplus = totalIncome - totalExpense;
-
-      const section = (title, list, total) => `
-        <h3>${title}</h3>
-        <table style="margin-bottom:16px">
-          <tbody>
-            ${list.length ? list.map(r => `<tr><td>${r.account_code}</td><td>${r.account_name}</td><td class="num">${money(r.amount)}</td></tr>`).join("")
-              : `<tr><td colspan="3" class="empty">None.</td></tr>`}
-            <tr style="font-weight:bold;border-top:1px solid var(--color-ink)"><td colspan="2">Total ${title}</td><td class="num">${money(total)}</td></tr>
-          </tbody>
-        </table>`;
-
-      body.innerHTML = section("Income", income, totalIncome) + section("Expenditure", expense, totalExpense) + `
-        <p style="font-weight:bold;font-size:16px;color:${surplus >= 0 ? 'var(--color-success)' : 'var(--color-alert)'}">
-          ${surplus >= 0 ? 'Surplus' : 'Deficit'}: KES ${money(Math.abs(surplus))}
-        </p>`;
-    }
-
-    function downloadPdf() {
-      if (!lastRows.length) { alert("Run a report with data first."); return; }
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF();
-      const { from, to } = dates();
-      const title = lastKind === "trial" ? "Trial Balance"
-                  : lastKind === "ie"    ? "Income & Expenditure"
-                  : lastKind === "bs"    ? "Balance Sheet"
-                  : lastKind === "cf"    ? "Cash Flow"
-                  : "General Ledger";
-      const rangeTxt = (from || to) ? `${from || "start"} to ${to || "today"}` : "All time";
-
-      doc.setFontSize(16); doc.text(orgName || "Report", 14, 18);
-      doc.setFontSize(11); doc.text(title, 14, 26);
-      doc.setFontSize(9); doc.setTextColor(100); doc.text(`Period: ${rangeTxt}`, 14, 32); doc.setTextColor(0);
-
-      if (lastKind === "trial") {
-        let totalDr = 0, totalCr = 0;
-        const rowsData = lastRows.map(r => {
-          totalDr += Number(r.total_debit); totalCr += Number(r.total_credit);
-          return [r.account_code, r.account_name, money(r.total_debit), money(r.total_credit)];
-        });
-        rowsData.push(["", "TOTALS", money(totalDr), money(totalCr)]);
-        doc.autoTable({ startY: 38, head: [["Code","Account","Debit","Credit"]], body: rowsData,
-          styles: { fontSize: 9 }, headStyles: { fillColor: [27,58,52] } });
-      } else if (lastKind === "ie") {
-        const rowsData = lastRows.map(r => [r.account_code, r.account_name, r.account_type, money(r.amount)]);
-        doc.autoTable({ startY: 38, head: [["Code","Account","Type","Amount"]], body: rowsData,
-          styles: { fontSize: 9 }, headStyles: { fillColor: [27,58,52] } });
-      } else if (lastKind === "bs") {
-        const rowsData = lastRows.map(r => [r.section, r.account_name, money(r.amount)]);
-        doc.autoTable({ startY: 38, head: [["Section","Account","Amount"]], body: rowsData,
-          styles: { fontSize: 9 }, headStyles: { fillColor: [27,58,52] } });
-      } else if (lastKind === "cf") {
-        const rowsData = lastRows.map(r => [r.direction, r.category, money(r.amount)]);
-        doc.autoTable({ startY: 38, head: [["Direction","Category","Amount"]], body: rowsData,
-          styles: { fontSize: 9 }, headStyles: { fillColor: [27,58,52] } });
-      } else if (lastKind === "gl") {
-        const rowsData = lastRows.map(r => [r.account_code, r.entry_date, r.journal_number || "—", r.description, money(r.debit), money(r.credit), money(r.running_balance)]);
-        doc.autoTable({ startY: 38, head:[["Account","Date","Journal","Description","Debit","Credit","Balance"]], body: rowsData,
-          styles:{fontSize:8}, headStyles:{fillColor:[27,58,52]} });
+      const pageH = doc.internal.pageSize.height;
+      function checkPage(needed=20) {
+        if (y + needed > pageH - 14) { doc.addPage(); y = 14; }
       }
-      doc.save(`${title.replace(/\W+/g,"_")}.pdf`);
+
+      function sectionHeader(label) {
+        checkPage(10);
+        doc.setFillColor(...SECTION_BG);
+        doc.rect(14, y, W, 7, "F");
+        doc.setFontSize(9); doc.setFont(undefined,"bold");
+        doc.setTextColor(60,40,10);
+        doc.text(label, 17, y+5);
+        doc.setTextColor(0);
+        y += 7;
+      }
+
+      function tableRow(cols, widths, isBold, bgColor) {
+        checkPage(7);
+        const rowH = 6;
+        if (bgColor) { doc.setFillColor(...bgColor); doc.rect(14, y, W, rowH, "F"); }
+        doc.setFontSize(8.5); doc.setFont(undefined, isBold?"bold":"normal");
+        let x = 14;
+        cols.forEach((col,i) => {
+          const w = widths[i];
+          const isNum = (typeof col === "string" && /^[\d,\.]+$/.test(col.trim())) || (i > 0 && i === cols.length-1);
+          doc.text(String(col||""), isNum ? x+w-1 : x+1, y+4.2, {align: isNum?"right":"left", maxWidth: w-2});
+          x += w;
+        });
+        doc.setDrawColor(220);
+        doc.line(14, y+rowH, 196, y+rowH);
+        y += rowH;
+      }
+
+      function tableHeader(cols, widths) {
+        checkPage(8);
+        doc.setFillColor(...PRIMARY);
+        doc.rect(14, y, W, 7, "F");
+        doc.setTextColor(255); doc.setFontSize(8); doc.setFont(undefined,"bold");
+        let x = 14;
+        cols.forEach((col,i) => {
+          const w = widths[i];
+          doc.text(col, i===cols.length-1 ? x+w-1 : x+1, y+5, {align: i===cols.length-1?"right":"left"});
+          x += w;
+        });
+        doc.setTextColor(0);
+        y += 7;
+      }
+
+      function grandTotal(label, amount, color) {
+        checkPage(10);
+        y += 2;
+        doc.setDrawColor(0); doc.setLineWidth(0.5);
+        doc.line(14, y, 196, y); y += 1;
+        doc.setFontSize(11); doc.setFont(undefined,"bold");
+        if (color) doc.setTextColor(...color);
+        doc.text(label, 17, y+5);
+        doc.text(money(Math.abs(amount)), 195, y+5, {align:"right"});
+        doc.setTextColor(0); doc.setLineWidth(0.2);
+        y += 9;
+      }
+
+      // ── RENDER BY KIND ────────────────────────────────────────────────
+      if (kind === "trial") {
+        tableHeader(["Code","Account Name","Type","Debit","Credit"],[20,80,25,28,29]);
+        let tDr=0, tCr=0;
+        data.forEach(r => {
+          tDr+=Number(r.total_debit); tCr+=Number(r.total_credit);
+          tableRow([r.account_code, r.account_name, r.account_type,
+            r.total_debit>0?money(r.total_debit):"",
+            r.total_credit>0?money(r.total_credit):""], [20,80,25,28,29], false);
+        });
+        tableRow(["","TOTALS","",money(tDr),money(tCr)],[20,80,25,28,29],true,TOTAL_BG);
+        const balanced = Math.abs(tDr-tCr)<0.005;
+        y+=3; doc.setFontSize(9); doc.setTextColor(balanced?27:166, balanced?107:67, balanced?74:47);
+        doc.text(balanced?"✓ In balance — total debits equal total credits.":"⚠ Does not balance by KES "+money(Math.abs(tDr-tCr)), 17, y);
+        doc.setTextColor(0);
+
+      } else if (kind === "ie") {
+        const income  = data.filter(r=>r.account_type==="income");
+        const expense = data.filter(r=>r.account_type==="expense");
+        const totI = income.reduce((s,r)=>s+Number(r.amount),0);
+        const totE = expense.reduce((s,r)=>s+Number(r.amount),0);
+        const surplus = totI-totE;
+        sectionHeader("INCOME"); tableHeader(["Code","Account","Amount"],[25,120,37]);
+        income.forEach(r => tableRow([r.account_code, r.account_name, money(r.amount)],[25,120,37],false));
+        tableRow(["","Total Income",money(totI)],[25,120,37],true,TOTAL_BG);
+        sectionHeader("EXPENDITURE"); tableHeader(["Code","Account","Amount"],[25,120,37]);
+        expense.forEach(r => tableRow([r.account_code, r.account_name, money(r.amount)],[25,120,37],false));
+        tableRow(["","Total Expenditure",money(totE)],[25,120,37],true,TOTAL_BG);
+        grandTotal(surplus>=0?"SURPLUS":"DEFICIT", surplus, surplus>=0?[27,107,74]:[166,67,47]);
+
+      } else if (kind === "bs") {
+        const assets = data.filter(r=>r.section==="asset");
+        const liab   = data.filter(r=>r.section==="liability");
+        const eq     = data.filter(r=>r.section==="equity");
+        const sum = l=>l.reduce((s,r)=>s+Number(r.amount),0);
+        const totA=sum(assets), totL=sum(liab), totE=sum(eq), totLE=totL+totE;
+        const balanced=Math.abs(totA-totLE)<0.005;
+        const sec=(label,rows,total)=>{
+          sectionHeader(label.toUpperCase()); tableHeader(["Account","Amount"],[145,37]);
+          rows.forEach(r=>tableRow([r.account_name,money(r.amount)],[145,37],false));
+          tableRow([`Total ${label}`,money(total)],[145,37],true,TOTAL_BG);
+        };
+        sec("Assets",assets,totA); sec("Liabilities",liab,totL); sec("Equity",eq,totE);
+        grandTotal("TOTAL LIABILITIES AND EQUITY", totLE);
+        y+=2; doc.setFontSize(9); doc.setTextColor(balanced?27:166,balanced?107:67,balanced?74:47);
+        doc.text(balanced?"✓ Balanced.":"⚠ Does not balance by KES "+money(Math.abs(totA-totLE)), 17, y);
+        doc.setTextColor(0);
+
+      } else if (kind === "cf") {
+        const inflow  = data.filter(r=>r.direction==="inflow");
+        const outflow = data.filter(r=>r.direction==="outflow");
+        const sum = l=>l.reduce((s,r)=>s+Number(r.amount),0);
+        const net = sum(inflow)-sum(outflow);
+        sectionHeader("CASH INFLOWS"); tableHeader(["Category","Amount"],[145,37]);
+        inflow.forEach(r=>tableRow([r.category,money(r.amount)],[145,37],false));
+        tableRow(["Total Cash Inflows",money(sum(inflow))],[145,37],true,TOTAL_BG);
+        sectionHeader("CASH OUTFLOWS"); tableHeader(["Category","Amount"],[145,37]);
+        outflow.forEach(r=>tableRow([r.category,money(r.amount)],[145,37],false));
+        tableRow(["Total Cash Outflows",money(sum(outflow))],[145,37],true,TOTAL_BG);
+        grandTotal("NET CASH MOVEMENT", net, net>=0?[27,107,74]:[166,67,47]);
+
+      } else { // GL
+        const byAccount = {};
+        data.forEach(r=>{
+          if(!byAccount[r.account_code]) byAccount[r.account_code]={name:r.account_name,type:r.account_type,rows:[]};
+          byAccount[r.account_code].rows.push(r);
+        });
+        Object.entries(byAccount).forEach(([code,acct])=>{
+          sectionHeader(`${code} — ${acct.name} (${acct.type})`);
+          tableHeader(["Date","Journal No.","Description","Debit","Credit","Balance"],[22,28,70,22,22,18]);
+          tableRow(["(Opening balance)","","","","","0.00"],[22,28,70,22,22,18],false,[240,240,240]);
+          acct.rows.forEach(r=>tableRow([
+            r.entry_date, r.journal_number||"—", r.description,
+            r.debit>0?money(r.debit):"", r.credit>0?money(r.credit):"", money(r.running_balance)
+          ],[22,28,70,22,22,18],false));
+          const closing = acct.rows.length ? Number(acct.rows[acct.rows.length-1].running_balance):0;
+          tableRow(["","","Closing balance","","",money(closing)],[22,28,70,22,22,18],true,TOTAL_BG);
+        });
+      }
+
+      // Page numbers
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let i=1; i<=pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8); doc.setTextColor(150);
+        doc.text(`Page ${i} of ${pageCount}`, 196, pageH-8, {align:"right"});
+        doc.text(`Finlens Africa | Confidential`, 14, pageH-8);
+        doc.setTextColor(0);
+      }
+
+      doc.save(`${title.replace(/\W+/g,"_")}_${toLocalISO(new Date())}.pdf`);
+    }
+
+    // ── EXCEL EXPORT ──────────────────────────────────────────────────────
+    function exportExcel() {
+      if (!lastReport) { alert("Run a report first."); return; }
+      const {kind,data} = lastReport;
+      const titles = {trial:"Trial Balance",ie:"Income & Expenditure",bs:"Balance Sheet",cf:"Cash Flow",gl:"General Ledger"};
+      const title = titles[kind];
+      const wb = XLSX.utils.book_new();
+      const period = periodLabel();
+      const now = new Date().toLocaleDateString("en-KE",{year:"numeric",month:"long",day:"numeric"});
+
+      function makeSheet(rows) {
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        // Column widths
+        const maxCols = Math.max(...rows.map(r=>r.length));
+        ws['!cols'] = Array.from({length:maxCols}, (_,i) => ({
+          wch: Math.max(...rows.map(r=>(String(r[i]||"").length)), 10)
+        }));
+        return ws;
+      }
+
+      let rows;
+      if (kind==="trial") {
+        let tDr=0, tCr=0;
+        rows = [
+          [orgName], [title], [period], [`Generated: ${now}`], [],
+          ["Code","Account Name","Type","Debit (KES)","Credit (KES)"],
+        ];
+        data.forEach(r=>{ tDr+=Number(r.total_debit); tCr+=Number(r.total_credit); rows.push([r.account_code,r.account_name,r.account_type,r.total_debit>0?Number(r.total_debit):"",r.total_credit>0?Number(r.total_credit):""]); });
+        rows.push([]); rows.push(["","TOTALS","",tDr,tCr]);
+        rows.push([]); rows.push([Math.abs(tDr-tCr)<0.005?"✓ In balance":"⚠ Out of balance by KES "+money(Math.abs(tDr-tCr))]);
+
+      } else if (kind==="ie") {
+        const income=data.filter(r=>r.account_type==="income"), expense=data.filter(r=>r.account_type==="expense");
+        const totI=income.reduce((s,r)=>s+Number(r.amount),0), totE=expense.reduce((s,r)=>s+Number(r.amount),0);
+        rows = [[orgName],[title],[period],[`Generated: ${now}`],[],["INCOME"],["Code","Account","Amount (KES)"]];
+        income.forEach(r=>rows.push([r.account_code,r.account_name,Number(r.amount)]));
+        rows.push(["","Total Income",totI],[],["EXPENDITURE"],["Code","Account","Amount (KES)"]);
+        expense.forEach(r=>rows.push([r.account_code,r.account_name,Number(r.amount)]));
+        rows.push(["","Total Expenditure",totE],[],[totI-totE>=0?"SURPLUS":"DEFICIT","",Math.abs(totI-totE)]);
+
+      } else if (kind==="bs") {
+        const assets=data.filter(r=>r.section==="asset"), liab=data.filter(r=>r.section==="liability"), eq=data.filter(r=>r.section==="equity");
+        const sum=l=>l.reduce((s,r)=>s+Number(r.amount),0);
+        const totA=sum(assets),totL=sum(liab),totE=sum(eq),totLE=totL+totE;
+        rows = [[orgName],[title],[`As at: ${lastReport.to||"today"}`],[`Generated: ${now}`],[],["ASSETS"],["Account","Amount (KES)"]];
+        assets.forEach(r=>rows.push([r.account_name,Number(r.amount)]));
+        rows.push(["Total Assets",totA],[],["LIABILITIES"],["Account","Amount (KES)"]);
+        liab.forEach(r=>rows.push([r.account_name,Number(r.amount)]));
+        rows.push(["Total Liabilities",totL],[],["EQUITY"],["Account","Amount (KES)"]);
+        eq.forEach(r=>rows.push([r.account_name,Number(r.amount)]));
+        rows.push(["Total Equity",totE],[],["TOTAL LIABILITIES AND EQUITY",totLE]);
+        rows.push([],[Math.abs(totA-totLE)<0.005?"✓ Balanced":"⚠ Does not balance by KES "+money(Math.abs(totA-totLE))]);
+
+      } else if (kind==="cf") {
+        const inf=data.filter(r=>r.direction==="inflow"), out=data.filter(r=>r.direction==="outflow");
+        const sum=l=>l.reduce((s,r)=>s+Number(r.amount),0);
+        const net=sum(inf)-sum(out);
+        rows = [[orgName],[title],[period],[`Generated: ${now}`],[],["CASH INFLOWS"],["Category","Amount (KES)"]];
+        inf.forEach(r=>rows.push([r.category,Number(r.amount)]));
+        rows.push(["Total Cash Inflows",sum(inf)],[],["CASH OUTFLOWS"],["Category","Amount (KES)"]);
+        out.forEach(r=>rows.push([r.category,Number(r.amount)]));
+        rows.push(["Total Cash Outflows",sum(out)],[],["NET CASH MOVEMENT",net]);
+
+      } else { // GL
+        rows = [[orgName],[title],[period],[`Generated: ${now}`],[]];
+        const byAccount={};
+        data.forEach(r=>{ if(!byAccount[r.account_code]) byAccount[r.account_code]={name:r.account_name,type:r.account_type,rows:[]}; byAccount[r.account_code].rows.push(r); });
+        Object.entries(byAccount).forEach(([code,acct])=>{
+          rows.push([`${code} — ${acct.name} (${acct.type})`]);
+          rows.push(["Date","Journal No.","Description","Debit (KES)","Credit (KES)","Running Balance"]);
+          rows.push(["(Opening balance)","","","","",0]);
+          acct.rows.forEach(r=>rows.push([r.entry_date,r.journal_number||"—",r.description,r.debit>0?Number(r.debit):"",r.credit>0?Number(r.credit):"",Number(r.running_balance)]));
+          const closing = acct.rows.length?Number(acct.rows[acct.rows.length-1].running_balance):0;
+          rows.push(["","","Closing balance","","",closing],[]);
+        });
+      }
+
+      const ws = makeSheet(rows);
+      XLSX.utils.book_append_sheet(wb, ws, title.slice(0,31));
+      XLSX.writeFile(wb, `${title.replace(/\W+/g,"_")}_${toLocalISO(new Date())}.xlsx`);
+    }
+
+    // ── INIT ──────────────────────────────────────────────────────────────
+    async function loadGLAccounts() {
+      const {data} = await supabaseClient.from("chart_of_accounts")
+        .select("id,code,name").eq("organisation_id",orgId).eq("is_active",true).order("code");
+      document.getElementById("gl-account").innerHTML =
+        `<option value="">All accounts</option>` +
+        (data||[]).map(a=>`<option value="${a.id}">${a.code} — ${a.name}</option>`).join("");
     }
 
     (async () => {
-      const session = await requireSession();
-      if (!session) return;
-      const org = await currentOrg();
-      if (!org) return;
+      const session = await requireSession(); if (!session) return;
+      const org = await currentOrg(); if (!org) return;
       orgId = org.organisation_id;
       orgName = org.organisations.name;
       await loadGLAccounts();

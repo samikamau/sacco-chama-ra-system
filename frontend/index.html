@@ -32,12 +32,14 @@
       <a href="contributions.html">Contributions</a>
       <a href="payments.html">Payments</a>
       <a href="loans.html">Loans</a>
+      <a href="expenditure.html">Expenditure</a>
       <a href="accounts.html">Chart of Accounts</a>
       <a href="journal.html">General Journal</a>
-      <a href="reconcile.html">Bank / M-Pesa</a>
+      <a href="reconcile.html">Reconciliation</a>
       <a href="statement.html">Member Statements</a>
       <a href="reports.html">Reports</a>
       <a href="periods.html">Accounting Periods</a>
+      <a href="users.html">Users</a>
       <a href="#" onclick="signOut()">Sign out</a>
     </nav>
     <main class="main">
@@ -68,6 +70,13 @@
           <div class="kpi"><div class="value" id="k-shares">—</div><div class="label">Total shares (KES)</div></div>
           <div class="kpi"><div class="value" id="k-deposits">—</div><div class="label">Total deposits (KES)</div></div>
           <div class="kpi"><div class="value" id="k-welfare">—</div><div class="label">Total welfare (KES)</div></div>
+        </div>
+      </div>
+
+      <div class="kpi-group">
+        <h2>Bank and Cash accounts</h2>
+        <div class="kpi-grid" id="bank-cash-grid">
+          <div class="kpi"><div class="value">—</div><div class="label">Loading…</div></div>
         </div>
       </div>
 
@@ -113,6 +122,29 @@
         document.getElementById("k-shares").textContent = money(kpis.total_shares);
         document.getElementById("k-deposits").textContent = money(kpis.total_deposits);
         document.getElementById("k-welfare").textContent = money(kpis.total_welfare);
+      }
+
+      // Bank and Cash accounts breakdown (each sub-account of the control)
+      try {
+        const { data: payAccts } = await supabaseClient.rpc("fn_payment_accounts", { p_organisation_id: orgId });
+        const grid = document.getElementById("bank-cash-grid");
+        if (payAccts && payAccts.length) {
+          const cards = [];
+          let total = 0;
+          for (const a of payAccts) {
+            const { data: bal } = await supabaseClient.rpc("fn_book_balance", { p_account_id: a.id, p_as_at: null });
+            const amt = Number(bal || 0);
+            total += amt;
+            cards.push(`<div class="kpi"><div class="value">${money(amt)}</div><div class="label">${a.name}</div></div>`);
+          }
+          cards.push(`<div class="kpi accent"><div class="value">${money(total)}</div><div class="label">Total bank and cash</div></div>`);
+          grid.innerHTML = cards.join("");
+        } else {
+          grid.innerHTML = `<div class="kpi"><div class="value">—</div><div class="label">No payment accounts configured</div></div>`;
+        }
+      } catch (e) {
+        document.getElementById("bank-cash-grid").innerHTML =
+          `<div class="kpi"><div class="value">—</div><div class="label">Run migration 022 to enable</div></div>`;
       }
 
       const { data: insights, error: iErr } = await supabaseClient.rpc("fn_dashboard_insights", { p_organisation_id: orgId });

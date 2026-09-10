@@ -15,12 +15,14 @@
       <a href="contributions.html">Contributions</a>
       <a href="payments.html" class="active">Payments</a>
       <a href="loans.html">Loans</a>
+      <a href="expenditure.html">Expenditure</a>
       <a href="accounts.html">Chart of Accounts</a>
       <a href="journal.html">General Journal</a>
-      <a href="reconcile.html">Bank / M-Pesa</a>
+      <a href="reconcile.html">Reconciliation</a>
       <a href="statement.html">Member Statements</a>
       <a href="reports.html">Reports</a>
       <a href="periods.html">Accounting Periods</a>
+      <a href="users.html">Users</a>
       <a href="#" onclick="signOut()">Sign out</a>
     </nav>
     <main class="main">
@@ -85,11 +87,18 @@
     }
 
     async function loadAccounts() {
-      const { data } = await supabaseClient.from("chart_of_accounts")
-        .select("id, code, name, account_type").eq("organisation_id", orgId).eq("is_active", true);
-      const cashAccounts = (data || []).filter(a => a.account_type === "asset");
+      // Only leaf payment accounts under the Bank and Cash control account
+      const { data, error } = await supabaseClient.rpc("fn_payment_accounts", { p_organisation_id: orgId });
+      let list = data || [];
+      if (error || !list.length) {
+        // Fallback for before migration 022 is applied
+        const { data: fb } = await supabaseClient.from("chart_of_accounts")
+          .select("id, code, name, account_type").eq("organisation_id", orgId)
+          .eq("is_active", true).eq("account_type", "asset");
+        list = (fb || []).filter(a => a.code >= "1000" && a.code <= "1099");
+      }
       document.getElementById("f-cash-account").innerHTML =
-        cashAccounts.map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join("");
+        list.map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join("");
     }
 
     async function loadFundTypes() {

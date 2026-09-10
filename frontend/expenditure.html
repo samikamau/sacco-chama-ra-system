@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Expenditure — Financial Operating System</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .tabs { display:flex; gap:4px; border-bottom:2px solid var(--color-line); margin-bottom:20px; }
+  .tab { padding:8px 16px; cursor:pointer; border-bottom:3px solid transparent; font-size:14px; }
+  .tab.active { border-bottom-color:var(--color-accent); font-weight:600; }
+  .lines-table input, .lines-table select { width:100%; box-sizing:border-box; }
+  .overdue { color:var(--color-alert); font-weight:600; }
+</style>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav">
+      <div class="brand">Ledger</div>
+      <a href="index.html">Dashboard</a>
+      <a href="members.html">Members</a>
+      <a href="contributions.html">Contributions</a>
+      <a href="payments.html">Payments</a>
+      <a href="loans.html">Loans</a>
+      <a href="expenditure.html" class="active">Expenditure</a>
+      <a href="accounts.html">Chart of Accounts</a>
+      <a href="journal.html">General Journal</a>
+      <a href="reconcile.html">Reconciliation</a>
+      <a href="statement.html">Member Statements</a>
+      <a href="reports.html">Reports</a>
+      <a href="periods.html">Accounting Periods</a>
+      <a href="users.html">Users</a>
+      <a href="#" onclick="signOut()">Sign out</a>
+    </nav>
+    <main class="main">
+      <h1>Expenditure</h1>
+
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab(0)">Bills</div>
+        <div class="tab" onclick="switchTab(1)">New bill</div>
+        <div class="tab" onclick="switchTab(2)">Suppliers</div>
+        <div class="tab" onclick="switchTab(3)">Creditors ageing</div>
+      </div>
+
+      <!-- BILLS LIST -->
+      <div id="pane-0">
+        <div class="card">
+          <h2>Bills</h2>
+          <table>
+            <thead><tr><th>Bill No.</th><th>Supplier</th><th>Date</th><th>Due</th><th class="num">Total</th><th class="num">Paid</th><th class="num">Outstanding</th><th>Status</th><th></th></tr></thead>
+            <tbody id="bill-rows"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="card" id="bill-detail" style="display:none">
+          <h2 id="bd-title">Bill</h2>
+          <div id="bd-body"></div>
+        </div>
+      </div>
+
+      <!-- NEW BILL -->
+      <div id="pane-1" style="display:none">
+        <div class="card">
+          <h2>New bill</h2>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div class="field" style="flex:2;min-width:200px"><label>Supplier *</label><select id="b-supplier"></select></div>
+            <div class="field" style="flex:1;min-width:150px"><label>Supplier invoice no.</label><input id="b-invno"></div>
+          </div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div class="field" style="flex:1;min-width:150px"><label>Bill date *</label><input id="b-date" type="date"></div>
+            <div class="field" style="flex:1;min-width:150px"><label>Due date *</label><input id="b-due" type="date"></div>
+          </div>
+          <div class="field"><label>Description</label><input id="b-desc" placeholder="e.g. Office supplies for September"></div>
+
+          <h3>Bill lines</h3>
+          <table class="lines-table">
+            <thead><tr><th>Expense account</th><th>Description</th><th class="num">Amount</th><th></th></tr></thead>
+            <tbody id="bill-lines"></tbody>
+          </table>
+          <button class="btn" onclick="addBillLine()">+ Add line</button>
+          <div style="text-align:right;font-family:var(--font-mono);font-weight:700;margin-top:8px">
+            Total: <span id="bill-total">0.00</span>
+          </div>
+
+          <div style="margin-top:14px;display:flex;gap:8px">
+            <button class="btn accent" onclick="createBill()">Create bill (draft)</button>
+          </div>
+          <p id="bill-error" class="error" style="display:none"></p>
+          <p id="bill-success" style="display:none;color:var(--color-success)"></p>
+        </div>
+      </div>
+
+      <!-- SUPPLIERS -->
+      <div id="pane-2" style="display:none">
+        <div class="card">
+          <h2>Add supplier</h2>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div class="field" style="flex:2;min-width:200px"><label>Name *</label><input id="s-name"></div>
+            <div class="field" style="flex:1;min-width:130px"><label>Supplier code</label><input id="s-code"></div>
+          </div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div class="field" style="flex:1;min-width:150px"><label>Contact person</label><input id="s-contact"></div>
+            <div class="field" style="flex:1;min-width:130px"><label>Phone</label><input id="s-phone"></div>
+            <div class="field" style="flex:1;min-width:150px"><label>Email</label><input id="s-email"></div>
+          </div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div class="field" style="flex:1;min-width:130px"><label>KRA PIN</label><input id="s-pin"></div>
+            <div class="field" style="flex:1;min-width:130px"><label>Payment terms (days)</label><input id="s-terms" type="number" value="30"></div>
+          </div>
+          <div class="field"><label>Address</label><input id="s-address"></div>
+          <button class="btn accent" onclick="createSupplier()">Save supplier</button>
+          <p id="sup-error" class="error" style="display:none"></p>
+        </div>
+        <div class="card">
+          <h2>Suppliers</h2>
+          <table>
+            <thead><tr><th>Code</th><th>Name</th><th>Contact</th><th>Phone</th><th class="num">Terms</th><th>Status</th></tr></thead>
+            <tbody id="supplier-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- AGEING -->
+      <div id="pane-3" style="display:none">
+        <div class="card">
+          <h2>Creditors ageing</h2>
+          <table>
+            <thead><tr><th>Supplier</th><th>Bill No.</th><th>Due</th><th class="num">Total</th><th class="num">Paid</th><th class="num">Outstanding</th><th class="num">Days overdue</th></tr></thead>
+            <tbody id="ageing-rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let orgId, suppliers = [], expenseAccounts = [], paymentAccounts = [], lineCount = 0, currentBill = null;
+
+    function switchTab(i) {
+      [0,1,2,3].forEach(n => document.getElementById('pane-'+n).style.display = (n===i)?'block':'none');
+      document.querySelectorAll('.tab').forEach((el,n)=>el.classList.toggle('active', n===i));
+      if (i===0) loadBills();
+      if (i===2) loadSuppliers();
+      if (i===3) loadAgeing();
+    }
+
+    async function loadRefData() {
+      const { data: sup } = await supabaseClient.from("suppliers")
+        .select("id, supplier_code, name, contact_person, phone, payment_terms_days, is_active")
+        .eq("organisation_id", orgId).eq("is_active", true).order("name");
+      suppliers = sup || [];
+      document.getElementById("b-supplier").innerHTML =
+        suppliers.map(s=>`<option value="${s.id}">${s.name}</option>`).join("");
+
+      // Expense and asset accounts that can be billed to (never control accounts)
+      const { data: accts } = await supabaseClient.from("chart_of_accounts")
+        .select("id, code, name, account_type, is_control")
+        .eq("organisation_id", orgId).eq("is_active", true).order("code");
+      expenseAccounts = (accts||[]).filter(a => !a.is_control && ['expense','asset'].includes(a.account_type));
+
+      const { data: pay } = await supabaseClient.rpc("fn_payment_accounts",{p_organisation_id:orgId});
+      paymentAccounts = pay || [];
+
+      document.getElementById("b-date").value = new Date().toISOString().slice(0,10);
+      const due = new Date(); due.setDate(due.getDate()+30);
+      document.getElementById("b-due").value = due.toISOString().slice(0,10);
+      if (!document.getElementById("bill-lines").children.length) addBillLine();
+    }
+
+    function addBillLine() {
+      lineCount++;
+      const tr = document.createElement("tr");
+      tr.id = "bl-"+lineCount;
+      tr.innerHTML = `
+        <td><select class="bl-acct">${expenseAccounts.map(a=>`<option value="${a.id}">${a.code} — ${a.name}</option>`).join("")}</select></td>
+        <td><input class="bl-desc" placeholder="Line description"></td>
+        <td><input class="bl-amt" type="number" step="0.01" oninput="updateBillTotal()"></td>
+        <td><button class="btn" style="padding:2px 8px;background:var(--color-alert)" onclick="document.getElementById('bl-${lineCount}').remove();updateBillTotal()">×</button></td>`;
+      document.getElementById("bill-lines").appendChild(tr);
+    }
+
+    function updateBillTotal() {
+      let t = 0;
+      document.querySelectorAll(".bl-amt").forEach(i=>t+=Number(i.value||0));
+      document.getElementById("bill-total").textContent = money(t);
+    }
+
+    async function createBill() {
+      const errEl = document.getElementById("bill-error");
+      const okEl = document.getElementById("bill-success");
+      errEl.style.display="none"; okEl.style.display="none";
+
+      const lines = [];
+      document.querySelectorAll("#bill-lines tr").forEach(r=>{
+        const acct = r.querySelector(".bl-acct")?.value;
+        const amt = Number(r.querySelector(".bl-amt")?.value||0);
+        if (acct && amt>0) lines.push({account_id:acct, description:r.querySelector(".bl-desc").value||null, amount:amt});
+      });
+      if (!lines.length) { showError(errEl,"Add at least one bill line with an amount."); return; }
+      if (!document.getElementById("b-supplier").value) { showError(errEl,"Select a supplier. Add one on the Suppliers tab if the list is empty."); return; }
+
+      const { data, error } = await supabaseClient.rpc("fn_create_bill", {
+        p_organisation_id: orgId,
+        p_supplier_id: document.getElementById("b-supplier").value,
+        p_bill_date: document.getElementById("b-date").value,
+        p_due_date: document.getElementById("b-due").value,
+        p_supplier_invoice_no: document.getElementById("b-invno").value||null,
+        p_description: document.getElementById("b-desc").value||null,
+        p_lines: lines,
+      });
+      if (error) { showError(errEl, error.message); return; }
+      okEl.textContent = `Bill ${data.bill_number} created as draft. Approve it on the Bills tab to post the accounting entry.`;
+      okEl.style.display="block";
+      document.getElementById("bill-lines").innerHTML=""; lineCount=0; addBillLine(); updateBillTotal();
+      document.getElementById("b-invno").value=""; document.getElementById("b-desc").value="";
+    }
+
+    async function loadBills() {
+      const { data, error } = await supabaseClient.from("bills")
+        .select("id, bill_number, bill_date, due_date, total_amount, amount_paid, status, suppliers(name)")
+        .eq("organisation_id", orgId).order("bill_date",{ascending:false});
+      const tbody = document.getElementById("bill-rows");
+      if (error) { tbody.innerHTML=`<tr><td colspan="9" class="error">${error.message}</td></tr>`; return; }
+      if (!data.length) { tbody.innerHTML=`<tr><td colspan="9" class="empty">No bills yet.</td></tr>`; return; }
+      tbody.innerHTML = data.map(b=>{
+        const outstanding = Number(b.total_amount)-Number(b.amount_paid);
+        const overdue = b.due_date < new Date().toISOString().slice(0,10) && outstanding>0;
+        const cls = b.status==='paid'?'paid':b.status==='partially_paid'?'partial':b.status==='draft'?'unpaid':'partial';
+        return `<tr>
+          <td><code>${b.bill_number}</code></td>
+          <td>${b.suppliers.name}</td>
+          <td>${b.bill_date}</td>
+          <td class="${overdue?'overdue':''}">${b.due_date}</td>
+          <td class="num">${money(b.total_amount)}</td>
+          <td class="num">${money(b.amount_paid)}</td>
+          <td class="num">${money(outstanding)}</td>
+          <td><span class="status ${cls}">${b.status.replace(/_/g,' ')}</span></td>
+          <td><button class="btn" onclick="openBill('${b.id}')">Open</button></td>
+        </tr>`;
+      }).join("");
+    }
+
+    async function openBill(id) {
+      currentBill = id;
+      const card = document.getElementById("bill-detail");
+      const body = document.getElementById("bd-body");
+      card.style.display="block"; body.innerHTML="Loading…";
+      card.scrollIntoView({behavior:"smooth"});
+
+      const { data: bill } = await supabaseClient.from("bills")
+        .select("*, suppliers(name, phone, email)").eq("id", id).single();
+      const { data: lines } = await supabaseClient.from("bill_lines")
+        .select("description, amount, chart_of_accounts(code, name)").eq("bill_id", id);
+      const { data: pays } = await supabaseClient.from("bill_payments")
+        .select("payment_date, amount, channel, reference, chart_of_accounts(code, name)")
+        .eq("bill_id", id).order("payment_date");
+
+      const outstanding = Number(bill.total_amount) - Number(bill.amount_paid);
+      document.getElementById("bd-title").textContent = bill.bill_number;
+
+      body.innerHTML = `
+        <p><strong>${bill.suppliers.name}</strong> ${bill.supplier_invoice_no?`&nbsp;|&nbsp; Their invoice: ${bill.supplier_invoice_no}`:''}<br>
+        Bill date ${bill.bill_date} &nbsp;|&nbsp; Due ${bill.due_date} &nbsp;|&nbsp;
+        <span class="status ${bill.status==='paid'?'paid':bill.status==='draft'?'unpaid':'partial'}">${bill.status.replace(/_/g,' ')}</span></p>
+        ${bill.description?`<p style="color:var(--color-muted)">${bill.description}</p>`:''}
+
+        <h3>Lines</h3>
+        <table style="margin-bottom:12px"><thead><tr><th>Account</th><th>Description</th><th class="num">Amount</th></tr></thead>
+        <tbody>${(lines||[]).map(l=>`<tr><td>${l.chart_of_accounts.code} — ${l.chart_of_accounts.name}</td><td>${l.description??""}</td><td class="num">${money(l.amount)}</td></tr>`).join("")}
+        <tr style="font-weight:700;border-top:2px solid var(--color-ink)"><td colspan="2">Total</td><td class="num">${money(bill.total_amount)}</td></tr>
+        <tr><td colspan="2">Paid</td><td class="num">${money(bill.amount_paid)}</td></tr>
+        <tr style="font-weight:700"><td colspan="2">Outstanding</td><td class="num">${money(outstanding)}</td></tr>
+        </tbody></table>
+
+        ${(pays||[]).length?`<h3>Payments</h3>
+          <table style="margin-bottom:12px"><thead><tr><th>Date</th><th>Account</th><th>Channel</th><th>Reference</th><th class="num">Amount</th></tr></thead>
+          <tbody>${pays.map(p=>`<tr><td>${p.payment_date}</td><td>${p.chart_of_accounts.code} — ${p.chart_of_accounts.name}</td><td>${p.channel}</td><td>${p.reference??"—"}</td><td class="num">${money(p.amount)}</td></tr>`).join("")}</tbody></table>`:''}
+
+        ${bill.status==='draft'?`
+          <button class="btn accent" onclick="approveBill('${id}')">Approve bill (posts Dr Expense / Cr Accounts Payable)</button>`:''}
+
+        ${(bill.status==='approved'||bill.status==='partially_paid')?`
+          <h3>Record a payment</h3>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+            <div class="field" style="margin-bottom:0"><label>Amount</label><input id="p-amt" type="number" step="0.01" value="${outstanding.toFixed(2)}"></div>
+            <div class="field" style="margin-bottom:0"><label>Pay from</label><select id="p-acct">${paymentAccounts.map(a=>`<option value="${a.id}">${a.code} — ${a.name}</option>`).join("")}</select></div>
+            <div class="field" style="margin-bottom:0"><label>Channel</label><select id="p-chan"><option value="bank">Bank</option><option value="mpesa">M-Pesa</option><option value="cash">Cash</option><option value="cheque">Cheque</option></select></div>
+            <div class="field" style="margin-bottom:0"><label>Reference</label><input id="p-ref"></div>
+            <button class="btn accent" onclick="payBill('${id}')">Pay</button>
+          </div>`:''}
+        <p id="bd-error" class="error" style="display:none"></p>`;
+    }
+
+    async function approveBill(id) {
+      if (!confirm("Approve this bill? This posts the accrual entry to the ledger.")) return;
+      const { error } = await supabaseClient.rpc("fn_approve_bill",{p_bill_id:id});
+      if (error) { showError(document.getElementById("bd-error"), error.message); return; }
+      loadBills(); openBill(id);
+    }
+
+    async function payBill(id) {
+      const { error } = await supabaseClient.rpc("fn_pay_bill", {
+        p_bill_id: id,
+        p_amount: document.getElementById("p-amt").value,
+        p_payment_account_id: document.getElementById("p-acct").value,
+        p_channel: document.getElementById("p-chan").value,
+        p_reference: document.getElementById("p-ref").value||null,
+        p_payment_date: null,
+      });
+      if (error) { showError(document.getElementById("bd-error"), error.message); return; }
+      loadBills(); openBill(id);
+    }
+
+    async function createSupplier() {
+      const errEl = document.getElementById("sup-error");
+      const name = document.getElementById("s-name").value.trim();
+      if (!name) { showError(errEl,"Supplier name is required."); return; }
+      const { error } = await supabaseClient.from("suppliers").insert({
+        organisation_id: orgId, name,
+        supplier_code: document.getElementById("s-code").value||null,
+        contact_person: document.getElementById("s-contact").value||null,
+        phone: document.getElementById("s-phone").value||null,
+        email: document.getElementById("s-email").value||null,
+        kra_pin: document.getElementById("s-pin").value||null,
+        payment_terms_days: document.getElementById("s-terms").value||30,
+        address: document.getElementById("s-address").value||null,
+      });
+      if (error) { showError(errEl, error.message); return; }
+      ["s-name","s-code","s-contact","s-phone","s-email","s-pin","s-address"].forEach(i=>document.getElementById(i).value="");
+      loadSuppliers(); loadRefData();
+    }
+
+    async function loadSuppliers() {
+      const { data, error } = await supabaseClient.from("suppliers")
+        .select("supplier_code, name, contact_person, phone, payment_terms_days, is_active")
+        .eq("organisation_id", orgId).order("name");
+      const tbody = document.getElementById("supplier-rows");
+      if (error) { tbody.innerHTML=`<tr><td colspan="6" class="error">${error.message}</td></tr>`; return; }
+      if (!data.length) { tbody.innerHTML=`<tr><td colspan="6" class="empty">No suppliers yet.</td></tr>`; return; }
+      tbody.innerHTML = data.map(s=>`<tr>
+        <td>${s.supplier_code??"—"}</td><td>${s.name}</td><td>${s.contact_person??"—"}</td>
+        <td>${s.phone??"—"}</td><td class="num">${s.payment_terms_days}</td>
+        <td><span class="status ${s.is_active?'paid':'unpaid'}">${s.is_active?'active':'inactive'}</span></td>
+      </tr>`).join("");
+    }
+
+    async function loadAgeing() {
+      const { data, error } = await supabaseClient.rpc("fn_creditors_ageing",{p_organisation_id:orgId});
+      const tbody = document.getElementById("ageing-rows");
+      if (error) { tbody.innerHTML=`<tr><td colspan="7" class="error">${error.message}</td></tr>`; return; }
+      if (!data || !data.length) { tbody.innerHTML=`<tr><td colspan="7" class="empty">No outstanding bills.</td></tr>`; return; }
+      tbody.innerHTML = data.map(a=>`<tr>
+        <td>${a.supplier_name}</td><td><code>${a.bill_number}</code></td>
+        <td class="${a.days_overdue>0?'overdue':''}">${a.due_date}</td>
+        <td class="num">${money(a.total_amount)}</td><td class="num">${money(a.amount_paid)}</td>
+        <td class="num">${money(a.outstanding)}</td>
+        <td class="num ${a.days_overdue>0?'overdue':''}">${a.days_overdue}</td>
+      </tr>`).join("");
+    }
+
+    (async () => {
+      const session = await requireSession(); if (!session) return;
+      const org = await currentOrg(); if (!org) return;
+      orgId = org.organisation_id;
+      await loadRefData();
+      loadBills();
+    })();
+  </script>
+</body>
+</html>

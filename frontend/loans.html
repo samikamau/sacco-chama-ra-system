@@ -15,12 +15,14 @@
       <a href="contributions.html">Contributions</a>
       <a href="payments.html">Payments</a>
       <a href="loans.html" class="active">Loans</a>
+      <a href="expenditure.html">Expenditure</a>
       <a href="accounts.html">Chart of Accounts</a>
       <a href="journal.html">General Journal</a>
-      <a href="reconcile.html">Bank / M-Pesa</a>
+      <a href="reconcile.html">Reconciliation</a>
       <a href="statement.html">Member Statements</a>
       <a href="reports.html">Reports</a>
       <a href="periods.html">Accounting Periods</a>
+      <a href="users.html">Users</a>
       <a href="#" onclick="signOut()">Sign out</a>
     </nav>
     <main class="main">
@@ -99,12 +101,21 @@
     }
 
     async function loadAccounts() {
-      const { data } = await supabaseClient.from("chart_of_accounts")
-        .select("id, code, name, account_type").eq("organisation_id", orgId).eq("is_active", true).order("code");
-      cashAccounts = (data||[]).filter(a => a.account_type === "asset" && a.code >= "1000" && a.code <= "1099");
-      const all = (data||[]).map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join("");
-      document.getElementById("pr-recv").innerHTML = all;
-      document.getElementById("pr-int").innerHTML = all;
+      // Payment accounts (leaf accounts under Bank and Cash control)
+      const { data: pay, error } = await supabaseClient.rpc("fn_payment_accounts", { p_organisation_id: orgId });
+      cashAccounts = pay || [];
+
+      // All accounts, for the loan product's receivable / interest income pickers
+      const { data: all } = await supabaseClient.from("chart_of_accounts")
+        .select("id, code, name, account_type, is_control").eq("organisation_id", orgId)
+        .eq("is_active", true).order("code");
+      const postable = (all||[]).filter(a => !a.is_control);
+      if (!cashAccounts.length) {
+        cashAccounts = postable.filter(a => a.account_type === "asset" && a.code >= "1000" && a.code <= "1099");
+      }
+      const opts = postable.map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join("");
+      document.getElementById("pr-recv").innerHTML = opts;
+      document.getElementById("pr-int").innerHTML = opts;
     }
 
     async function loadProducts() {

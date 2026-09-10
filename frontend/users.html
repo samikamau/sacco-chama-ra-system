@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Users — Financial Operating System</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .role-desc { font-size:12px; color:var(--color-muted); margin-top:4px; line-height:1.5; }
+  .invite-link { background:#F3EBD8; padding:12px; border-radius:var(--radius); font-family:var(--font-mono); font-size:12px; word-break:break-all; margin-top:8px; }
+  .me-badge { background:var(--color-primary); color:#fff; font-size:10px; padding:1px 6px; border-radius:999px; margin-left:6px; }
+</style>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav">
+      <div class="brand">Ledger</div>
+      <a href="index.html">Dashboard</a>
+      <a href="members.html">Members</a>
+      <a href="contributions.html">Contributions</a>
+      <a href="payments.html">Payments</a>
+      <a href="loans.html">Loans</a>
+      <a href="expenditure.html">Expenditure</a>
+      <a href="accounts.html">Chart of Accounts</a>
+      <a href="journal.html">General Journal</a>
+      <a href="reconcile.html">Reconciliation</a>
+      <a href="statement.html">Member Statements</a>
+      <a href="reports.html">Reports</a>
+      <a href="periods.html">Accounting Periods</a>
+      <a href="users.html" class="active">Users</a>
+      <a href="#" onclick="signOut()">Sign out</a>
+    </nav>
+    <main class="main">
+      <h1>Users and access</h1>
+
+      <!-- MY PENDING INVITATIONS -->
+      <div class="card" id="my-invites-card" style="display:none">
+        <h2>You have been invited</h2>
+        <div id="my-invites"></div>
+      </div>
+
+      <!-- INVITE -->
+      <div class="card" id="invite-card">
+        <h2>Invite someone</h2>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div class="field" style="flex:2;min-width:220px"><label>Email address *</label><input id="i-email" type="email" placeholder="person@example.com"></div>
+          <div class="field" style="flex:1;min-width:160px"><label>Role *</label>
+            <select id="i-role" onchange="showRoleDesc()">
+              <option value="viewer">Viewer</option>
+              <option value="secretary">Secretary</option>
+              <option value="treasurer">Treasurer</option>
+              <option value="accountant">Accountant</option>
+              <option value="org_admin">Administrator</option>
+            </select>
+          </div>
+          <button class="btn accent" onclick="sendInvite()">Send invitation</button>
+        </div>
+        <div class="role-desc" id="role-desc"></div>
+        <p id="invite-error" class="error" style="display:none"></p>
+        <div id="invite-success" style="display:none"></div>
+      </div>
+
+      <!-- CURRENT USERS -->
+      <div class="card">
+        <h2>Current users</h2>
+        <table>
+          <thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th></th></tr></thead>
+          <tbody id="user-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+
+      <!-- PENDING INVITATIONS -->
+      <div class="card">
+        <h2>Pending invitations</h2>
+        <table>
+          <thead><tr><th>Email</th><th>Role</th><th>Invited</th><th>Expires</th><th>Status</th><th></th></tr></thead>
+          <tbody id="invite-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let orgId, orgName, myRole = null;
+
+    const ROLE_DESCRIPTIONS = {
+      viewer:     "Can view reports and records. Cannot record, post, or approve anything.",
+      secretary:  "Can add and edit members. Cannot record payments or post accounting entries.",
+      treasurer:  "Can record payments, contributions, and bank imports. Cannot post journals or approve bills.",
+      accountant: "Can record and post accounting entries, reconcile, approve bills, and close periods.",
+      org_admin:  "Full access, including inviting users, changing roles, and configuring the organisation.",
+    };
+
+    function showRoleDesc() {
+      const r = document.getElementById("i-role").value;
+      document.getElementById("role-desc").textContent = ROLE_DESCRIPTIONS[r] || "";
+    }
+
+    async function loadMyInvites() {
+      const { data } = await supabaseClient.rpc("fn_my_invitations");
+      const card = document.getElementById("my-invites-card");
+      if (!data || !data.length) { card.style.display = "none"; return; }
+      card.style.display = "block";
+      document.getElementById("my-invites").innerHTML = data.map(i=>`
+        <div style="padding:12px;border:1px solid var(--color-line);border-radius:var(--radius);margin-bottom:8px">
+          <strong>${i.organisation_name}</strong> has invited you as <strong>${i.role.replace('org_admin','Administrator')}</strong>.
+          <div style="color:var(--color-muted);font-size:12px;margin:4px 0">Expires ${new Date(i.expires_at).toLocaleDateString()}</div>
+          <button class="btn accent" onclick="acceptInvite('${i.id}')">Accept invitation</button>
+        </div>`).join("");
+    }
+
+    async function acceptInvite(id) {
+      const { error } = await supabaseClient.rpc("fn_accept_invitation", { p_invitation_id: id });
+      if (error) { alert(error.message); return; }
+      alert("Invitation accepted. Reloading…");
+      window.location.reload();
+    }
+
+    async function sendInvite() {
+      const errEl = document.getElementById("invite-error");
+      const okEl = document.getElementById("invite-success");
+      errEl.style.display="none"; okEl.style.display="none";
+      const email = document.getElementById("i-email").value.trim();
+      if (!email) { showError(errEl, "Enter an email address."); return; }
+
+      const { data, error } = await supabaseClient.rpc("fn_invite_user", {
+        p_organisation_id: orgId,
+        p_email: email,
+        p_role: document.getElementById("i-role").value,
+        p_note: null,
+      });
+      if (error) { showError(errEl, error.message); return; }
+
+      const signupUrl = window.location.origin + "/login.html";
+      okEl.style.display = "block";
+      okEl.innerHTML = `
+        <p style="color:var(--color-success)">Invitation created for <strong>${data.email}</strong> as <strong>${data.role}</strong>.</p>
+        <p style="font-size:13px;margin-top:8px"><strong>What happens next:</strong> this person needs an account before they can accept.
+        Ask an administrator to create their login in Supabase (Authentication &rarr; Users &rarr; Add user) using
+        <strong>${data.email}</strong>, then send them this link:</p>
+        <div class="invite-link">${signupUrl}</div>
+        <p style="font-size:13px;margin-top:8px">When they sign in, the invitation will appear at the top of this Users page for them to accept.</p>`;
+      document.getElementById("i-email").value = "";
+      loadInvites();
+    }
+
+    async function loadUsers() {
+      const { data, error } = await supabaseClient.rpc("fn_organisation_users", { p_organisation_id: orgId });
+      const tbody = document.getElementById("user-rows");
+      if (error) { tbody.innerHTML = `<tr><td colspan="5" class="error">${error.message}</td></tr>`; return; }
+      if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="5" class="empty">No users.</td></tr>`; return; }
+
+      // Work out my own role so we can show/hide admin controls
+      const me = data.find(u=>u.is_me);
+      myRole = me ? me.role : null;
+      document.getElementById("invite-card").style.display = (myRole==='org_admin') ? 'block' : 'none';
+
+      const isAdmin = myRole === 'org_admin';
+      tbody.innerHTML = data.map(u=>`
+        <tr>
+          <td>${u.email}${u.is_me?'<span class="me-badge">you</span>':''}</td>
+          <td>${isAdmin && !u.is_me ? `
+            <select onchange="changeRole('${u.user_id}', this.value)" style="font-size:13px;padding:2px">
+              ${['viewer','secretary','treasurer','accountant','org_admin'].map(r=>
+                `<option value="${r}" ${r===u.role?'selected':''}>${r==='org_admin'?'Administrator':r.charAt(0).toUpperCase()+r.slice(1)}</option>`).join("")}
+            </select>` : (u.role==='org_admin'?'Administrator':u.role.charAt(0).toUpperCase()+u.role.slice(1))}</td>
+          <td><span class="status ${u.status==='active'?'paid':'unpaid'}">${u.status}</span></td>
+          <td>${new Date(u.joined_at).toLocaleDateString()}</td>
+          <td>${isAdmin && !u.is_me ? `
+            <button class="btn" style="padding:2px 8px;font-size:12px;background:${u.status==='active'?'var(--color-muted)':'var(--color-success)'}"
+              onclick="setStatus('${u.user_id}','${u.status==='active'?'disabled':'active'}')">
+              ${u.status==='active'?'Disable':'Enable'}</button>` : ''}</td>
+        </tr>`).join("");
+    }
+
+    async function changeRole(userId, role) {
+      const { error } = await supabaseClient.rpc("fn_change_user_role", {
+        p_organisation_id: orgId, p_user_id: userId, p_new_role: role });
+      if (error) { alert(error.message); loadUsers(); return; }
+      loadUsers();
+    }
+
+    async function setStatus(userId, status) {
+      if (status==='disabled' && !confirm("Disable this user? They will lose access immediately but their history is preserved.")) return;
+      const { error } = await supabaseClient.rpc("fn_set_user_status", {
+        p_organisation_id: orgId, p_user_id: userId, p_status: status });
+      if (error) { alert(error.message); return; }
+      loadUsers();
+    }
+
+    async function loadInvites() {
+      const { data, error } = await supabaseClient.from("organisation_invitations")
+        .select("id, email, role, status, invited_at, expires_at")
+        .eq("organisation_id", orgId).order("invited_at", { ascending: false }).limit(50);
+      const tbody = document.getElementById("invite-rows");
+      if (error) { tbody.innerHTML = `<tr><td colspan="6" class="error">${error.message}</td></tr>`; return; }
+      if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty">No invitations sent.</td></tr>`; return; }
+      tbody.innerHTML = data.map(i=>{
+        const cls = i.status==='accepted'?'paid':i.status==='pending'?'partial':'unpaid';
+        return `<tr>
+          <td>${i.email}</td>
+          <td>${i.role==='org_admin'?'Administrator':i.role}</td>
+          <td>${new Date(i.invited_at).toLocaleDateString()}</td>
+          <td>${new Date(i.expires_at).toLocaleDateString()}</td>
+          <td><span class="status ${cls}">${i.status}</span></td>
+          <td>${i.status==='pending' && myRole==='org_admin'?`<button class="btn" style="padding:2px 8px;font-size:12px;background:var(--color-alert)" onclick="revokeInvite('${i.id}')">Revoke</button>`:''}</td>
+        </tr>`;
+      }).join("");
+    }
+
+    async function revokeInvite(id) {
+      const { error } = await supabaseClient.rpc("fn_revoke_invitation", { p_invitation_id: id });
+      if (error) { alert(error.message); return; }
+      loadInvites();
+    }
+
+    (async () => {
+      const session = await requireSession(); if (!session) return;
+      await loadMyInvites();   // works even before belonging to an org
+      const org = await currentOrg();
+      if (!org) {
+        document.getElementById("invite-card").style.display = "none";
+        document.getElementById("user-rows").innerHTML = `<tr><td colspan="5" class="empty">You are not yet a member of any organisation. If you have an invitation above, accept it to continue.</td></tr>`;
+        document.getElementById("invite-rows").innerHTML = `<tr><td colspan="6" class="empty">—</td></tr>`;
+        return;
+      }
+      orgId = org.organisation_id;
+      orgName = org.organisations.name;
+      showRoleDesc();
+      await loadUsers();
+      loadInvites();
+    })();
+  </script>
+</body>
+</html>
