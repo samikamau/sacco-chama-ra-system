@@ -6,31 +6,23 @@
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-  .coa-category { margin-bottom:8px; border:1px solid var(--color-line); border-radius:var(--radius); overflow:hidden; }
-  .coa-category-header { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; background:var(--color-primary); color:#fff; cursor:pointer; user-select:none; }
-  .coa-category-header h3 { margin:0; font-size:14px; color:#fff; }
-  .coa-category-header .meta { font-size:12px; opacity:0.75; }
-  .coa-category-body { display:none; }
-  .coa-category-body.open { display:block; }
-  .coa-row { display:grid; grid-template-columns:90px 1fr 90px 80px 120px; gap:8px; align-items:center; padding:7px 16px; border-bottom:1px solid var(--color-line); font-size:13px; }
+  .coa-category { margin-bottom:10px; border:1px solid var(--color-line); border-radius:var(--radius); overflow:hidden; }
+  .coa-cat-header { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; color:#fff; cursor:pointer; user-select:none; }
+  .coa-cat-header h3 { margin:0; font-size:14px; color:#fff; font-weight:600; }
+  .coa-cat-header .meta { font-size:12px; opacity:0.8; display:flex; align-items:center; gap:10px; }
+  .toggle-icon { font-size:18px; font-weight:300; transition:transform 0.2s; line-height:1; }
+  .coa-cat-body { display:none; }
+  .coa-cat-body.open { display:block; }
+  .coa-row { display:grid; grid-template-columns:90px 1fr 90px 90px 150px; gap:8px; align-items:center; padding:7px 16px; border-bottom:1px solid var(--color-line); font-size:13px; }
   .coa-row:last-child { border-bottom:none; }
   .coa-row:hover { background:var(--color-bg); }
-  .coa-header-row { background:#F3EBD8; font-weight:600; font-size:12px; color:var(--color-muted); }
-  .coa-code { font-family:var(--font-mono); color:var(--color-muted); }
-  .coa-inactive { opacity:0.45; text-decoration:line-through; }
-  .badge { font-size:10px; padding:1px 6px; border-radius:999px; }
-  .badge-system { background:#E8EFE8; color:#2A6B2A; }
-  .badge-custom { background:#EBE8F8; color:#4A2A9B; }
+  .coa-hdr { background:#F3EBD8; font-weight:600; font-size:12px; color:var(--color-muted); }
+  .coa-inactive { opacity:0.45; }
+  .coa-inactive .coa-name { text-decoration:line-through; }
   .drawer-backdrop { position:fixed;inset:0;background:rgba(0,0,0,0.35);display:none;z-index:40; }
   .drawer-backdrop.open { display:block; }
   .drawer { position:fixed;top:0;right:0;height:100vh;width:420px;max-width:94vw;background:var(--color-surface);z-index:50;transform:translateX(100%);transition:transform 0.2s;overflow-y:auto;padding:var(--space-4);box-shadow:-2px 0 16px rgba(0,0,0,0.12); }
   .drawer.open { transform:translateX(0); }
-  .category-colors { background:var(--color-primary); }
-  .type-asset { border-left:4px solid #2B7A4E; }
-  .type-liability { border-left:4px solid #C0392B; }
-  .type-equity { border-left:4px solid #8E44AD; }
-  .type-income { border-left:4px solid #1A6FA8; }
-  .type-expense { border-left:4px solid #D35400; }
 </style>
 </head>
 <body>
@@ -45,6 +37,7 @@
       <a href="expenditure.html">Expenditure</a>
       <a href="accounts.html" class="active">Chart of Accounts</a>
       <a href="journal.html">General Journal</a>
+      <a href="banking.html">Banking</a>
       <a href="reconcile.html">Reconciliation</a>
       <a href="statement.html">Member Statements</a>
       <a href="reports.html">Reports</a>
@@ -64,13 +57,13 @@
           <option value="active">Active only</option>
           <option value="all">All (including inactive)</option>
         </select>
-        <label style="font-size:13px;cursor:pointer"><input type="checkbox" id="f-expand" onchange="renderAll()"> Expand all</label>
       </div>
 
       <div id="coa-container"></div>
     </main>
   </div>
 
+  <!-- ADD / EDIT DRAWER -->
   <div class="drawer-backdrop" id="backdrop" onclick="closeDrawer()"></div>
   <div class="drawer" id="drawer">
     <h2 id="drawer-title">Add account</h2>
@@ -78,7 +71,7 @@
     <div class="field"><label>Account name *</label><input id="d-name"></div>
     <div class="field"><label>Category (parent) *</label>
       <select id="d-parent" onchange="autoSetType()">
-        <option value="">— select category —</option>
+        <option value="">— top level —</option>
       </select>
     </div>
     <div class="field"><label>Account type</label>
@@ -93,7 +86,7 @@
     <div class="field"><label>Normal balance</label>
       <select id="d-normal"><option value="debit">Debit</option><option value="credit">Credit</option></select>
     </div>
-    <div class="field"><label>Description</label><input id="d-desc"></div>
+    <div class="field"><label>Description (optional)</label><input id="d-desc"></div>
     <div class="field" id="d-active-wrap" style="display:none">
       <label><input type="checkbox" id="d-active" checked> Active</label>
     </div>
@@ -110,15 +103,15 @@
     let orgId, allAccounts = [], editingId = null;
 
     const CATEGORIES = [
-      { code:'1000', label:'Bank',         type:'asset',    color:'#2B7A4E' },
-      { code:'1100', label:'Member Receivables',  type:'asset',    color:'#2B7A4E' },
-      { code:'1200', label:'Investments',         type:'asset',    color:'#2B7A4E' },
-      { code:'1300', label:'Fixed Assets',        type:'asset',    color:'#2B7A4E' },
-      { code:'2000', label:'Liabilities',         type:'liability',color:'#C0392B' },
-      { code:'3000', label:'Member Funds',        type:'equity',   color:'#8E44AD' },
-      { code:'4000', label:'Contributions',       type:'income',   color:'#1A6FA8' },
-      { code:'5000', label:'Income',              type:'income',   color:'#1A6FA8' },
-      { code:'6000', label:'Expenses',            type:'expense',  color:'#D35400' },
+      { code:'1000', label:'Bank',               type:'asset',    color:'#1B6E45' },
+      { code:'1100', label:'Member Receivables', type:'asset',    color:'#1B5E75' },
+      { code:'1200', label:'Investments',        type:'asset',    color:'#1B4E75' },
+      { code:'1300', label:'Fixed Assets',       type:'asset',    color:'#2C4A6E' },
+      { code:'2000', label:'Liabilities',        type:'liability',color:'#922B21' },
+      { code:'3000', label:'Member Funds',       type:'equity',   color:'#6C3483' },
+      { code:'4000', label:'Contributions',      type:'income',   color:'#1A5276' },
+      { code:'5000', label:'Income',             type:'income',   color:'#145A32' },
+      { code:'6000', label:'Expenses',           type:'expense',  color:'#784212' },
     ];
 
     async function loadAccounts() {
@@ -135,13 +128,15 @@
     function renderAll() {
       const search = document.getElementById('f-search').value.toLowerCase();
       const showAll = document.getElementById('f-status').value === 'all';
-      const expandAll = document.getElementById('f-expand').checked;
       const container = document.getElementById('coa-container');
 
-      // Build parent options for drawer
+      // Populate parent selector in drawer
       document.getElementById('d-parent').innerHTML =
-        '<option value="">— top level (control account) —</option>' +
-        CATEGORIES.map(c => `<option value="${allAccounts.find(a=>a.code===c.code)?.id||''}">${c.code} — ${c.label}</option>`).join('');
+        '<option value="">— top level —</option>' +
+        CATEGORIES.map(c => {
+          const a = allAccounts.find(x => x.code === c.code);
+          return a ? `<option value="${a.id}">${c.code} — ${c.label}</option>` : '';
+        }).join('');
 
       container.innerHTML = CATEGORIES.map(cat => {
         const catAcct = allAccounts.find(a => a.code === cat.code);
@@ -156,57 +151,60 @@
         if (search && !children.length &&
             !catAcct.code.includes(search) && !catAcct.name.toLowerCase().includes(search)) return '';
 
-        const totalDr = 0; // balances shown in GL report, not here
-        const rows = children.map(a => `
-          <div class="coa-row ${a.is_active === false ? 'coa-inactive' : ''}">
-            <div class="coa-code">${a.code}</div>
-            <div>
-              ${a.name}
-              ${a.is_active === false ? '<span class="badge badge-system" style="margin-left:6px">inactive</span>' : ''}
-            </div>
-            <div style="color:var(--color-muted);font-size:12px">${a.account_type}</div>
-            <div style="color:var(--color-muted);font-size:12px">${a.normal_balance || ''}</div>
-            <div style="display:flex;gap:4px">
-              <button class="btn" style="padding:2px 8px;font-size:12px" onclick="openDrawer('${a.id}')">Edit</button>
-              <button class="btn" style="padding:2px 8px;font-size:12px;background:${a.is_active===false?'var(--color-success)':'var(--color-muted)'}"
-                onclick="toggleActive('${a.id}',${a.is_active===false})">
-                ${a.is_active === false ? 'Activate' : 'Deactivate'}
-              </button>
-            </div>
-          </div>`).join('');
+        const isOpen = !!search;
+        const rows = children.length
+          ? children.map(a => `
+            <div class="coa-row ${a.is_active === false ? 'coa-inactive' : ''}">
+              <div style="font-family:var(--font-mono);font-size:12px;color:var(--color-muted)">${a.code}</div>
+              <div class="coa-name">${a.name}</div>
+              <div style="font-size:12px;color:var(--color-muted)">${a.account_type}</div>
+              <div style="font-size:12px;color:var(--color-muted)">${a.normal_balance||''}</div>
+              <div style="display:flex;gap:4px">
+                <button class="btn" style="padding:2px 8px;font-size:11px" onclick="openDrawer('${a.id}')">Edit</button>
+                <button class="btn" style="padding:2px 8px;font-size:11px;background:${a.is_active===false?'var(--color-success)':'var(--color-muted)'}"
+                  onclick="toggleActive('${a.id}',${a.is_active===false})">
+                  ${a.is_active === false ? 'Activate' : 'Deactivate'}
+                </button>
+              </div>
+            </div>`).join('')
+          : `<div class="coa-row"><div style="color:var(--color-muted);grid-column:1/-1">No sub-accounts yet.</div></div>`;
 
-        const isOpen = expandAll || !!search;
         return `
-          <div class="coa-category type-${cat.type}">
-            <div class="coa-category-header" onclick="toggleCategory(this)" style="background:${cat.color}">
-              <h3>${cat.code} — ${cat.label}</h3>
-              <div class="meta">${children.length} account${children.length!==1?'s':''} &nbsp; ▾</div>
+          <div class="coa-category">
+            <div class="coa-cat-header" style="background:${cat.color}" onclick="toggleCat(this)">
+              <h3>${cat.code} &nbsp;${cat.label}</h3>
+              <div class="meta">
+                <span>${children.length} account${children.length!==1?'s':''}</span>
+                <span class="toggle-icon">${isOpen?'−':'+'}</span>
+              </div>
             </div>
-            <div class="coa-category-body ${isOpen?'open':''}">
-              <div class="coa-row coa-header-row">
+            <div class="coa-cat-body ${isOpen?'open':''}">
+              <div class="coa-row coa-hdr">
                 <div>Code</div><div>Name</div><div>Type</div><div>Balance</div><div>Actions</div>
               </div>
-              ${rows || '<div class="coa-row"><div colspan="5" style="color:var(--color-muted)">No sub-accounts yet.</div></div>'}
-              <div style="padding:8px 16px">
-                <button class="btn" style="font-size:12px" onclick="openDrawer(null,'${catAcct.id}')">+ Add sub-account</button>
+              ${rows}
+              <div style="padding:8px 16px;border-top:1px solid var(--color-line)">
+                <button class="btn" style="font-size:12px" onclick="openDrawer(null,'${catAcct.id}')">
+                  + Add sub-account
+                </button>
               </div>
             </div>
           </div>`;
       }).join('');
     }
 
-    function toggleCategory(header) {
+    function toggleCat(header) {
       const body = header.nextElementSibling;
-      body.classList.toggle('open');
+      const icon = header.querySelector('.toggle-icon');
+      const isOpen = body.classList.toggle('open');
+      icon.textContent = isOpen ? '−' : '+';
     }
 
     function openDrawer(id, presetParentId) {
       editingId = id;
-      const errorEl = document.getElementById('drawer-error');
-      errorEl.style.display = 'none';
+      document.getElementById('drawer-error').style.display = 'none';
       document.getElementById('drawer-title').textContent = id ? 'Edit account' : 'Add account';
       document.getElementById('d-active-wrap').style.display = id ? 'block' : 'none';
-
       if (id) {
         const a = allAccounts.find(x => x.id === id);
         if (!a) return;
@@ -218,13 +216,8 @@
         document.getElementById('d-active').checked = a.is_active !== false;
         document.getElementById('d-parent').value = a.parent_account_id || '';
       } else {
-        document.getElementById('d-code').value = '';
-        document.getElementById('d-name').value = '';
-        document.getElementById('d-desc').value = '';
-        if (presetParentId) {
-          document.getElementById('d-parent').value = presetParentId;
-          autoSetType();
-        }
+        ['d-code','d-name','d-desc'].forEach(i => document.getElementById(i).value = '');
+        if (presetParentId) { document.getElementById('d-parent').value = presetParentId; autoSetType(); }
       }
       document.getElementById('backdrop').classList.add('open');
       document.getElementById('drawer').classList.add('open');
@@ -237,12 +230,12 @@
     }
 
     function autoSetType() {
-      const parentId = document.getElementById('d-parent').value;
-      if (!parentId) return;
-      const parent = allAccounts.find(a => a.id === parentId);
-      if (!parent) return;
-      document.getElementById('d-type').value = parent.account_type;
-      document.getElementById('d-normal').value = parent.normal_balance || 'debit';
+      const pid = document.getElementById('d-parent').value;
+      if (!pid) return;
+      const p = allAccounts.find(a => a.id === pid);
+      if (!p) return;
+      document.getElementById('d-type').value = p.account_type;
+      document.getElementById('d-normal').value = p.normal_balance || 'debit';
     }
 
     async function saveAccount() {
@@ -251,10 +244,8 @@
       const code = document.getElementById('d-code').value.trim();
       const name = document.getElementById('d-name').value.trim();
       if (!code || !name) { showError(errorEl, 'Code and name are required.'); return; }
-
       const payload = {
-        organisation_id: orgId,
-        code, name,
+        organisation_id: orgId, code, name,
         account_type: document.getElementById('d-type').value,
         normal_balance: document.getElementById('d-normal').value,
         description: document.getElementById('d-desc').value || null,
@@ -262,7 +253,6 @@
         is_active: editingId ? document.getElementById('d-active').checked : true,
         is_control: false,
       };
-
       let error;
       if (editingId) {
         ({ error } = await supabaseClient.from('chart_of_accounts').update(payload).eq('id', editingId));
@@ -277,11 +267,9 @@
       if (!makeActive) {
         const { count } = await supabaseClient.from('journal_lines')
           .select('*', { count: 'exact', head: true }).eq('account_id', id);
-        if (count > 0 && !confirm(`This account has ${count} posted transaction(s). Deactivating prevents future use but preserves all history. Continue?`))
-          return;
+        if (count > 0 && !confirm(`This account has ${count} posted transaction(s). Deactivating prevents future use but preserves history. Continue?`)) return;
       }
-      const { error } = await supabaseClient.from('chart_of_accounts')
-        .update({ is_active: makeActive }).eq('id', id);
+      const { error } = await supabaseClient.from('chart_of_accounts').update({ is_active: makeActive }).eq('id', id);
       if (error) { alert(error.message); return; }
       loadAccounts();
     }

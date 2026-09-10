@@ -31,6 +31,7 @@
       <a href="expenditure.html">Expenditure</a>
       <a href="accounts.html">Chart of Accounts</a>
       <a href="journal.html">General Journal</a>
+      <a href="banking.html">Banking</a>
       <a href="reconcile.html">Reconciliation</a>
       <a href="statement.html">Member Statements</a>
       <a href="reports.html" class="active">Reports</a>
@@ -216,14 +217,30 @@
       const eq     = data.filter(r=>r.section==="equity");
       const sum    = l=>l.reduce((s,r)=>s+Number(r.amount),0);
       const totA=sum(assets), totL=sum(liab), totE=sum(eq), totLE=totL+totE;
-      const sec = (label,rows,total) => `
-        <div class="section-heading">${label}</div>
-        <table><tbody>
-          ${rows.length ? rows.map(r=>`<tr><td>${r.account_name}</td><td class="num">${money(r.amount)}</td></tr>`).join("") : `<tr><td colspan="2" class="empty">None.</td></tr>`}
-          <tr class="total-row"><td>Total ${label}</td><td class="num">${money(total)}</td></tr>
-        </tbody></table>`;
       const balanced = Math.abs(totA-totLE)<0.005;
-      return sec("Assets",assets,totA) + sec("Liabilities",liab,totL) + sec("Equity",eq,totE) +
+
+      function groupedSection(label, rows, total) {
+        const groups = {};
+        rows.forEach(r => {
+          const g = r.group_name || 'Other';
+          if (!groups[g]) groups[g] = [];
+          groups[g].push(r);
+        });
+        const multiGroup = Object.keys(groups).length > 1;
+        let html = `<div class="section-heading">${label}</div><table><tbody>`;
+        Object.entries(groups).forEach(([grp, grpRows]) => {
+          const grpTotal = grpRows.reduce((s,r)=>s+Number(r.amount),0);
+          if (multiGroup) html += `<tr><td colspan="2" style="font-weight:600;padding-top:8px;color:var(--color-primary);padding-left:0">${grp}</td></tr>`;
+          grpRows.forEach(r => html += `<tr><td style="padding-left:${multiGroup?'20px':'0'}">${r.account_name}</td><td class="num">${money(r.amount)}</td></tr>`);
+          if (multiGroup) html += `<tr style="color:var(--color-muted);font-style:italic"><td style="padding-left:20px">Subtotal ${grp}</td><td class="num">${money(grpTotal)}</td></tr>`;
+        });
+        html += `<tr class="total-row"><td>Total ${label}</td><td class="num">${money(total)}</td></tr></tbody></table>`;
+        return html;
+      }
+
+      return groupedSection('Assets',assets,totA) +
+        groupedSection('Liabilities',liab,totL) +
+        groupedSection('Equity',eq,totE) +
         `<div class="grand-total"><span>Total Liabilities and Equity</span><span>${money(totLE)}</span></div>
          <p class="${balanced?'balance-ok':'balance-bad'}">${balanced?'✓ Balanced.':'⚠ Does not balance by KES '+money(Math.abs(totA-totLE))+' — investigate.'}</p>`;
     }

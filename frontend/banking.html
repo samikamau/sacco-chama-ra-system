@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Banking — Financial Operating System</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .tabs { display:flex; gap:4px; border-bottom:2px solid var(--color-line); margin-bottom:20px; }
+  .tab { padding:8px 16px; cursor:pointer; border-bottom:3px solid transparent; font-size:14px; }
+  .tab.active { border-bottom-color:var(--color-accent); font-weight:600; }
+  .ob-row { display:grid; grid-template-columns:90px 1fr 140px 140px; gap:8px; align-items:center; padding:6px 0; border-bottom:1px solid var(--color-line); font-size:13px; }
+  .ob-row input { width:100%; box-sizing:border-box; }
+  .balance-bar { padding:10px 14px; border-radius:var(--radius); font-family:var(--font-mono); margin-top:8px; font-size:13px; }
+  .balance-bar.ok { background:#E4EEE6; color:var(--color-success); }
+  .balance-bar.bad { background:#F3E4E0; color:var(--color-alert); }
+</style>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav">
+      <div class="brand">Ledger</div>
+      <a href="index.html">Dashboard</a>
+      <a href="members.html">Members</a>
+      <a href="contributions.html">Contributions</a>
+      <a href="payments.html">Payments</a>
+      <a href="loans.html">Loans</a>
+      <a href="expenditure.html">Expenditure</a>
+      <a href="accounts.html">Chart of Accounts</a>
+      <a href="journal.html">General Journal</a>
+      <a href="banking.html" class="active">Banking</a>
+      <a href="reconcile.html">Reconciliation</a>
+      <a href="statement.html">Member Statements</a>
+      <a href="reports.html">Reports</a>
+      <a href="periods.html">Accounting Periods</a>
+      <a href="users.html">Users</a>
+      <a href="#" onclick="signOut()">Sign out</a>
+    </nav>
+    <main class="main">
+      <h1>Banking</h1>
+
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab(0)">Opening Balances</div>
+        <div class="tab" onclick="switchTab(1)">Bank Transfer</div>
+        <div class="tab" onclick="switchTab(2)">Account Balances</div>
+      </div>
+
+      <!-- OPENING BALANCES -->
+      <div id="pane-0">
+        <div class="card">
+          <h2>Post opening balances</h2>
+          <p style="color:var(--color-muted);font-size:13px">Enter the starting balance for each account as at your system go-live date. Debits and credits must balance before posting. Typical opening entry: Dr each asset account / Cr each liability and equity account.</p>
+          <div class="field" style="max-width:220px"><label>As at date *</label><input id="ob-date" type="date"></div>
+
+          <div class="ob-row" style="font-weight:600;font-size:12px;color:var(--color-muted);border-bottom:2px solid var(--color-line)">
+            <div>Code</div><div>Account</div><div class="num">Debit (KES)</div><div class="num">Credit (KES)</div>
+          </div>
+          <div id="ob-rows"></div>
+
+          <div id="ob-balance-bar" class="balance-bar bad" style="margin-top:12px">
+            Debits: 0.00 | Credits: 0.00 | Difference: 0.00 — not balanced
+          </div>
+          <div style="margin-top:12px;display:flex;gap:8px">
+            <button class="btn accent" onclick="postOpeningBalances()">Post opening balances</button>
+          </div>
+          <p id="ob-error" class="error" style="display:none"></p>
+          <p id="ob-success" style="display:none;color:var(--color-success)"></p>
+        </div>
+
+        <div class="card">
+          <h2>Previous opening balance entries</h2>
+          <table>
+            <thead><tr><th>Journal No.</th><th>Date</th><th>Description</th><th class="num">Total Dr</th></tr></thead>
+            <tbody id="ob-history"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- BANK TRANSFER -->
+      <div id="pane-1" style="display:none">
+        <div class="card">
+          <h2>Bank transfer</h2>
+          <p style="color:var(--color-muted);font-size:13px">Transfer money between bank, cash, and M-Pesa accounts. Posts Dr receiving account / Cr sending account.</p>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div class="field" style="flex:1;min-width:180px"><label>From account (source) *</label><select id="t-from"></select></div>
+            <div class="field" style="flex:1;min-width:180px"><label>To account (destination) *</label><select id="t-to"></select></div>
+          </div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div class="field" style="flex:1;min-width:140px"><label>Amount (KES) *</label><input id="t-amount" type="number" step="0.01"></div>
+            <div class="field" style="flex:1;min-width:140px"><label>Date *</label><input id="t-date" type="date"></div>
+            <div class="field" style="flex:1;min-width:160px"><label>Reference</label><input id="t-ref" placeholder="e.g. TRF-001"></div>
+          </div>
+          <div class="field"><label>Description (optional)</label><input id="t-desc"></div>
+          <button class="btn accent" onclick="postTransfer()">Post transfer</button>
+          <p id="t-error" class="error" style="display:none"></p>
+          <p id="t-success" style="display:none;color:var(--color-success)"></p>
+        </div>
+
+        <div class="card">
+          <h2>Recent transfers</h2>
+          <table>
+            <thead><tr><th>Journal No.</th><th>Date</th><th>Description</th><th class="num">Amount</th></tr></thead>
+            <tbody id="t-history"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ACCOUNT BALANCES -->
+      <div id="pane-2" style="display:none">
+        <div class="card">
+          <h2>Bank account balances</h2>
+          <table>
+            <thead><tr><th>Code</th><th>Account</th><th>Type</th><th class="num">Balance (KES)</th></tr></thead>
+            <tbody id="bal-rows"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let orgId, paymentAccounts = [], allAccounts = [];
+
+    function switchTab(i) {
+      [0,1,2].forEach(n => document.getElementById('pane-'+n).style.display = n===i?'block':'none');
+      document.querySelectorAll('.tab').forEach((el,n) => el.classList.toggle('active', n===i));
+      if (i===1) loadTransferHistory();
+      if (i===2) loadBalances();
+    }
+
+    async function loadRefData() {
+      const { data: pa } = await supabaseClient.rpc('fn_payment_accounts', { p_organisation_id: orgId });
+      paymentAccounts = pa || [];
+
+      // All non-control accounts for opening balances
+      const { data: all } = await supabaseClient.from('chart_of_accounts')
+        .select('id,code,name,account_type,normal_balance,is_control,is_active')
+        .eq('organisation_id', orgId).eq('is_active', true).order('code');
+      allAccounts = (all || []).filter(a => !a.is_control);
+
+      // Payment account selectors for transfer
+      const opts = paymentAccounts.map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join('');
+      document.getElementById('t-from').innerHTML = opts;
+      document.getElementById('t-to').innerHTML = opts;
+      document.getElementById('t-date').value = new Date().toISOString().slice(0,10);
+
+      // Build opening balance rows for all non-control accounts
+      buildOBRows();
+    }
+
+    function buildOBRows() {
+      const today = new Date().toISOString().slice(0,10);
+      document.getElementById('ob-date').value = today;
+      document.getElementById('ob-rows').innerHTML = allAccounts.map(a => `
+        <div class="ob-row" id="obr-${a.id}">
+          <div style="font-family:var(--font-mono);font-size:12px;color:var(--color-muted)">${a.code}</div>
+          <div style="font-size:13px">${a.name}</div>
+          <div><input type="number" step="0.01" class="ob-dr" data-id="${a.id}" placeholder="0.00" oninput="updateOBBalance()"></div>
+          <div><input type="number" step="0.01" class="ob-cr" data-id="${a.id}" placeholder="0.00" oninput="updateOBBalance()"></div>
+        </div>`).join('');
+    }
+
+    function updateOBBalance() {
+      let dr = 0, cr = 0;
+      document.querySelectorAll('.ob-dr').forEach(i => dr += Number(i.value||0));
+      document.querySelectorAll('.ob-cr').forEach(i => cr += Number(i.value||0));
+      const diff = Math.abs(dr - cr);
+      const bar = document.getElementById('ob-balance-bar');
+      const ok = diff < 0.005;
+      bar.textContent = `Debits: ${money(dr)} | Credits: ${money(cr)} | Difference: ${money(diff)} — ${ok ? '✓ balanced' : 'not balanced'}`;
+      bar.className = 'balance-bar ' + (ok ? 'ok' : 'bad');
+    }
+
+    async function postOpeningBalances() {
+      const errorEl = document.getElementById('ob-error');
+      const successEl = document.getElementById('ob-success');
+      errorEl.style.display = 'none'; successEl.style.display = 'none';
+      const date = document.getElementById('ob-date').value;
+      if (!date) { showError(errorEl, 'Enter a date.'); return; }
+
+      const lines = [];
+      allAccounts.forEach(a => {
+        const dr = Number(document.querySelector(`.ob-dr[data-id="${a.id}"]`)?.value || 0);
+        const cr = Number(document.querySelector(`.ob-cr[data-id="${a.id}"]`)?.value || 0);
+        if (dr > 0 || cr > 0) lines.push({ account_id: a.id, debit: dr, credit: cr });
+      });
+
+      if (!lines.length) { showError(errorEl, 'Enter at least one balance.'); return; }
+
+      const { error } = await supabaseClient.rpc('fn_post_opening_balances', {
+        p_organisation_id: orgId,
+        p_as_at: date,
+        p_balances: lines,
+      });
+      if (error) { showError(errorEl, error.message); return; }
+      successEl.textContent = 'Opening balances posted successfully.';
+      successEl.style.display = 'block';
+      buildOBRows(); updateOBBalance(); loadOBHistory();
+    }
+
+    async function loadOBHistory() {
+      const { data } = await supabaseClient.from('journal_entries')
+        .select('journal_number, entry_date, description, journal_lines(debit)')
+        .eq('organisation_id', orgId).eq('source_type', 'opening_balance')
+        .order('entry_date', { ascending: false });
+      const tbody = document.getElementById('ob-history');
+      if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="4" class="empty">No opening balance entries yet.</td></tr>`; return; }
+      tbody.innerHTML = data.map(j => {
+        const total = (j.journal_lines||[]).reduce((s,l)=>s+Number(l.debit),0);
+        return `<tr><td><code>${j.journal_number||'—'}</code></td><td>${j.entry_date}</td><td>${j.description}</td><td class="num">${money(total)}</td></tr>`;
+      }).join('');
+    }
+
+    async function postTransfer() {
+      const errorEl = document.getElementById('t-error');
+      const successEl = document.getElementById('t-success');
+      errorEl.style.display = 'none'; successEl.style.display = 'none';
+      const from = document.getElementById('t-from').value;
+      const to   = document.getElementById('t-to').value;
+      const amt  = document.getElementById('t-amount').value;
+      const date = document.getElementById('t-date').value;
+      if (!from || !to || !amt || !date) { showError(errorEl, 'All fields except description are required.'); return; }
+      if (from === to) { showError(errorEl, 'Source and destination must be different accounts.'); return; }
+      const { error } = await supabaseClient.rpc('fn_bank_transfer', {
+        p_organisation_id: orgId,
+        p_from_account_id: from,
+        p_to_account_id: to,
+        p_amount: amt,
+        p_transfer_date: date,
+        p_reference: document.getElementById('t-ref').value || null,
+        p_description: document.getElementById('t-desc').value || null,
+      });
+      if (error) { showError(errorEl, error.message); return; }
+      successEl.textContent = 'Transfer posted successfully.';
+      successEl.style.display = 'block';
+      document.getElementById('t-amount').value = '';
+      document.getElementById('t-ref').value = '';
+      document.getElementById('t-desc').value = '';
+      loadTransferHistory();
+    }
+
+    async function loadTransferHistory() {
+      const { data } = await supabaseClient.from('journal_entries')
+        .select('journal_number, entry_date, description, journal_lines(debit)')
+        .eq('organisation_id', orgId).eq('source_type', 'bank_transfer')
+        .order('entry_date', { ascending: false }).limit(20);
+      const tbody = document.getElementById('t-history');
+      if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="4" class="empty">No transfers yet.</td></tr>`; return; }
+      tbody.innerHTML = data.map(j => {
+        const total = (j.journal_lines||[]).reduce((s,l)=>s+Number(l.debit),0)/2;
+        return `<tr><td><code>${j.journal_number||'—'}</code></td><td>${j.entry_date}</td><td>${j.description}</td><td class="num">${money(total)}</td></tr>`;
+      }).join('');
+    }
+
+    async function loadBalances() {
+      const { data } = await supabaseClient.rpc('fn_payment_accounts', { p_organisation_id: orgId });
+      const tbody = document.getElementById('bal-rows');
+      if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="4" class="empty">No bank accounts configured.</td></tr>`; return; }
+      const rows = await Promise.all((data||[]).map(async a => {
+        const { data: bal } = await supabaseClient.rpc('fn_book_balance', { p_account_id: a.id, p_as_at: null });
+        return `<tr><td><code>${a.code}</code></td><td>${a.name}</td><td style="color:var(--color-muted)">${a.subtype}</td><td class="num" style="font-family:var(--font-mono)">${money(bal||0)}</td></tr>`;
+      }));
+      tbody.innerHTML = rows.join('');
+    }
+
+    (async () => {
+      const session = await requireSession(); if (!session) return;
+      const org = await currentOrg(); if (!org) return;
+      orgId = org.organisation_id;
+      await loadRefData();
+      loadOBHistory();
+    })();
+  </script>
+</body>
+</html>
