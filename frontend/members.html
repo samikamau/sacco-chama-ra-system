@@ -295,7 +295,7 @@
     if (toDate)   payQ = payQ.lte('transaction_date', toDate);
 
     let loanQ = supabaseClient.from('loans')
-      .select('id,principal,status,application_date,loan_products(name),loan_repayments(amount,principal_portion,interest_portion,created_at)')
+      .select('id,loan_number,principal,status,application_date,loan_products(name),loan_repayments(amount,principal_portion,interest_portion,created_at)')
       .eq('member_id', memberId).order('application_date', {ascending:true});
     if (fromDate) loanQ = loanQ.gte('application_date', fromDate);
     if (toDate)   loanQ = loanQ.lte('application_date', toDate);
@@ -406,7 +406,8 @@
           const outstanding = Number(loan.principal) - repaid;
           h += `
             <div style="font-weight:600;margin:10px 0 4px">
-              ${loan.loan_products.name} — KES ${money(loan.principal)}
+              <code style="font-size:12px;color:var(--color-primary)">${loan.loan_number||'—'}</code>
+              &nbsp; ${loan.loan_products.name} — KES ${money(loan.principal)}
               <span style="font-weight:400;font-size:13px;color:var(--color-muted)">
                 Applied: ${loan.application_date||'—'} &nbsp;·&nbsp; ${loan.status}
               </span>

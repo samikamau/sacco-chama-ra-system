@@ -111,7 +111,7 @@
           </div>
           <div id="loan-filter-banner" style="display:none;margin-bottom:12px;font-size:13px;background:#F3EBD8;padding:8px 12px;border-radius:4px"></div>
           <table>
-            <thead><tr><th>Member</th><th>Product</th><th class="num">Principal</th><th>Term</th><th>Applied</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>Loan No.</th><th>Member</th><th>Product</th><th class="num">Principal</th><th>Term</th><th>Applied</th><th>Status</th><th></th></tr></thead>
             <tbody id="loan-rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
           </table>
         </div>
@@ -345,7 +345,7 @@
     // ── LOANS LIST ────────────────────────────────────────────────────────
     async function loadLoans() {
       let query = supabaseClient.from('loans')
-        .select('id,principal,term_months,status,application_date,members(full_name),loan_products(name)')
+        .select('id,loan_number,principal,term_months,status,application_date,members(full_name),loan_products(name)')
         .eq('organisation_id',orgId);
       if (currentLoanFilter) query = query.in('status',currentLoanFilter);
       const range = getLoanDateRange();
@@ -368,6 +368,7 @@
       if (!data.length) { tbody.innerHTML=`<tr><td colspan="7" class="empty">No loans match this filter.</td></tr>`; return; }
       tbody.innerHTML = data.map(l=>`
         <tr>
+          <td><code style="font-size:12px">${l.loan_number||'—'}</code></td>
           <td>${l.members.full_name}</td>
           <td>${l.loan_products.name}</td>
           <td class="num">${money(l.principal)}</td>
@@ -388,7 +389,7 @@
       card.scrollIntoView({behavior:'smooth'});
 
       const [{data:loan},{data:guarantors},{data:schedule},{data:members}] = await Promise.all([
-        supabaseClient.from('loans').select('*,members(full_name),loan_products(name,interest_method,annual_interest_rate)').eq('id',loanId).single(),
+        supabaseClient.from('loans').select('*,loan_number,members(full_name),loan_products(name,interest_method,annual_interest_rate)').eq('id',loanId).single(),
         supabaseClient.from('loan_guarantors').select('id,amount_guaranteed,amount_released,members:guarantor_member_id(full_name)').eq('loan_id',loanId),
         supabaseClient.from('loan_schedule').select('installment_no,due_date,principal_due,interest_due,total_due,principal_paid,interest_paid,status').eq('loan_id',loanId).order('installment_no'),
         supabaseClient.from('members').select('id,member_number,full_name').eq('organisation_id',orgId).eq('status','active').order('full_name'),
@@ -398,7 +399,17 @@
       const totalReleased   = (guarantors||[]).reduce((s,g)=>s+Number(g.amount_released||0),0);
       const cashOpts = cashAccounts.map(a=>`<option value="${a.id}">${a.code} — ${a.name}</option>`).join('');
 
-      let html = `<p><strong>${loan.members.full_name}</strong> — ${loan.loan_products.name} — KES ${money(loan.principal)} / ${loan.term_months}m (<strong>${loan.status}</strong>)</p>`;
+      let html = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <div>
+          <div style="font-size:16px;font-weight:700">${loan.members.full_name}</div>
+          <div style="font-size:13px;color:var(--color-muted)">${loan.loan_products.name} &nbsp;·&nbsp; KES ${money(loan.principal)} &nbsp;·&nbsp; ${loan.term_months} months &nbsp;·&nbsp; ${loan.status}</div>
+        </div>
+        <div style="text-align:right">
+          <code style="font-size:16px;font-weight:700;color:var(--color-primary)">${loan.loan_number||'—'}</code>
+          <div style="font-size:11px;color:var(--color-muted)">Loan number</div>
+        </div>
+      </div>`;
       if (loan.decision_remarks) html += `<p style="color:var(--color-muted);font-size:13px">Remarks: ${loan.decision_remarks}</p>`;
       if (loan.requested_amount && loan.requested_amount !== loan.principal) {
         html += `<p style="font-size:13px;color:var(--color-muted)">Originally requested: KES ${money(loan.requested_amount)}</p>`;
