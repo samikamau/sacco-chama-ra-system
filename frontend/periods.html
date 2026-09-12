@@ -19,11 +19,13 @@
       <a href="reconcile.html">Reconciliation</a>
       <a href="statement.html">Member Statements</a>
       <a href="reports.html">Reports</a>
-      <div class="nav-section-label">Accountant</div>
-      <a href="contributions.html">Contributions</a>
-      <a href="accounts.html">Chart of Accounts</a>
-      <a href="journal.html">General Journal</a>
-      <a href="periods.html" class="active">Accounting Periods</a>
+      <a href="#" class="nav-accountant-toggle active" onclick="toggleAccountant(event)">Accountant</a>
+      <div class="nav-accountant-sub" style="display:block">
+        <a href="contributions.html" style="padding-left:28px;font-size:13px">Contributions</a>
+        <a href="accounts.html" style="padding-left:28px;font-size:13px">Chart of Accounts</a>
+        <a href="journal.html" style="padding-left:28px;font-size:13px">General Journal</a>
+        <a href="periods.html" class="active" style="padding-left:28px;font-size:13px">Accounting Periods</a>
+      </div>
       <a href="users.html">Users</a>
       <a href="#" onclick="signOut()">Sign out</a>
     </nav>
@@ -126,36 +128,13 @@
   </script>
 
   <script>
-  // Collapsible Accountant nav section
-  (function() {
-    const label = document.querySelector('.nav-section-label');
-    if (!label) return;
-    // Mark the accountant links
-    let el = label.nextElementSibling;
-    while (el && el.tagName === 'A') {
-      el.classList.add('nav-accountant-link');
-      el = el.nextElementSibling;
-    }
-    // Restore collapsed state from localStorage
-    const collapsed = localStorage.getItem('nav-accountant-collapsed') === 'true';
-    if (collapsed) {
-      label.classList.add('collapsed');
-      document.querySelectorAll('.nav-accountant-link').forEach(a => a.classList.add('hidden'));
-    }
-    label.addEventListener('click', () => {
-      const isCollapsed = label.classList.toggle('collapsed');
-      document.querySelectorAll('.nav-accountant-link').forEach(a => a.classList.toggle('hidden', isCollapsed));
-      localStorage.setItem('nav-accountant-collapsed', isCollapsed);
-    });
-    // Always expand if current page is an accountant link
-    const currentHref = window.location.pathname.split('/').pop() || 'index.html';
-    const accountantPages = ['contributions.html','accounts.html','journal.html','periods.html','users.html'];
-    if (accountantPages.includes(currentHref) && collapsed) {
-      label.classList.remove('collapsed');
-      document.querySelectorAll('.nav-accountant-link').forEach(a => a.classList.remove('hidden'));
-      localStorage.setItem('nav-accountant-collapsed', 'false');
-    }
-  })();
+  function toggleAccountant(e) {
+    e.preventDefault();
+    const sub = document.querySelector('.nav-accountant-sub');
+    if (!sub) return;
+    const isVisible = sub.style.display !== 'none';
+    sub.style.display = isVisible ? 'none' : 'block';
+  }
   </script>
 </body>
 </html>
