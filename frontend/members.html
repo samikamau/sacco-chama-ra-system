@@ -101,15 +101,13 @@
       <!-- MEMBER STATEMENTS TAB -->
       <div id="mtab-statements" style="display:none">
         <div class="card">
-          <h2>Member Statements</h2>
-          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
             <div class="field" style="margin-bottom:0;flex:1;min-width:200px">
               <label>Select member</label>
-              <select id="stmt-member-select"></select>
+              <select id="stmt-member-select" onchange="loadInlineStatement()"></select>
             </div>
-            <button class="btn accent" onclick="openMemberStatement()">Open statement</button>
           </div>
-          <p style="font-size:13px;color:var(--color-muted);margin-top:8px">Select a member then click Open statement to view their full account history.</p>
+          <div id="inline-statement" style="margin-top:16px"></div>
         </div>
       </div>
 
@@ -344,6 +342,68 @@
       if (btn)   btn.classList.toggle('active', t === name);
     });
     window.scrollTo({top: 0, behavior: 'smooth'});
+    if (name === 'statements') populateStmtSelect();
+  }
+
+  async function populateStmtSelect() {
+    const sel = document.getElementById('stmt-member-select');
+    if (sel.options.length > 1) { loadInlineStatement(); return; }
+    const {data} = await supabaseClient.from('members')
+      .select('id,member_number,full_name').eq('organisation_id', orgId)
+      .eq('status','active').order('full_name');
+    sel.innerHTML = (data||[]).map(m =>
+      `<option value="${m.id}">${m.member_number} — ${m.full_name}</option>`).join('');
+    loadInlineStatement();
+  }
+
+  async function loadInlineStatement() {
+    const memberId = document.getElementById('stmt-member-select').value;
+    const box = document.getElementById('inline-statement');
+    if (!memberId) return;
+    box.innerHTML = '<p style="color:var(--color-muted)">Loading…</p>';
+
+    const [{ data: member }, { data: payments }, { data: loans }] = await Promise.all([
+      supabaseClient.from('members').select('full_name,member_number,status,join_date').eq('id', memberId).single(),
+      supabaseClient.from('payments').select('transaction_date,channel,reference,amount,status').eq('member_id', memberId).order('transaction_date', {ascending:false}).limit(30),
+      supabaseClient.from('loans').select('id,principal,status,application_date,loan_products(name)').eq('member_id', memberId).order('application_date', {ascending:false}),
+    ]);
+
+    const totalPaid = (payments||[]).filter(p=>p.status==='posted').reduce((s,p)=>s+Number(p.amount),0);
+
+    let html = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+      <div><strong>${member.full_name}</strong> &nbsp; ${member.member_number}</div>
+      <div style="color:var(--color-muted)">Joined: ${member.join_date||'—'}</div>
+      <div style="color:var(--color-muted)">Status: ${member.status}</div>
+      <div>Total contributions: <strong>KES ${money(totalPaid)}</strong></div>
+    </div>`;
+
+    html += `<h3 style="margin-bottom:8px">Payment history</h3>
+    <table><thead><tr><th>Date</th><th>Channel</th><th>Reference</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>`;
+    if ((payments||[]).length) {
+      html += payments.map(p => `<tr>
+        <td>${p.transaction_date}</td><td>${p.channel}</td><td>${p.reference||'—'}</td>
+        <td class="num">${money(p.amount)}</td>
+        <td><span class="status ${p.status==='posted'?'paid':'unpaid'}">${p.status}</span></td>
+      </tr>`).join('');
+    } else {
+      html += `<tr><td colspan="5" class="empty">No payments recorded.</td></tr>`;
+    }
+    html += `</tbody></table>`;
+
+    html += `<h3 style="margin-top:16px;margin-bottom:8px">Loans</h3>
+    <table><thead><tr><th>Product</th><th class="num">Principal</th><th>Date</th><th>Status</th></tr></thead><tbody>`;
+    if ((loans||[]).length) {
+      html += loans.map(l => `<tr>
+        <td>${l.loan_products.name}</td><td class="num">${money(l.principal)}</td>
+        <td>${l.application_date||'—'}</td>
+        <td><span class="status ${l.status==='closed'?'paid':l.status==='active'?'partial':'unpaid'}">${l.status}</span></td>
+      </tr>`).join('');
+    } else {
+      html += `<tr><td colspan="4" class="empty">No loans recorded.</td></tr>`;
+    }
+    html += `</tbody></table>`;
+
+    box.innerHTML = html;
   }
   function openMemberStatement() {
     const sel = document.getElementById('stmt-member-select');
