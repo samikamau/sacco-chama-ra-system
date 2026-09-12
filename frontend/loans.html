@@ -2,57 +2,109 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Loans — Financial Operating System</title>
+<title>Loan Management — Financial Operating System</title>
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .loan-tabs { display:flex; gap:0; border-bottom:2px solid var(--color-line); margin-bottom:20px; }
+  .loan-tab-btn { background:none; border:none; padding:10px 18px; cursor:pointer; font-size:14px; color:var(--color-muted); border-bottom:3px solid transparent; margin-bottom:-2px; font-family:inherit; }
+  .loan-tab-btn.active { color:var(--color-ink); font-weight:600; border-bottom-color:var(--color-accent); }
+  .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; }
+  .kpi-card { border-radius:6px; padding:16px; cursor:pointer; transition:opacity 0.15s; }
+  .kpi-card:hover { opacity:0.85; }
+  .kpi-num { font-size:28px; font-weight:700; }
+  .kpi-label { font-size:13px; font-weight:600; margin-top:4px; }
+  .kpi-sub { font-size:12px; color:var(--color-muted); margin-top:2px; }
+</style>
 </head>
 <body>
   <div class="app-shell">
     <nav class="nav">
       <div class="brand">Ledger</div>
       <a href="index.html">Dashboard</a>
-      <a href="members.html">Members</a>
-      <a href="payments.html">Payments</a>
-      <a href="loans.html" class="active">Loan Management</a>
-      <a href="expenditure.html">Expenditure</a>
-      <a href="banking.html">Banking</a>
-      <a href="reconcile.html">Reconciliation</a>
-      <a href="statement.html">Member Statements</a>
-      <a href="reports.html">Reports</a>
-      <a href="#" class="nav-accountant-toggle " onclick="toggleAccountant(event)">Accountant</a>
-      <div class="nav-accountant-sub" style="display:none">
-        <a href="contributions.html" style="padding-left:28px;font-size:13px">Contributions</a>
-        <a href="accounts.html" style="padding-left:28px;font-size:13px">Chart of Accounts</a>
-        <a href="journal.html" style="padding-left:28px;font-size:13px">General Journal</a>
-        <a href="periods.html" style="padding-left:28px;font-size:13px">Accounting Periods</a>
+      <div class="nav-group">
+        <div class="nav-group-header" onclick="toggleNav(this)">
+          <span>Member Management</span><span class="nav-chevron">›</span>
+        </div>
+        <div class="nav-group-body">
+          <a href="members.html">Members</a>
+          <a href="contributions.html">Contributions</a>
+          <a href="payments.html">Payments</a>
+          <a href="statement.html">Member Statements</a>
+        </div>
       </div>
-      <a href="users.html">Users</a>
-      <a href="#" onclick="signOut()">Sign out</a>
+      <div class="nav-group nav-open">
+        <div class="nav-group-header active" onclick="toggleNav(this)">
+          <span>Loan Management</span><span class="nav-chevron">›</span>
+        </div>
+        <div class="nav-group-body">
+          <a href="loans.html" class="active">Loans</a>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-header" onclick="toggleNav(this)">
+          <span>Supplier Management</span><span class="nav-chevron">›</span>
+        </div>
+        <div class="nav-group-body">
+          <a href="expenditure.html">Suppliers & Bills</a>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-header" onclick="toggleNav(this)">
+          <span>Accountant</span><span class="nav-chevron">›</span>
+        </div>
+        <div class="nav-group-body">
+          <a href="accounts.html">Chart of Accounts</a>
+          <a href="journal.html">General Journal</a>
+          <a href="periods.html">Accounting Periods</a>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-header" onclick="toggleNav(this)">
+          <span>Banking</span><span class="nav-chevron">›</span>
+        </div>
+        <div class="nav-group-body">
+          <a href="banking.html">Bank & Cash</a>
+          <a href="reconcile.html">Reconciliation</a>
+        </div>
+      </div>
+      <a href="reports.html">Reports</a>
+      <div class="nav-group">
+        <div class="nav-group-header" onclick="toggleNav(this)">
+          <span>Administration</span><span class="nav-chevron">›</span>
+        </div>
+        <div class="nav-group-body">
+          <a href="users.html">Users & Access</a>
+        </div>
+      </div>
+      <a href="#" onclick="signOut()" class="nav-signout">Sign out</a>
     </nav>
     <main class="main">
-      <h1>Loans</h1>
+      <h1>Loan Management</h1>
 
-      <div class="tabs" style="display:flex;gap:4px;border-bottom:1px solid #ddd;margin-bottom:20px">
-        <button id="tabbtn-dashboard" class="tab-btn" onclick="switchTab('dashboard')" style="background:none;border:none;padding:10px 16px;cursor:pointer;font-size:14px">Dashboard</button>
-        <button id="tabbtn-application" class="tab-btn" onclick="switchTab('application')" style="background:none;border:none;padding:10px 16px;cursor:pointer;font-size:14px">New Application</button>
-        <button id="tabbtn-loans" class="tab-btn" onclick="switchTab('loans')" style="background:none;border:none;padding:10px 16px;cursor:pointer;font-size:14px">Loans List</button>
-        <button id="tabbtn-arrears" class="tab-btn" onclick="switchTab('arrears')" style="background:none;border:none;padding:10px 16px;cursor:pointer;font-size:14px">Loan Arrears</button>
-        <button id="tabbtn-products" class="tab-btn" onclick="switchTab('products')" style="background:none;border:none;padding:10px 16px;cursor:pointer;font-size:14px">Loan Products</button>
+      <div class="loan-tabs">
+        <button id="lt-dashboard"  class="loan-tab-btn" onclick="switchTab('dashboard')">Dashboard</button>
+        <button id="lt-application" class="loan-tab-btn" onclick="switchTab('application')">New Application</button>
+        <button id="lt-loans"      class="loan-tab-btn" onclick="switchTab('loans')">Loans List</button>
+        <button id="lt-arrears"    class="loan-tab-btn" onclick="switchTab('arrears')">Loan Arrears</button>
+        <button id="lt-products"   class="loan-tab-btn" onclick="switchTab('products')">Loan Products</button>
       </div>
 
-      <div id="tab-dashboard" class="tab-panel" style="display:none">
+      <!-- DASHBOARD -->
+      <div id="tab-dashboard" style="display:none">
         <div class="card">
-          <h2>Loan Portfolio Overview</h2>
-          <div id="dash-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:12px">Loading…</div>
+          <h2>Loan Portfolio</h2>
+          <div id="dash-stats" class="kpi-grid">Loading…</div>
         </div>
       </div>
 
-      <div id="tab-application" class="tab-panel" style="display:none">
+      <!-- NEW APPLICATION -->
+      <div id="tab-application" style="display:none">
         <div class="card">
           <h2>New loan application</h2>
           <div class="field"><label>Member</label><select id="a-member" onchange="checkEligibility()"></select></div>
           <div class="field"><label>Loan product</label><select id="a-product" onchange="checkEligibility()"></select></div>
-          <div id="elig-box" style="background:#F3EBD8;border-radius:3px;padding:12px;margin-bottom:12px;font-size:13px;display:none"></div>
+          <div id="elig-box" style="background:#F3EBD8;border-radius:4px;padding:12px;margin-bottom:12px;font-size:13px;display:none"></div>
           <div class="field"><label>Principal requested (KES)</label><input id="a-principal" type="number"></div>
           <div class="field"><label>Term (months)</label><input id="a-term" type="number" value="12"></div>
           <button class="btn accent" onclick="createApplication()">Create application</button>
@@ -61,27 +113,17 @@
         </div>
       </div>
 
-      <div id="tab-loans" class="tab-panel" style="display:none">
+      <!-- LOANS LIST -->
+      <div id="tab-loans" style="display:none">
         <div class="card">
           <h2>Loans</h2>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">
-            <div class="field" style="margin-bottom:0"><label>Status</label>
-              <select id="loan-status-filter" onchange="onStatusFilterChange()">
-                <option value="all">All statuses</option>
-                <option value="pending">Pending Approval</option>
-                <option value="approved">Awaiting Disbursement</option>
-                <option value="active">Active</option>
-                <option value="closed">Closed</option>
-                <option value="rejected">Declined</option>
-              </select>
-            </div>
             <div class="field" style="margin-bottom:0"><label>Period</label>
               <select id="loan-period-type" onchange="onPeriodTypeChange()">
                 <option value="all">All time</option>
                 <option value="month">Month</option>
                 <option value="quarter">Quarter</option>
                 <option value="year">Year</option>
-                <option value="custom">Custom range</option>
               </select>
             </div>
             <div class="field" id="loan-period-month-wrap" style="margin-bottom:0;display:none"><label>Month</label>
@@ -95,13 +137,8 @@
               <input type="number" id="loan-period-quarter-year" style="width:90px"></div>
             <div class="field" id="loan-period-year-wrap" style="margin-bottom:0;display:none"><label>Year</label>
               <input type="number" id="loan-period-year" style="width:90px"></div>
-            <div class="field" id="loan-period-custom-from-wrap" style="margin-bottom:0;display:none"><label>From</label>
-              <input type="date" id="loan-period-custom-from"></div>
-            <div class="field" id="loan-period-custom-to-wrap" style="margin-bottom:0;display:none"><label>To</label>
-              <input type="date" id="loan-period-custom-to"></div>
-            <div class="field" style="margin-bottom:0"><label>Sort by date</label>
-              <select id="loan-sort-order"><option value="desc">Newest first</option><option value="asc">Oldest first</option></select>
-            </div>
+            <div class="field" style="margin-bottom:0"><label>Sort</label>
+              <select id="loan-sort-order"><option value="desc">Newest first</option><option value="asc">Oldest first</option></select></div>
             <button class="btn" onclick="loadLoans()">Apply</button>
           </div>
           <div id="loan-filter-banner" style="display:none;margin-bottom:12px;font-size:13px;background:#F3EBD8;padding:8px 12px;border-radius:4px"></div>
@@ -109,16 +146,16 @@
             <thead><tr><th>Member</th><th>Product</th><th class="num">Principal</th><th>Term</th><th>Applied</th><th>Status</th><th></th></tr></thead>
             <tbody id="loan-rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
           </table>
-          <p id="loan-error" class="error" style="display:none"></p>
         </div>
-
         <div class="card" id="detail-card" style="display:none">
           <h2 id="detail-title">Loan detail</h2>
           <div id="detail-body"></div>
+          <p id="detail-error" class="error" style="display:none"></p>
         </div>
       </div>
 
-      <div id="tab-arrears" class="tab-panel" style="display:none">
+      <!-- ARREARS -->
+      <div id="tab-arrears" style="display:none">
         <div class="card">
           <h2>Loans in arrears</h2>
           <table>
@@ -128,21 +165,21 @@
         </div>
       </div>
 
-      <div id="tab-products" class="tab-panel" style="display:none">
+      <!-- LOAN PRODUCTS -->
+      <div id="tab-products" style="display:none">
         <div class="card">
           <h2>Loan products</h2>
           <table>
-            <thead><tr><th>Name</th><th class="num">Multiplier</th><th>Interest</th><th class="num">Rate %</th></tr></thead>
+            <thead><tr><th>Name</th><th class="num">Multiplier</th><th>Interest method</th><th class="num">Rate %</th></tr></thead>
             <tbody id="product-rows"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
           </table>
-          <details style="margin-top:12px">
+          <details style="margin-top:16px">
             <summary style="cursor:pointer;color:var(--color-muted)">Add a loan product</summary>
             <div style="margin-top:12px">
               <div class="field"><label>Name</label><input id="pr-name"></div>
-              <div class="field"><label>Savings multiplier (max loan = multiplier x deposits)</label><input id="pr-mult" type="number" value="3"></div>
+              <div class="field"><label>Savings multiplier</label><input id="pr-mult" type="number" value="3"></div>
               <div class="field"><label>Interest method</label>
-                <select id="pr-method"><option value="reducing">Reducing balance</option><option value="flat">Flat</option></select>
-              </div>
+                <select id="pr-method"><option value="reducing">Reducing balance</option><option value="flat">Flat</option></select></div>
               <div class="field"><label>Annual interest rate %</label><input id="pr-rate" type="number" value="12"></div>
               <div class="field"><label>Max term (months)</label><input id="pr-term" type="number" value="12"></div>
               <div class="field"><label>Loan receivable account</label><select id="pr-recv"></select></div>
@@ -160,531 +197,438 @@
   <script src="js/auth.js"></script>
   <script>
     let orgId, products = [], cashAccounts = [];
-
-    function switchTab(name) {
-      const tabs = ['dashboard','application','loans','arrears','products'];
-      tabs.forEach(t => {
-        document.getElementById('tab-'+t).style.display = (t === name) ? 'block' : 'none';
-        const btn = document.getElementById('tabbtn-'+t);
-        if (t === name) {
-          btn.style.borderBottom = '3px solid var(--color-accent, #1a5632)';
-          btn.style.fontWeight = '600';
-          btn.style.color = 'inherit';
-        } else {
-          btn.style.borderBottom = '3px solid transparent';
-          btn.style.fontWeight = '400';
-          btn.style.color = 'var(--color-muted, #666)';
-        }
-      });
-    }
-
-    async function loadDashboard() {
-      const statsEl = document.getElementById('dash-stats');
-      statsEl.innerHTML = 'Loading…';
-
-      const { data: loanRows, error } = await supabaseClient.from('loans')
-        .select('id, principal, status').eq('organisation_id', orgId);
-      if (error) { statsEl.innerHTML = `<p class="error">${error.message}</p>`; return; }
-
-      const rows = loanRows || [];
-      const pending  = rows.filter(l => l.status === 'draft' || l.status === 'pending_approval');
-      const approved = rows.filter(l => l.status === 'approved');
-      const active   = rows.filter(l => l.status === 'active' || l.status === 'disbursed');
-      const closed   = rows.filter(l => l.status === 'closed');
-      const totalDisbursed = rows
-        .filter(l => ['active','disbursed','closed'].includes(l.status))
-        .reduce((s,l) => s + Number(l.principal), 0);
-
-      const { data: disbRows } = await supabaseClient.from('loan_disbursements')
-        .select('loan_id, amount').eq('organisation_id', orgId);
-      const disbByLoan = {};
-      (disbRows || []).forEach(d => { disbByLoan[d.loan_id] = (disbByLoan[d.loan_id] || 0) + Number(d.amount); });
-      const approvedRemaining = approved.reduce((s,l) => s + (Number(l.principal) - (disbByLoan[l.id] || 0)), 0);
-
-      const { data: schedule } = await supabaseClient.from('loan_schedule')
-        .select('principal_due, principal_paid, interest_due, interest_paid')
-        .eq('organisation_id', orgId).neq('status', 'paid');
-      const outstanding = (schedule || []).reduce((s,r) =>
-        s + (Number(r.principal_due) - Number(r.principal_paid)) + (Number(r.interest_due) - Number(r.interest_paid)), 0);
-
-      const { data: arrears } = await supabaseClient.rpc('fn_loan_arrears', { p_organisation_id: orgId });
-      const arrearsRows = arrears || [];
-      const arrearsAmount = arrearsRows.reduce((s,a) => s + Number(a.overdue_amount), 0);
-
-      const cards = [
-        { label: 'Pending Approval', value: pending.length, sub: `KES ${money(pending.reduce((s,l)=>s+Number(l.principal),0))} requested`, onclick: "goToLoansFiltered(['draft','pending_approval'])" },
-        { label: 'Awaiting Disbursement', value: approved.length, sub: `KES ${money(approvedRemaining)} remaining`, onclick: "goToLoansFiltered(['approved'])" },
-        { label: 'Active Loans', value: active.length, sub: `KES ${money(outstanding)} outstanding`, onclick: "goToLoansFiltered(['active','disbursed'])" },
-        { label: 'Closed Loans', value: closed.length, sub: `KES ${money(totalDisbursed)} total disbursed`, onclick: "goToLoansFiltered(['closed'])" },
-        { label: 'In Arrears', value: arrearsRows.length, sub: `KES ${money(arrearsAmount)} overdue`, alert: arrearsRows.length > 0, onclick: "switchTab('arrears')" },
-      ];
-
-      statsEl.innerHTML = cards.map(c => `
-        <div onclick="${c.onclick}" style="cursor:pointer;background:${c.alert ? '#FDECEC' : '#F3EBD8'};border-radius:6px;padding:16px" onmouseover="this.style.opacity=0.85" onmouseout="this.style.opacity=1">
-          <div style="font-size:28px;font-weight:700;color:${c.alert ? '#b91c1c' : 'inherit'}">${c.value}</div>
-          <div style="font-size:13px;font-weight:600;margin-top:4px">${c.label}</div>
-          <div style="font-size:12px;color:var(--color-muted);margin-top:2px">${c.sub}</div>
-        </div>`).join('');
-    }
-
-    async function loadMembers() {
-      const { data } = await supabaseClient.from("members")
-        .select("id, member_number, full_name").eq("organisation_id", orgId).eq("status","active").order("full_name");
-      document.getElementById("a-member").innerHTML =
-        (data||[]).map(m => `<option value="${m.id}">${m.member_number} — ${m.full_name}</option>`).join("");
-    }
-
-    async function loadAccounts() {
-      // Payment accounts (leaf accounts under Bank and Cash control)
-      const { data: pay, error } = await supabaseClient.rpc("fn_payment_accounts", { p_organisation_id: orgId });
-      cashAccounts = pay || [];
-
-      // All accounts, for the loan product's receivable / interest income pickers
-      const { data: all } = await supabaseClient.from("chart_of_accounts")
-        .select("id, code, name, account_type, is_control").eq("organisation_id", orgId)
-        .eq("is_active", true).order("code");
-      const postable = (all||[]).filter(a => !a.is_control);
-      if (!cashAccounts.length) {
-        cashAccounts = postable.filter(a => a.account_type === "asset" && a.code >= "1000" && a.code <= "1099");
-      }
-      const opts = postable.map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join("");
-      document.getElementById("pr-recv").innerHTML = opts;
-      document.getElementById("pr-int").innerHTML = opts;
-    }
-
-    async function loadProducts() {
-      const { data } = await supabaseClient.from("loan_products")
-        .select("id, name, savings_multiplier, interest_method, annual_interest_rate")
-        .eq("organisation_id", orgId).eq("active", true).order("name");
-      products = data || [];
-      document.getElementById("product-rows").innerHTML = products.length
-        ? products.map(p => `<tr><td>${p.name}</td><td class="num">${p.savings_multiplier}</td><td>${p.interest_method}</td><td class="num">${p.annual_interest_rate}</td></tr>`).join("")
-        : `<tr><td colspan="4" class="empty">No products yet — add one below.</td></tr>`;
-      document.getElementById("a-product").innerHTML =
-        products.map(p => `<option value="${p.id}">${p.name}</option>`).join("");
-      checkEligibility();
-    }
-
-    async function checkEligibility() {
-      const memberId = document.getElementById("a-member").value;
-      const productId = document.getElementById("a-product").value;
-      const box = document.getElementById("elig-box");
-      if (!memberId || !productId) { box.style.display = "none"; return; }
-      const { data, error } = await supabaseClient.rpc("fn_loan_eligibility", {
-        p_member_id: memberId, p_product_id: productId,
-      });
-      if (error) { box.style.display = "none"; return; }
-      box.style.display = "block";
-      box.innerHTML = `Savings: <strong>KES ${money(data.savings)}</strong> &times; ${data.savings_multiplier}
-        &nbsp;|&nbsp; Existing outstanding: KES ${money(data.existing_outstanding)}
-        &nbsp;|&nbsp; <strong>Maximum eligible: KES ${money(data.max_eligible)}</strong>`;
-    }
-
-    async function createApplication() {
-      const errorEl = document.getElementById("app-error");
-      const successEl = document.getElementById("app-success");
-      errorEl.style.display="none"; successEl.style.display="none";
-      const productId = document.getElementById("a-product").value;
-      const prod = products.find(p => p.id === productId);
-      const payload = {
-        organisation_id: orgId,
-        member_id: document.getElementById("a-member").value,
-        product_id: productId,
-        principal: document.getElementById("a-principal").value,
-        term_months: document.getElementById("a-term").value,
-        interest_method: prod.interest_method,
-        annual_interest_rate: prod.annual_interest_rate,
-        status: "pending_approval",
-      };
-      if (!payload.principal || Number(payload.principal) <= 0) { showError(errorEl, "Enter a principal amount."); return; }
-      const { error } = await supabaseClient.from("loans").insert(payload);
-      if (error) { showError(errorEl, error.message); return; }
-      successEl.textContent = "Application created. Add guarantors, then approve it from the Loans List tab.";
-      successEl.style.display = "block";
-      document.getElementById("a-principal").value = "";
-      loadLoans();
-      loadDashboard();
-    }
-
-    let currentLoanFilter = null; // array of loan statuses, or null for all
+    let currentLoanFilter = null;
 
     const LOAN_FILTER_LABELS = {
-      draft: 'Pending Approval', pending_approval: 'Pending Approval',
-      approved: 'Awaiting Disbursement',
-      active: 'Active', disbursed: 'Active',
-      closed: 'Closed', rejected: 'Declined',
+      draft:'Pending Approval', pending_approval:'Pending Approval',
+      approved:'Awaiting Disbursement', active:'Active', disbursed:'Active',
+      closed:'Closed', rejected:'Declined',
     };
 
-    const STATUS_FILTER_GROUPS = {
-      pending: ['draft','pending_approval'],
-      approved: ['approved'],
-      active: ['active','disbursed'],
-      closed: ['closed'],
-      rejected: ['rejected'],
-    };
-
-    function onStatusFilterChange() {
-      const key = document.getElementById("loan-status-filter").value;
-      currentLoanFilter = (key === "all") ? null : STATUS_FILTER_GROUPS[key];
-      loadLoans();
+    // ── TABS ──────────────────────────────────────────────────────────────
+    function switchTab(name) {
+      ['dashboard','application','loans','arrears','products'].forEach(t => {
+        document.getElementById('tab-'+t).style.display = t===name ? 'block' : 'none';
+        const btn = document.getElementById('lt-'+t);
+        btn.classList.toggle('active', t===name);
+      });
     }
 
+    // ── PERIOD FILTER ─────────────────────────────────────────────────────
     function onPeriodTypeChange() {
-      const type = document.getElementById("loan-period-type").value;
-      document.getElementById("loan-period-month-wrap").style.display = type === "month" ? "block" : "none";
-      document.getElementById("loan-period-quarter-wrap").style.display = type === "quarter" ? "block" : "none";
-      document.getElementById("loan-period-quarter-year-wrap").style.display = type === "quarter" ? "block" : "none";
-      document.getElementById("loan-period-year-wrap").style.display = type === "year" ? "block" : "none";
-      document.getElementById("loan-period-custom-from-wrap").style.display = type === "custom" ? "block" : "none";
-      document.getElementById("loan-period-custom-to-wrap").style.display = type === "custom" ? "block" : "none";
-    }
-
-    function addOneDay(dateStr) {
-      const d = new Date(dateStr + "T00:00:00");
-      d.setDate(d.getDate() + 1);
-      return d.toISOString().slice(0, 10);
+      const type = document.getElementById('loan-period-type').value;
+      document.getElementById('loan-period-month-wrap').style.display        = type==='month'   ?'block':'none';
+      document.getElementById('loan-period-quarter-wrap').style.display      = type==='quarter' ?'block':'none';
+      document.getElementById('loan-period-quarter-year-wrap').style.display = type==='quarter' ?'block':'none';
+      document.getElementById('loan-period-year-wrap').style.display         = type==='year'    ?'block':'none';
     }
 
     function getLoanDateRange() {
-      const type = document.getElementById("loan-period-type").value;
-      if (type === "month") {
-        const val = document.getElementById("loan-period-month").value; // "YYYY-MM"
+      const type = document.getElementById('loan-period-type').value;
+      if (type==='month') {
+        const val = document.getElementById('loan-period-month').value;
         if (!val) return null;
-        const [y, m] = val.split("-").map(Number);
-        const from = `${y}-${String(m).padStart(2,"0")}-01`;
-        const to = m === 12 ? `${y+1}-01-01` : `${y}-${String(m+1).padStart(2,"0")}-01`;
-        return { from, to, label: new Date(y, m-1).toLocaleString('default',{month:'long',year:'numeric'}) };
+        const [y,m] = val.split('-').map(Number);
+        const from = `${y}-${String(m).padStart(2,'0')}-01`;
+        const to = m===12 ? `${y+1}-01-01` : `${y}-${String(m+1).padStart(2,'0')}-01`;
+        return { from, to, label: new Date(y,m-1).toLocaleString('default',{month:'long',year:'numeric'}) };
       }
-      if (type === "quarter") {
-        const q = Number(document.getElementById("loan-period-quarter").value);
-        const y = Number(document.getElementById("loan-period-quarter-year").value);
+      if (type==='quarter') {
+        const q = Number(document.getElementById('loan-period-quarter').value);
+        const y = Number(document.getElementById('loan-period-quarter-year').value);
         if (!y) return null;
-        const startMonth = (q-1)*3 + 1;
-        const endMonth = startMonth + 3;
-        const from = `${y}-${String(startMonth).padStart(2,"0")}-01`;
-        const to = endMonth > 12 ? `${y+1}-01-01` : `${y}-${String(endMonth).padStart(2,"0")}-01`;
-        return { from, to, label: `Q${q} ${y}` };
+        const startMonth = (q-1)*3+1;
+        const endMonth = startMonth+3;
+        const from = `${y}-${String(startMonth).padStart(2,'0')}-01`;
+        const to = endMonth>12 ? `${y+1}-01-01` : `${y}-${String(endMonth).padStart(2,'0')}-01`;
+        return { from, to, label:`Q${q} ${y}` };
       }
-      if (type === "year") {
-        const y = Number(document.getElementById("loan-period-year").value);
+      if (type==='year') {
+        const y = Number(document.getElementById('loan-period-year').value);
         if (!y) return null;
-        return { from: `${y}-01-01`, to: `${y+1}-01-01`, label: `${y}` };
-      }
-      if (type === "custom") {
-        const from = document.getElementById("loan-period-custom-from").value;
-        const to = document.getElementById("loan-period-custom-to").value;
-        if (!from || !to) return null;
-        return { from, to: addOneDay(to), label: `${from} to ${to}` };
+        return { from:`${y}-01-01`, to:`${y+1}-01-01`, label:`${y}` };
       }
       return null;
     }
 
     function goToLoansFiltered(statuses) {
       currentLoanFilter = statuses;
-      const key = Object.keys(STATUS_FILTER_GROUPS)
-        .find(k => JSON.stringify(STATUS_FILTER_GROUPS[k]) === JSON.stringify(statuses));
-      document.getElementById("loan-status-filter").value = key || "all";
       switchTab('loans');
       loadLoans();
     }
 
     function clearLoanFilter() {
       currentLoanFilter = null;
-      document.getElementById("loan-status-filter").value = "all";
-      document.getElementById("loan-period-type").value = "all";
+      document.getElementById('loan-period-type').value = 'all';
       onPeriodTypeChange();
       loadLoans();
     }
 
+    // ── DASHBOARD ─────────────────────────────────────────────────────────
+    async function loadDashboard() {
+      const el = document.getElementById('dash-stats');
+      el.innerHTML = 'Loading…';
+      const { data: rows } = await supabaseClient.from('loans')
+        .select('id,principal,status').eq('organisation_id', orgId);
+      const all = rows||[];
+      const pending  = all.filter(l=>['draft','pending_approval'].includes(l.status));
+      const approved = all.filter(l=>l.status==='approved');
+      const active   = all.filter(l=>['active','disbursed'].includes(l.status));
+      const closed   = all.filter(l=>l.status==='closed');
+      const sum = arr => arr.reduce((s,l)=>s+Number(l.principal),0);
+
+      const { data: sched } = await supabaseClient.from('loan_schedule')
+        .select('principal_due,principal_paid,interest_due,interest_paid')
+        .eq('organisation_id', orgId).neq('status','paid');
+      const outstanding = (sched||[]).reduce((s,r)=>
+        s+(Number(r.principal_due)-Number(r.principal_paid))+(Number(r.interest_due)-Number(r.interest_paid)),0);
+
+      const { data: arrears } = await supabaseClient.rpc('fn_loan_arrears',{p_organisation_id:orgId});
+      const arrearsRows = arrears||[];
+      const arrearsAmt = arrearsRows.reduce((s,a)=>s+Number(a.overdue_amount),0);
+
+      const cards = [
+        { label:'Pending Approval',       value:pending.length,  sub:`KES ${money(sum(pending))} requested`,    bg:'#F3EBD8', onclick:"goToLoansFiltered(['draft','pending_approval'])" },
+        { label:'Awaiting Disbursement',  value:approved.length, sub:`KES ${money(sum(approved))} approved`,    bg:'#F3EBD8', onclick:"goToLoansFiltered(['approved'])" },
+        { label:'Active Loans',           value:active.length,   sub:`KES ${money(outstanding)} outstanding`,   bg:'#F3EBD8', onclick:"goToLoansFiltered(['active','disbursed'])" },
+        { label:'Closed Loans',           value:closed.length,   sub:`KES ${money(sum(closed))} disbursed`,     bg:'#F3EBD8', onclick:"goToLoansFiltered(['closed'])" },
+        { label:'In Arrears',             value:arrearsRows.length, sub:`KES ${money(arrearsAmt)} overdue`,     bg: arrearsRows.length?'#FDECEC':'#F3EBD8', alert:arrearsRows.length>0, onclick:"switchTab('arrears')" },
+      ];
+
+      el.innerHTML = cards.map(c=>`
+        <div class="kpi-card" style="background:${c.bg}" onclick="${c.onclick}">
+          <div class="kpi-num" style="color:${c.alert?'#b91c1c':'inherit'}">${c.value}</div>
+          <div class="kpi-label">${c.label}</div>
+          <div class="kpi-sub">${c.sub}</div>
+        </div>`).join('');
+    }
+
+    // ── LOAD REFS ─────────────────────────────────────────────────────────
+    async function loadMembers() {
+      const {data} = await supabaseClient.from('members')
+        .select('id,member_number,full_name').eq('organisation_id',orgId).eq('status','active').order('full_name');
+      document.getElementById('a-member').innerHTML =
+        (data||[]).map(m=>`<option value="${m.id}">${m.member_number} — ${m.full_name}</option>`).join('');
+    }
+
+    async function loadAccounts() {
+      const {data:pay} = await supabaseClient.rpc('fn_payment_accounts',{p_organisation_id:orgId});
+      cashAccounts = pay||[];
+      const {data:all} = await supabaseClient.from('chart_of_accounts')
+        .select('id,code,name,account_type,is_control').eq('organisation_id',orgId).eq('is_active',true).order('code');
+      const postable = (all||[]).filter(a=>!a.is_control);
+      const opts = postable.map(a=>`<option value="${a.id}">${a.code} — ${a.name}</option>`).join('');
+      document.getElementById('pr-recv').innerHTML = opts;
+      document.getElementById('pr-int').innerHTML = opts;
+    }
+
+    async function loadProducts() {
+      const {data} = await supabaseClient.from('loan_products')
+        .select('id,name,savings_multiplier,interest_method,annual_interest_rate')
+        .eq('organisation_id',orgId).eq('active',true).order('name');
+      products = data||[];
+      document.getElementById('product-rows').innerHTML = products.length
+        ? products.map(p=>`<tr><td>${p.name}</td><td class="num">${p.savings_multiplier}</td><td>${p.interest_method}</td><td class="num">${p.annual_interest_rate}</td></tr>`).join('')
+        : `<tr><td colspan="4" class="empty">No products yet.</td></tr>`;
+      document.getElementById('a-product').innerHTML =
+        products.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+      checkEligibility();
+    }
+
+    async function checkEligibility() {
+      const memberId = document.getElementById('a-member').value;
+      const productId = document.getElementById('a-product').value;
+      const box = document.getElementById('elig-box');
+      if (!memberId||!productId) { box.style.display='none'; return; }
+      const {data,error} = await supabaseClient.rpc('fn_loan_eligibility',{p_member_id:memberId,p_product_id:productId});
+      if (error) { box.style.display='none'; return; }
+      box.style.display='block';
+      box.innerHTML = `Savings: <strong>KES ${money(data.savings)}</strong> × ${data.savings_multiplier}
+        &nbsp;|&nbsp; Existing outstanding: KES ${money(data.existing_outstanding)}
+        &nbsp;|&nbsp; <strong style="color:var(--color-success)">Max eligible: KES ${money(data.max_eligible)}</strong>`;
+    }
+
+    // ── APPLICATIONS ──────────────────────────────────────────────────────
+    async function createApplication() {
+      const errorEl = document.getElementById('app-error');
+      const successEl = document.getElementById('app-success');
+      errorEl.style.display='none'; successEl.style.display='none';
+      const productId = document.getElementById('a-product').value;
+      const prod = products.find(p=>p.id===productId);
+      const payload = {
+        organisation_id:orgId,
+        member_id: document.getElementById('a-member').value,
+        product_id: productId,
+        principal: document.getElementById('a-principal').value,
+        term_months: document.getElementById('a-term').value,
+        interest_method: prod.interest_method,
+        annual_interest_rate: prod.annual_interest_rate,
+        status:'pending_approval',
+      };
+      if (!payload.principal||Number(payload.principal)<=0) { showError(errorEl,'Enter a principal amount.'); return; }
+      const {error} = await supabaseClient.from('loans').insert(payload);
+      if (error) { showError(errorEl,error.message); return; }
+      successEl.textContent='Application created. Add guarantors from the Loans List tab, then approve.';
+      successEl.style.display='block';
+      document.getElementById('a-principal').value='';
+      loadLoans(); loadDashboard();
+    }
+
+    // ── LOANS LIST ────────────────────────────────────────────────────────
     async function loadLoans() {
-      let query = supabaseClient.from("loans")
-        .select("id, principal, term_months, status, application_date, members(full_name), loan_products(name)")
-        .eq("organisation_id", orgId);
-
-      if (currentLoanFilter) query = query.in("status", currentLoanFilter);
-
+      let query = supabaseClient.from('loans')
+        .select('id,principal,term_months,status,application_date,members(full_name),loan_products(name)')
+        .eq('organisation_id',orgId);
+      if (currentLoanFilter) query = query.in('status',currentLoanFilter);
       const range = getLoanDateRange();
-      if (range) query = query.gte("application_date", range.from).lt("application_date", range.to);
+      if (range) query = query.gte('application_date',range.from).lt('application_date',range.to);
+      const sortAsc = document.getElementById('loan-sort-order')?.value==='asc';
+      query = query.order('application_date',{ascending:sortAsc});
+      const {data,error} = await query;
 
-      const sortAsc = document.getElementById("loan-sort-order")?.value === "asc";
-      query = query.order("application_date", { ascending: sortAsc });
-
-      const { data, error } = await query;
-
-      const banner = document.getElementById("loan-filter-banner");
-      const parts = [];
-      if (currentLoanFilter) parts.push([...new Set(currentLoanFilter.map(s => LOAN_FILTER_LABELS[s] || s))].join(', '));
+      const banner = document.getElementById('loan-filter-banner');
+      const parts=[];
+      if (currentLoanFilter) parts.push([...new Set(currentLoanFilter.map(s=>LOAN_FILTER_LABELS[s]||s))].join(', '));
       if (range) parts.push(range.label);
       if (parts.length) {
-        banner.style.display = "block";
-        banner.innerHTML = `Showing: <strong>${parts.join(' · ')}</strong> &nbsp; <a href="#" onclick="clearLoanFilter(); return false;">Clear filter</a>`;
-      } else {
-        banner.style.display = "none";
-      }
+        banner.style.display='block';
+        banner.innerHTML=`Showing: <strong>${parts.join(' · ')}</strong> &nbsp; <a href="#" onclick="clearLoanFilter();return false;">Clear filter</a>`;
+      } else { banner.style.display='none'; }
 
-      const tbody = document.getElementById("loan-rows");
-      if (error) { tbody.innerHTML = `<tr><td colspan="7" class="error">${error.message}</td></tr>`; return; }
-      if (!data.length) { tbody.innerHTML = `<tr><td colspan="7" class="empty">No loans match this filter.</td></tr>`; return; }
-      tbody.innerHTML = data.map(l => `
+      const tbody = document.getElementById('loan-rows');
+      if (error) { tbody.innerHTML=`<tr><td colspan="7" class="error">${error.message}</td></tr>`; return; }
+      if (!data.length) { tbody.innerHTML=`<tr><td colspan="7" class="empty">No loans match this filter.</td></tr>`; return; }
+      tbody.innerHTML = data.map(l=>`
         <tr>
           <td>${l.members.full_name}</td>
           <td>${l.loan_products.name}</td>
           <td class="num">${money(l.principal)}</td>
           <td>${l.term_months}m</td>
-          <td>${l.application_date}</td>
+          <td>${l.application_date||'—'}</td>
           <td><span class="status ${l.status==='closed'?'paid':l.status==='active'||l.status==='disbursed'?'partial':'unpaid'}">${l.status}</span></td>
           <td><button class="btn" onclick="openLoan('${l.id}')">Open</button></td>
-        </tr>`).join("");
+        </tr>`).join('');
     }
 
+    // ── LOAN DETAIL ───────────────────────────────────────────────────────
     async function openLoan(loanId) {
-      const card = document.getElementById("detail-card");
-      const body = document.getElementById("detail-body");
-      card.style.display = "block";
-      body.innerHTML = "Loading…";
-      card.scrollIntoView({ behavior: "smooth" });
+      const card = document.getElementById('detail-card');
+      const body = document.getElementById('detail-body');
+      document.getElementById('detail-error').style.display='none';
+      card.style.display='block';
+      body.innerHTML='Loading…';
+      card.scrollIntoView({behavior:'smooth'});
 
-      const { data: loan } = await supabaseClient.from("loans")
-        .select("*, members(full_name), loan_products(name, interest_method, annual_interest_rate)")
-        .eq("id", loanId).single();
-
-      const { data: guarantors } = await supabaseClient.from("loan_guarantors")
-        .select("id, amount_guaranteed, members:guarantor_member_id(full_name)").eq("loan_id", loanId);
-
-      const { data: schedule } = await supabaseClient.from("loan_schedule")
-        .select("installment_no, due_date, principal_due, interest_due, total_due, principal_paid, interest_paid, status")
-        .eq("loan_id", loanId).order("installment_no");
-
-      const { data: members } = await supabaseClient.from("members")
-        .select("id, member_number, full_name").eq("organisation_id", orgId).eq("status","active").order("full_name");
-
-      const { data: disbursements } = await supabaseClient.from("loan_disbursements")
-        .select("amount, disbursed_at").eq("loan_id", loanId).order("disbursed_at");
+      const [{data:loan},{data:guarantors},{data:schedule},{data:members}] = await Promise.all([
+        supabaseClient.from('loans').select('*,members(full_name),loan_products(name,interest_method,annual_interest_rate)').eq('id',loanId).single(),
+        supabaseClient.from('loan_guarantors').select('id,amount_guaranteed,amount_released,members:guarantor_member_id(full_name)').eq('loan_id',loanId),
+        supabaseClient.from('loan_schedule').select('installment_no,due_date,principal_due,interest_due,total_due,principal_paid,interest_paid,status').eq('loan_id',loanId).order('installment_no'),
+        supabaseClient.from('members').select('id,member_number,full_name').eq('organisation_id',orgId).eq('status','active').order('full_name'),
+      ]);
 
       const totalGuaranteed = (guarantors||[]).reduce((s,g)=>s+Number(g.amount_guaranteed),0);
-      const disbursedSoFar = (disbursements||[]).reduce((s,d)=>s+Number(d.amount),0);
-      const remainingToDisburse = Number(loan.principal) - disbursedSoFar;
+      const totalReleased   = (guarantors||[]).reduce((s,g)=>s+Number(g.amount_released||0),0);
+      const cashOpts = cashAccounts.map(a=>`<option value="${a.id}">${a.code} — ${a.name}</option>`).join('');
 
-      let html = `<p><strong>${loan.members.full_name}</strong> — ${loan.loan_products.name} — KES ${money(loan.principal)} over ${loan.term_months} months (${loan.status})</p>`;
+      let html = `<p><strong>${loan.members.full_name}</strong> — ${loan.loan_products.name} — KES ${money(loan.principal)} / ${loan.term_months}m (<strong>${loan.status}</strong>)</p>`;
+      if (loan.decision_remarks) html += `<p style="color:var(--color-muted);font-size:13px">Remarks: ${loan.decision_remarks}</p>`;
+      if (loan.requested_amount && loan.requested_amount !== loan.principal) {
+        html += `<p style="font-size:13px;color:var(--color-muted)">Originally requested: KES ${money(loan.requested_amount)}</p>`;
+      }
 
       // Guarantors
-      html += `<h3>Guarantors (total KES ${money(totalGuaranteed)} of ${money(loan.principal)} required)</h3>`;
-      html += `<table><tbody>` + ((guarantors||[]).length
-        ? guarantors.map(g => `<tr><td>${g.members.full_name}</td><td class="num">${money(g.amount_guaranteed)}</td></tr>`).join("")
-        : `<tr><td class="empty">None yet.</td></tr>`) + `</tbody></table>`;
+      html += `<h3 style="margin-top:16px">Guarantors — KES ${money(totalGuaranteed)} guaranteed, KES ${money(totalReleased)} released</h3>`;
+      html += `<table><tbody>`;
+      if ((guarantors||[]).length) {
+        html += guarantors.map(g=>`<tr>
+          <td>${g.members.full_name}</td>
+          <td class="num">Guaranteed: KES ${money(g.amount_guaranteed)}</td>
+          <td class="num">Released: KES ${money(g.amount_released||0)}</td>
+          <td class="num" style="color:var(--color-accent)">Net: KES ${money(Number(g.amount_guaranteed)-Number(g.amount_released||0))}</td>
+        </tr>`).join('');
+      } else {
+        html += `<tr><td class="empty">No guarantors yet.</td></tr>`;
+      }
+      html += `</tbody></table>`;
 
-      if (loan.status === 'pending_approval' || loan.status === 'draft') {
+      // Add guarantor form (only for pending/draft)
+      if (['pending_approval','draft'].includes(loan.status)) {
         html += `<div style="margin-top:16px">
-          <h3 style="margin-bottom:8px">Add guarantor</h3>
+          <h3>Add guarantor</h3>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
-            <div class="field" style="margin-bottom:0;min-width:200px">
-              <label>Guarantor</label>
+            <div class="field" style="margin-bottom:0;min-width:200px"><label>Guarantor</label>
               <select id="g-member" onchange="showGuarantorCapacity('${loanId}')">
-                ${(members||[]).map(m=>`<option value="${m.id}">${m.full_name}</option>`).join("")}
-              </select>
-            </div>
-            <div class="field" style="margin-bottom:0;min-width:160px">
-              <label>Amount to guarantee (KES)</label>
-              <input id="g-amount" type="number" step="0.01">
-            </div>
+                ${(members||[]).map(m=>`<option value="${m.id}">${m.full_name}</option>`).join('')}
+              </select></div>
+            <div class="field" style="margin-bottom:0;min-width:160px"><label>Amount (KES)</label>
+              <input id="g-amount" type="number" step="0.01"></div>
             <button class="btn" onclick="addGuarantor('${loanId}')">Add</button>
           </div>
           <div id="g-capacity" style="margin-top:8px;font-size:13px"></div>
         </div>`;
       }
 
-      // Schedule
+      // Repayment schedule
       if ((schedule||[]).length) {
         html += `<h3 style="margin-top:16px">Repayment schedule</h3>
           <table><thead><tr><th>#</th><th>Due</th><th class="num">Principal</th><th class="num">Interest</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>`;
-        html += schedule.map(s => `<tr>
+        html += (schedule||[]).map(s=>`<tr>
           <td>${s.installment_no}</td><td>${s.due_date}</td>
           <td class="num">${money(s.principal_due)}</td><td class="num">${money(s.interest_due)}</td>
           <td class="num">${money(s.total_due)}</td>
           <td><span class="status ${s.status==='paid'?'paid':s.status==='partial'?'partial':'unpaid'}">${s.status}</span></td>
-        </tr>`).join("");
+        </tr>`).join('');
         html += `</tbody></table>`;
       }
 
-      const cashOpts = cashAccounts.map(a=>`<option value="${a.id}">${a.code} — ${a.name}</option>`).join("");
-
       // Actions
-      if (loan.status === 'pending_approval' || loan.status === 'draft') {
+      if (['pending_approval','draft'].includes(loan.status)) {
         html += `<div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
           <div class="field" style="margin-bottom:0;max-width:160px"><label>Approved amount</label>
             <input id="approve-amount" type="number" step="0.01" value="${loan.principal}"></div>
-          <div class="field" style="margin-bottom:0;min-width:220px;flex:1"><label>Remarks</label>
-            <input id="approve-remarks" placeholder="Required if amount is reduced or declining"></div>
+          <div class="field" style="margin-bottom:0;flex:1;min-width:200px"><label>Remarks</label>
+            <input id="approve-remarks" placeholder="Required if reducing amount or declining"></div>
           <button class="btn accent" onclick="approveLoan('${loanId}')">Approve</button>
           <button class="btn" style="background:#b91c1c;color:#fff" onclick="declineLoan('${loanId}')">Decline</button>
         </div>`;
-      } else if (loan.status === 'approved') {
-        html += `<div style="margin-top:16px">
-          <p style="font-size:13px;color:var(--color-muted)">
-            Approved: <strong>KES ${money(loan.principal)}</strong>
-            &nbsp;|&nbsp; Disbursed so far: <strong>KES ${money(disbursedSoFar)}</strong>
-            &nbsp;|&nbsp; Remaining: <strong>KES ${money(remainingToDisburse)}</strong>
-          </p>`;
-        if ((disbursements||[]).length) {
-          html += `<table style="margin-bottom:12px"><thead><tr><th>Date</th><th class="num">Amount</th></tr></thead><tbody>` +
-            disbursements.map(d => `<tr><td>${new Date(d.disbursed_at).toLocaleDateString()}</td><td class="num">${money(d.amount)}</td></tr>`).join("") +
-            `</tbody></table>`;
-        }
-        html += `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
-          <div class="field" style="margin-bottom:0;max-width:160px"><label>Disburse amount</label>
-            <input id="disburse-amount" type="number" step="0.01" value="${remainingToDisburse}"></div>
-          <div class="field" style="margin-bottom:0;max-width:280px"><label>Disburse from account</label><select id="disburse-acct">${cashOpts}</select></div>
-          <button class="btn accent" onclick="disburseLoan('${loanId}')">Disburse</button>`;
-        if (disbursedSoFar === 0) {
-          html += `
-          <div class="field" style="margin-bottom:0;min-width:220px;flex:1"><label>Remarks (only needed to decline)</label>
+      } else if (loan.status==='approved') {
+        html += `<div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <div class="field" style="margin-bottom:0;max-width:160px"><label>Disbursed amount</label>
+            <input id="disburse-amount" type="number" step="0.01" value="${loan.principal}"></div>
+          <div class="field" style="margin-bottom:0;max-width:240px"><label>From account</label>
+            <select id="disburse-acct">${cashOpts}</select></div>
+          <button class="btn accent" onclick="disburseLoan('${loanId}')">Disburse</button>
+          <div class="field" style="margin-bottom:0;flex:1;min-width:200px"><label>Remarks (to decline)</label>
             <input id="approve-remarks" placeholder="Reason for declining"></div>
-          <button class="btn" style="background:#b91c1c;color:#fff" onclick="declineLoan('${loanId}')">Decline</button>`;
-        }
-        html += `</div></div>`;
-      } else if (loan.status === 'rejected') {
-        html += `<p style="margin-top:16px;color:#b91c1c">Declined${loan.decision_remarks ? ': ' + loan.decision_remarks : ''}</p>`;
-      } else if (loan.status === 'active' || loan.status === 'disbursed') {
-        html += `<p style="margin-top:16px;color:var(--color-muted);font-size:13px">Repayments are recorded from the Payments page.</p>`;
+          <button class="btn" style="background:#b91c1c;color:#fff" onclick="declineLoan('${loanId}')">Decline</button>
+        </div>`;
+      } else if (loan.status==='rejected') {
+        html += `<p style="margin-top:12px;color:#b91c1c">Declined${loan.decision_remarks?': '+loan.decision_remarks:''}</p>`;
+      } else if (['active','disbursed'].includes(loan.status)) {
+        html += `<p style="margin-top:12px;color:var(--color-muted);font-size:13px">Repayments are recorded from the Payments page.</p>`;
       }
 
-      html += `<p id="detail-error" class="error" style="display:none"></p>`;
       body.innerHTML = html;
     }
 
+    // ── GUARANTOR CAPACITY ────────────────────────────────────────────────
     async function showGuarantorCapacity(loanId) {
-      const memberId = document.getElementById("g-member").value;
-      const capDiv = document.getElementById("g-capacity");
-      if (!memberId) { capDiv.textContent = ''; return; }
-      capDiv.textContent = 'Checking capacity…';
-      const { data, error } = await supabaseClient.rpc("fn_guarantor_capacity", {
-        p_member_id: memberId, p_exclude_loan_id: loanId,
-      });
-      if (error) { capDiv.textContent = ''; return; }
-      const available = Number(data.available);
-      const committed = Number(data.committed);
-      const deposits  = Number(data.total_deposits);
-      capDiv.innerHTML = `Deposits: <strong>KES ${money(deposits)}</strong>
-        &nbsp;|&nbsp; Committed: <strong>KES ${money(committed)}</strong>
-        &nbsp;|&nbsp; <span style="color:${available>0?'var(--color-success)':'var(--color-alert)'}">
-        Available: <strong>KES ${money(available)}</strong></span>`;
-      const amtInput = document.getElementById("g-amount");
+      const memberId = document.getElementById('g-member').value;
+      const capDiv = document.getElementById('g-capacity');
+      if (!memberId) { capDiv.textContent=''; return; }
+      capDiv.textContent='Checking…';
+      const {data,error} = await supabaseClient.rpc('fn_guarantor_capacity',{p_member_id:memberId,p_exclude_loan_id:loanId});
+      if (error) { capDiv.textContent=''; return; }
+      const available=Number(data.available), committed=Number(data.committed), deposits=Number(data.total_deposits);
+      capDiv.innerHTML=`Deposits: <strong>KES ${money(deposits)}</strong> &nbsp;|&nbsp; Committed: <strong>KES ${money(committed)}</strong>
+        &nbsp;|&nbsp; <span style="color:${available>0?'var(--color-success)':'var(--color-alert)'}">Available: <strong>KES ${money(available)}</strong></span>`;
+      const amtInput = document.getElementById('g-amount');
       if (!amtInput.value) amtInput.value = available.toFixed(2);
     }
 
     async function addGuarantor(loanId) {
-      const errorEl = document.getElementById("detail-error");
-      const memberId = document.getElementById("g-member").value;
-      const amount = Number(document.getElementById("g-amount").value);
+      const errorEl = document.getElementById('detail-error');
+      const memberId = document.getElementById('g-member').value;
+      const amount = Number(document.getElementById('g-amount').value);
 
-      const { data: loanRow } = await supabaseClient.from("loans")
-        .select("principal").eq("id", loanId).single();
-      const { data: existingGuarantors } = await supabaseClient.from("loan_guarantors")
-        .select("amount_guaranteed").eq("loan_id", loanId);
-      const alreadyGuaranteed = (existingGuarantors||[]).reduce((s,g)=>s+Number(g.amount_guaranteed),0);
+      // Check against loan principal first
+      const {data:loanRow} = await supabaseClient.from('loans').select('principal').eq('id',loanId).single();
+      const {data:existing} = await supabaseClient.from('loan_guarantors').select('amount_guaranteed').eq('loan_id',loanId);
+      const alreadyGuaranteed = (existing||[]).reduce((s,g)=>s+Number(g.amount_guaranteed),0);
       const roomLeft = Number(loanRow.principal) - alreadyGuaranteed;
       if (amount > roomLeft) {
-        showError(errorEl, `This would push total guarantees above the loan principal of KES ${money(Number(loanRow.principal))}. At most KES ${money(roomLeft)} more can be guaranteed.`);
+        showError(errorEl,`Total guarantees cannot exceed KES ${money(Number(loanRow.principal))}. At most KES ${money(roomLeft)} more can be guaranteed.`);
         return;
       }
 
-      const { data: cap } = await supabaseClient.rpc("fn_guarantor_capacity", {
-        p_member_id: memberId, p_exclude_loan_id: loanId,
-      });
+      // Check member's personal capacity
+      const {data:cap} = await supabaseClient.rpc('fn_guarantor_capacity',{p_member_id:memberId,p_exclude_loan_id:loanId});
       if (cap && amount > Number(cap.available)) {
-        showError(errorEl, `This member can only guarantee KES ${money(Number(cap.available))} (KES ${money(Number(cap.total_deposits))} deposits less KES ${money(Number(cap.committed))} already committed to other loans).`);
+        showError(errorEl,`This member can only guarantee KES ${money(Number(cap.available))} (deposits KES ${money(Number(cap.total_deposits))} less KES ${money(Number(cap.committed))} already committed).`);
         return;
       }
-      const { error } = await supabaseClient.from("loan_guarantors").insert({
-        loan_id: loanId, organisation_id: orgId,
-        guarantor_member_id: memberId,
-        amount_guaranteed: amount,
+
+      const {error} = await supabaseClient.from('loan_guarantors').insert({
+        loan_id:loanId, organisation_id:orgId, guarantor_member_id:memberId, amount_guaranteed:amount,
       });
-      if (error) { showError(errorEl, error.message); return; }
+      if (error) { showError(errorEl,error.message); return; }
       openLoan(loanId);
     }
 
+    // ── APPROVE / DISBURSE / DECLINE ──────────────────────────────────────
     async function approveLoan(loanId) {
-      const errorEl = document.getElementById("detail-error");
-      const approvedAmount = document.getElementById("approve-amount").value;
-      const remarks = document.getElementById("approve-remarks").value || null;
-      if (!confirm("Approve this loan? Guarantor and eligibility checks run now, but no money moves yet.")) return;
-      const { error } = await supabaseClient.rpc("fn_approve_loan", {
-        p_loan_id: loanId,
-        p_approved_amount: approvedAmount || null,
-        p_remarks: remarks,
+      const errorEl = document.getElementById('detail-error');
+      const approvedAmount = document.getElementById('approve-amount').value;
+      const remarks = document.getElementById('approve-remarks').value||null;
+      if (!confirm('Approve this loan? Eligibility and guarantor checks run now. No money moves yet.')) return;
+      const {error} = await supabaseClient.rpc('fn_approve_loan',{
+        p_loan_id:loanId, p_approved_amount:approvedAmount||null, p_remarks:remarks,
       });
-      if (error) { showError(errorEl, error.message); return; }
+      if (error) { showError(errorEl,error.message); return; }
       loadLoans(); loadDashboard(); openLoan(loanId);
     }
 
     async function disburseLoan(loanId) {
-      const errorEl = document.getElementById("detail-error");
-      const amount = document.getElementById("disburse-amount").value;
-      if (!confirm("Disburse this amount? This posts the disbursement journal entry; the repayment schedule builds once the full approved amount has been disbursed.")) return;
-      const { error } = await supabaseClient.rpc("fn_disburse_loan", {
-        p_loan_id: loanId,
-        p_cash_account_id: document.getElementById("disburse-acct").value,
-        p_amount: amount || null,
+      const errorEl = document.getElementById('detail-error');
+      const disbursedAmount = document.getElementById('disburse-amount').value;
+      if (!confirm('Disburse this loan? This posts the disbursement journal entry and builds the repayment schedule.')) return;
+      const {error} = await supabaseClient.rpc('fn_disburse_loan',{
+        p_loan_id:loanId,
+        p_cash_account_id: document.getElementById('disburse-acct').value,
+        p_disbursed_amount: disbursedAmount||null,
       });
-      if (error) { showError(errorEl, error.message); return; }
+      if (error) { showError(errorEl,error.message); return; }
       loadLoans(); loadDashboard(); openLoan(loanId);
     }
 
     async function declineLoan(loanId) {
-      const errorEl = document.getElementById("detail-error");
-      const remarks = document.getElementById("approve-remarks").value;
-      if (!remarks || !remarks.trim()) {
-        showError(errorEl, "Enter a remark explaining why this loan is being declined.");
-        return;
-      }
-      if (!confirm("Decline this loan? This cannot be undone.")) return;
-      const { error } = await supabaseClient.rpc("fn_reject_loan", {
-        p_loan_id: loanId, p_remarks: remarks,
-      });
-      if (error) { showError(errorEl, error.message); return; }
+      const errorEl = document.getElementById('detail-error');
+      const remarks = document.getElementById('approve-remarks').value;
+      if (!remarks||!remarks.trim()) { showError(errorEl,'Enter a remark explaining why this loan is being declined.'); return; }
+      if (!confirm('Decline this loan? This cannot be undone.')) return;
+      const {error} = await supabaseClient.rpc('fn_reject_loan',{p_loan_id:loanId,p_remarks:remarks});
+      if (error) { showError(errorEl,error.message); return; }
       loadLoans(); loadDashboard(); openLoan(loanId);
     }
 
+    // ── LOAN PRODUCTS ─────────────────────────────────────────────────────
     async function createProduct() {
-      const errorEl = document.getElementById("pr-error");
+      const errorEl = document.getElementById('pr-error');
       const payload = {
-        organisation_id: orgId,
-        name: document.getElementById("pr-name").value.trim(),
-        savings_multiplier: document.getElementById("pr-mult").value,
-        interest_method: document.getElementById("pr-method").value,
-        annual_interest_rate: document.getElementById("pr-rate").value,
-        max_term_months: document.getElementById("pr-term").value,
-        savings_category: "share_deposit",
-        loan_receivable_account_id: document.getElementById("pr-recv").value,
-        interest_income_account_id: document.getElementById("pr-int").value,
+        organisation_id:orgId,
+        name: document.getElementById('pr-name').value.trim(),
+        savings_multiplier: document.getElementById('pr-mult').value,
+        interest_method: document.getElementById('pr-method').value,
+        annual_interest_rate: document.getElementById('pr-rate').value,
+        max_term_months: document.getElementById('pr-term').value,
+        savings_category:'share_deposit',
+        loan_receivable_account_id: document.getElementById('pr-recv').value,
+        interest_income_account_id: document.getElementById('pr-int').value,
       };
-      if (!payload.name) { showError(errorEl, "Name is required."); return; }
-      const { error } = await supabaseClient.from("loan_products").insert(payload);
-      if (error) { showError(errorEl, error.message); return; }
+      if (!payload.name) { showError(errorEl,'Name is required.'); return; }
+      const {error} = await supabaseClient.from('loan_products').insert(payload);
+      if (error) { showError(errorEl,error.message); return; }
       loadProducts();
     }
 
+    // ── ARREARS ───────────────────────────────────────────────────────────
     async function loadArrears() {
-      const { data, error } = await supabaseClient.rpc("fn_loan_arrears", { p_organisation_id: orgId });
-      const tbody = document.getElementById("arrears-rows");
-      if (error) { tbody.innerHTML = `<tr><td colspan="5" class="error">${error.message}</td></tr>`; return; }
-      if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="5" class="empty">No loans in arrears.</td></tr>`; return; }
-      tbody.innerHTML = data.map(a => `
-        <tr>
-          <td>${a.member_name}</td>
-          <td>${a.product_name}</td>
-          <td class="num">${money(a.overdue_amount)}</td>
-          <td class="num">${a.days_overdue}</td>
-          <td class="num">${a.installments_overdue}</td>
-        </tr>`).join("");
+      const {data,error} = await supabaseClient.rpc('fn_loan_arrears',{p_organisation_id:orgId});
+      const tbody = document.getElementById('arrears-rows');
+      if (error) { tbody.innerHTML=`<tr><td colspan="5" class="error">${error.message}</td></tr>`; return; }
+      if (!data||!data.length) { tbody.innerHTML=`<tr><td colspan="5" class="empty">No loans in arrears.</td></tr>`; return; }
+      tbody.innerHTML = data.map(a=>`<tr>
+        <td>${a.member_name}</td><td>${a.product_name}</td>
+        <td class="num">${money(a.overdue_amount)}</td>
+        <td class="num">${a.days_overdue}</td>
+        <td class="num">${a.installments_overdue}</td>
+      </tr>`).join('');
     }
 
+    // ── INIT ──────────────────────────────────────────────────────────────
     (async () => {
-      const session = await requireSession();
-      if (!session) return;
-      const org = await currentOrg();
-      if (!org) return;
+      const session = await requireSession(); if (!session) return;
+      const org = await currentOrg(); if (!org) return;
       orgId = org.organisation_id;
       await loadAccounts();
       await Promise.all([loadMembers(), loadProducts()]);
@@ -696,12 +640,9 @@
   </script>
 
   <script>
-  function toggleAccountant(e) {
-    e.preventDefault();
-    const sub = document.querySelector('.nav-accountant-sub');
-    if (!sub) return;
-    const isVisible = sub.style.display !== 'none';
-    sub.style.display = isVisible ? 'none' : 'block';
+  function toggleNav(header) {
+    const group = header.parentElement;
+    group.classList.toggle('nav-open');
   }
   </script>
 </body>
