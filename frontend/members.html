@@ -51,6 +51,7 @@
           <a href="accounts.html">Chart of Accounts</a>
           <a href="journal.html">General Journal</a>
           <a href="periods.html">Accounting Periods</a>
+          <a href="banking.html">Opening Balances</a>
         </div>
       </div>
       <div class="nav-group">
@@ -60,19 +61,26 @@
         <div class="nav-group-body">
           <a href="banking.html">Bank & Cash</a>
           <a href="reconcile.html">Reconciliation</a>
+          <a href="payments.html">Payments</a>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-header" onclick="toggleNav(this)">
+          <span>Administration</span><span class="nav-chevron">›</span>
+        </div>
+        <div class="nav-group-body">
+          <a href="users.html">Users & Access</a>
+          <a href="contributions.html">Contributions</a>
         </div>
       </div>
       <a href="reports.html">Reports</a>
-      <a href="users.html">Administration</a>
       <a href="#" onclick="signOut()" class="nav-signout">Sign out</a>
     </nav>
     <main class="main">
       <h1>Member Management</h1>
       <div class="loan-tabs">
-        <button id="mt-members"       class="loan-tab-btn" onclick="switchMemberTab('members')">Members</button>
-        <button id="mt-contributions" class="loan-tab-btn" onclick="switchMemberTab('contributions')">Contributions</button>
-        <button id="mt-payments"      class="loan-tab-btn" onclick="switchMemberTab('payments')">Payments</button>
-        <button id="mt-statements"    class="loan-tab-btn" onclick="switchMemberTab('statements')">Member Statements</button>
+        <button id="mt-members"    class="loan-tab-btn active" onclick="switchMemberTab('members')">Members</button>
+        <button id="mt-statements" class="loan-tab-btn" onclick="switchMemberTab('statements')">Member Statements</button>
       </div>
 
       <!-- MEMBERS TAB -->
@@ -88,23 +96,6 @@
         </table>
       </div>
       </div><!-- /mtab-members -->
-
-      <!-- CONTRIBUTIONS TAB -->
-      <div id="mtab-contributions" style="display:none">
-        <div class="card">
-          <h2>Contributions</h2>
-          <p style="color:var(--color-muted);font-size:13px">Manage contribution types and view contribution history.</p>
-          <a href="contributions.html" class="btn accent" style="text-decoration:none;display:inline-block;margin-top:8px">Open Contributions</a>
-        </div>
-      </div>
-
-      <!-- PAYMENTS TAB -->
-      <div id="mtab-payments" style="display:none">
-        <div class="card">
-          <h2>Payments</h2>
-          <p style="color:var(--color-muted);font-size:13px">Record member payments — fund contributions and loan repayments.</p>
-          <a href="payments.html" class="btn accent" style="text-decoration:none;display:inline-block;margin-top:8px">Open Payments</a>
-        </div>
       </div>
 
       <!-- MEMBER STATEMENTS TAB -->
