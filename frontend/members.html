@@ -176,7 +176,7 @@
 <script src="js/config.js"></script>
 <script src="js/auth.js"></script>
 <script>
-  let orgId, allMembers = [];
+  let orgId, allMembers = [], orgName = '', orgType = '';
 
   // ── TABS ────────────────────────────────────────────────────────
   function switchTab(name) {
@@ -288,133 +288,195 @@
 
   async function buildMemberStatement(memberId, stmtType, fromDate, toDate) {
     let payQ = supabaseClient.from('payments')
-      .select('transaction_date,channel,reference,amount,status')
-      .eq('member_id', memberId).order('transaction_date',{ascending:false});
+      .select('transaction_date,reference,amount,payment_allocations(amount,contribution_types(name,category))')
+      .eq('member_id', memberId).eq('status','posted')
+      .order('transaction_date', {ascending:true});
     if (fromDate) payQ = payQ.gte('transaction_date', fromDate);
     if (toDate)   payQ = payQ.lte('transaction_date', toDate);
 
     let loanQ = supabaseClient.from('loans')
-      .select('id,principal,status,application_date,disbursed_at,loan_products(name),loan_repayments(amount,created_at)')
-      .eq('member_id', memberId).order('application_date',{ascending:false});
+      .select('id,principal,status,application_date,loan_products(name),loan_repayments(amount,principal_portion,interest_portion,created_at)')
+      .eq('member_id', memberId).order('application_date', {ascending:true});
     if (fromDate) loanQ = loanQ.gte('application_date', fromDate);
     if (toDate)   loanQ = loanQ.lte('application_date', toDate);
 
-    let allocQ = supabaseClient.from('payment_allocations')
-      .select('amount,contribution_types(name,category),payments!inner(transaction_date,member_id)')
-      .eq('payments.member_id', memberId);
-
-    const fetches = [
+    const [{data:member},{data:payments},{data:loans}] = await Promise.all([
       supabaseClient.from('members').select('full_name,member_number,status,date_joined').eq('id',memberId).single(),
       stmtType==='loans' ? Promise.resolve({data:[]}) : payQ,
       stmtType==='contributions' ? Promise.resolve({data:[]}) : loanQ,
-      (stmtType==='full'||stmtType==='funds'||stmtType==='contributions') ? allocQ : Promise.resolve({data:[]}),
-    ];
+    ]);
 
-    const [{data:member},{data:payments},{data:loans},{data:allocs}] = await Promise.all(fetches);
+    const periodText = fromDate && toDate
+      ? `${fromDate} to ${toDate}` : 'All time';
+    const typeLabels = {full:'Full Statement',funds:'Fund Balances',contributions:'Contributions Statement',loans:'Loan Statement'};
+    const printDate  = new Date().toLocaleDateString('en-KE',{day:'2-digit',month:'long',year:'numeric'});
 
-    const periodText = fromDate&&toDate ? `${fromDate} to ${toDate}` : 'All time';
-    const typeLabels = {full:'Full Statement',funds:'Fund Balances',contributions:'Contributions',loans:'Loans'};
-
-    // Fund balances from allocations
-    const fundMap = {};
-    (allocs||[]).forEach(a => {
-      const name = a.contribution_types?.name || 'Other';
-      fundMap[name] = (fundMap[name]||0) + Number(a.amount);
-    });
-
-    const totalContribs = (payments||[]).filter(p=>p.status==='posted').reduce((s,p)=>s+Number(p.amount),0);
-    const totalLoans    = (loans||[]).reduce((s,l)=>s+Number(l.principal),0);
-
+    // ── COMPANY HEADER ────────────────────────────────────────────
     let h = `
-      <div style="margin-bottom:8px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
-          <div>
-            <div style="font-size:18px;font-weight:700">${member.full_name}</div>
-            <div style="font-size:13px;color:var(--color-muted)">
-              ${member.member_number} &nbsp;·&nbsp; Joined: ${member.date_joined||'—'} &nbsp;·&nbsp; ${member.status}
-            </div>
-          </div>
-          <div style="text-align:right;font-size:13px;color:var(--color-muted)">
-            <strong>${typeLabels[stmtType]||'Statement'}</strong><br>${periodText}
-          </div>
+      <div style="border-bottom:3px solid var(--color-primary);padding-bottom:12px;margin-bottom:16px;
+                  display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:20px;font-weight:800;color:var(--color-primary)">${orgName}</div>
+          <div style="font-size:13px;color:var(--color-muted)">${orgType}</div>
+        </div>
+        <div style="text-align:right;font-size:12px;color:var(--color-muted)">
+          <div><strong>${typeLabels[stmtType]||'Statement'}</strong></div>
+          <div>Period: ${periodText}</div>
+          <div>Printed: ${printDate}</div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;padding:10px 14px;background:var(--color-bg);border-radius:4px">
+        <div style="font-size:16px;font-weight:700">${member.full_name}</div>
+        <div style="font-size:13px;color:var(--color-muted)">
+          Member No: ${member.member_number} &nbsp;·&nbsp;
+          Joined: ${member.date_joined||'—'} &nbsp;·&nbsp;
+          Status: ${member.status}
         </div>
       </div>`;
 
-    // Summary KPIs
-    h += `<div style="display:flex;gap:12px;flex-wrap:wrap;margin:12px 0">`;
-    if (stmtType!=='loans') h += `
-      <div style="flex:1;min-width:130px;background:var(--color-bg);padding:10px 14px;border-radius:4px">
-        <div style="font-size:18px;font-weight:700;color:var(--color-accent)">KES ${money(totalContribs)}</div>
-        <div style="font-size:12px;color:var(--color-muted)">Total contributions</div>
-      </div>`;
-    if (stmtType!=='contributions') h += `
-      <div style="flex:1;min-width:130px;background:var(--color-bg);padding:10px 14px;border-radius:4px">
-        <div style="font-size:18px;font-weight:700">${(loans||[]).filter(l=>['active','disbursed'].includes(l.status)).length}</div>
-        <div style="font-size:12px;color:var(--color-muted)">Active loans &nbsp;·&nbsp; KES ${money(totalLoans)} total</div>
-      </div>`;
-    h += `</div>`;
+    // ── FUND BALANCES SUMMARY ──────────────────────────────────────
+    const fundMap = {};
+    (payments||[]).forEach(p => {
+      (p.payment_allocations||[]).forEach(a => {
+        const fund = a.contribution_types?.name || 'Other';
+        fundMap[fund] = (fundMap[fund]||0) + Number(a.amount);
+      });
+    });
 
-    // Fund balances section
     if ((stmtType==='full'||stmtType==='funds') && Object.keys(fundMap).length) {
-      h += `<h3 style="margin-bottom:6px">Fund balances</h3>
-        <table><thead><tr><th>Fund</th><th class="num">Balance (KES)</th></tr></thead><tbody>`;
+      h += `<h3 style="margin-bottom:6px">Fund summary</h3>
+        <table style="margin-bottom:16px">
+          <thead><tr><th>Fund</th><th class="num">Total (KES)</th></tr></thead>
+          <tbody>`;
+      let grandTotal = 0;
       Object.entries(fundMap).forEach(([fund,amt]) => {
-        h += `<tr><td>${fund}</td><td class="num"><strong>${money(amt)}</strong></td></tr>`;
+        grandTotal += amt;
+        h += `<tr><td>${fund}</td><td class="num">${money(amt)}</td></tr>`;
       });
       h += `<tr style="font-weight:700;border-top:2px solid var(--color-line)">
-        <td>Total</td><td class="num">${money(Object.values(fundMap).reduce((a,b)=>a+b,0))}</td>
-      </tr></tbody></table>`;
+              <td>Grand total</td><td class="num">${money(grandTotal)}</td>
+            </tr></tbody></table>`;
     }
 
-    // Contributions / payments
-    if (stmtType!=='loans' && stmtType!=='funds') {
-      h += `<h3 style="margin-top:16px;margin-bottom:6px">Payment history</h3>
-        <table><thead><tr><th>Date</th><th>Channel</th><th>Reference</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>`;
-      h += (payments||[]).length
-        ? payments.map(p=>`<tr>
-            <td>${p.transaction_date}</td><td>${p.channel}</td><td>${p.reference||'—'}</td>
-            <td class="num">${money(p.amount)}</td>
-            <td><span class="status ${p.status==='posted'?'paid':'unpaid'}">${p.status}</span></td>
-          </tr>`).join('')
-        : '<tr><td colspan="5" class="empty">No payments in this period.</td></tr>';
+    // ── CONTRIBUTIONS WITH RUNNING BALANCE ─────────────────────────
+    if (stmtType !== 'loans' && stmtType !== 'funds') {
+      h += `<h3 style="margin-bottom:6px">Contributions statement</h3>
+        <table>
+          <thead><tr>
+            <th>Date</th><th>Reference</th><th>Details</th>
+            <th class="num">Amount (KES)</th><th class="num">Running balance (KES)</th>
+          </tr></thead><tbody>`;
+
+      let runBal = 0;
+      if ((payments||[]).length) {
+        payments.forEach(p => {
+          const amt = Number(p.amount);
+          runBal += amt;
+          const detail = (p.payment_allocations||[])
+            .map(a => `${a.contribution_types?.name||'—'}: ${money(a.amount)}`).join(', ') || '—';
+          h += `<tr>
+            <td>${p.transaction_date}</td>
+            <td>${p.reference||'—'}</td>
+            <td style="font-size:12px;color:var(--color-muted)">${detail}</td>
+            <td class="num">${money(amt)}</td>
+            <td class="num"><strong>${money(runBal)}</strong></td>
+          </tr>`;
+        });
+        h += `<tr style="font-weight:700;border-top:2px solid var(--color-line)">
+                <td colspan="3">Closing balance</td>
+                <td class="num">${money(runBal)}</td>
+                <td class="num">${money(runBal)}</td>
+              </tr>`;
+      } else {
+        h += `<tr><td colspan="5" class="empty">No contributions in this period.</td></tr>`;
+      }
       h += `</tbody></table>`;
     }
 
-    // Loans
-    if (stmtType!=='contributions' && stmtType!=='funds') {
-      h += `<h3 style="margin-top:16px;margin-bottom:6px">Loans</h3>
-        <table><thead><tr><th>Product</th><th class="num">Principal</th><th>Disbursed</th><th class="num">Repaid</th><th>Status</th></tr></thead><tbody>`;
-      h += (loans||[]).length
-        ? loans.map(l=>{
-            const repaid=(l.loan_repayments||[]).reduce((s,r)=>s+Number(r.amount),0);
-            return `<tr>
-              <td>${l.loan_products.name}</td><td class="num">${money(l.principal)}</td>
-              <td>${l.application_date||'—'}</td><td class="num">${money(repaid)}</td>
-              <td><span class="status ${l.status==='closed'?'paid':['active','disbursed'].includes(l.status)?'partial':'unpaid'}">${l.status}</span></td>
-            </tr>`;}).join('')
-        : '<tr><td colspan="5" class="empty">No loans in this period.</td></tr>';
-      h += `</tbody></table>`;
+    // ── LOANS WITH RUNNING BALANCE ─────────────────────────────────
+    if (stmtType !== 'contributions' && stmtType !== 'funds') {
+      h += `<h3 style="margin-top:20px;margin-bottom:6px">Loan statement</h3>`;
+
+      if (!(loans||[]).length) {
+        h += `<p class="empty">No loans in this period.</p>`;
+      } else {
+        for (const loan of loans) {
+          const repaid = (loan.loan_repayments||[]).reduce((s,r)=>s+Number(r.amount),0);
+          const outstanding = Number(loan.principal) - repaid;
+          h += `
+            <div style="font-weight:600;margin:10px 0 4px">
+              ${loan.loan_products.name} — KES ${money(loan.principal)}
+              <span style="font-weight:400;font-size:13px;color:var(--color-muted)">
+                Applied: ${loan.application_date||'—'} &nbsp;·&nbsp; ${loan.status}
+              </span>
+            </div>
+            <table style="margin-bottom:12px">
+              <thead><tr>
+                <th>Date</th><th>Principal paid</th><th class="num">Interest paid</th>
+                <th class="num">Total paid</th><th class="num">Outstanding</th>
+              </tr></thead><tbody>`;
+
+          // Opening row
+          h += `<tr style="color:var(--color-muted);font-style:italic">
+            <td>${loan.application_date||'—'}</td>
+            <td colspan="3">Loan disbursed</td>
+            <td class="num"><strong>${money(loan.principal)}</strong></td>
+          </tr>`;
+
+          let balance = Number(loan.principal);
+          const repayments = [...(loan.loan_repayments||[])]
+            .sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+
+          repayments.forEach(r => {
+            const prin = Number(r.principal_portion||0);
+            const int  = Number(r.interest_portion||0);
+            const tot  = Number(r.amount||0);
+            balance -= prin;
+            const dateStr = r.created_at ? r.created_at.slice(0,10) : '—';
+            h += `<tr>
+              <td>${dateStr}</td>
+              <td class="num">${money(prin)}</td>
+              <td class="num">${money(int)}</td>
+              <td class="num">${money(tot)}</td>
+              <td class="num"><strong>${money(Math.max(balance,0))}</strong></td>
+            </tr>`;
+          });
+
+          h += `<tr style="font-weight:700;border-top:2px solid var(--color-line)">
+            <td colspan="3">Balance outstanding</td>
+            <td class="num">${money(repaid)}</td>
+            <td class="num">${money(Math.max(outstanding,0))}</td>
+          </tr></tbody></table>`;
+        }
+      }
     }
 
     return h;
   }
 
+  
   // ── EXPORT ───────────────────────────────────────────────────────
   function exportStmtPDF() {
-    const content = document.getElementById('stmt-body').innerHTML;
+    const stmtContent = document.getElementById('stmt-body').innerHTML;
     const win = window.open('','_blank');
-    win.document.write(`<!DOCTYPE html><html><head><title>Member Statements</title>
+    win.document.write(`<!DOCTYPE html><html><head>
+      <title>${orgName} — Member Statements</title>
       <style>
-        body{font-family:Arial,sans-serif;font-size:13px;padding:24px;color:#1a1a1a}
-        table{width:100%;border-collapse:collapse;margin-bottom:12px}
-        th,td{padding:6px 10px;border:1px solid #ddd;text-align:left}
-        th{background:#f5f5f5;font-weight:600}
+        body{font-family:Arial,sans-serif;font-size:12px;padding:28px;color:#1a1a1a;max-width:900px;margin:auto}
+        table{width:100%;border-collapse:collapse;margin-bottom:10px}
+        th,td{padding:5px 9px;border:1px solid #ccc;text-align:left;font-size:12px}
+        th{background:#f0f0f0;font-weight:600}
         .num{text-align:right}
-        h3{margin:16px 0 6px}
-        @media print{.page-break{page-break-after:always}}
-      </style></head><body>${content}</body></html>`);
+        h3{margin:14px 0 5px;font-size:14px}
+        .empty{color:#888;font-style:italic}
+        @media print{
+          @page{margin:18mm}
+          div[style*="page-break-after"]{page-break-after:always}
+        }
+      </style></head><body>${stmtContent}</body></html>`);
     win.document.close();
-    setTimeout(()=>win.print(),400);
+    setTimeout(()=>win.print(),500);
   }
 
   function exportStmtExcel() {
@@ -534,7 +596,9 @@
   (async()=>{
     const session=await requireSession(); if(!session)return;
     const org=await currentOrg(); if(!org)return;
-    orgId=org.organisation_id;
+    orgId = org.organisation_id;
+    orgName = org.organisations?.name || 'Organisation';
+    orgType = org.organisations?.org_type || '';
     loadMembers();
   })();
 </script>
