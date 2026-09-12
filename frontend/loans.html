@@ -13,7 +13,7 @@
       <a href="index.html">Dashboard</a>
       <a href="members.html">Members</a>
       <a href="payments.html">Payments</a>
-      <a href="loans.html" class="active">Loans</a>
+      <a href="loans.html" class="active">Loan Management</a>
       <a href="expenditure.html">Expenditure</a>
       <a href="banking.html">Banking</a>
       <a href="reconcile.html">Reconciliation</a>
@@ -33,10 +33,18 @@
       <h1>Loans</h1>
 
       <div class="tabs" style="display:flex;gap:4px;border-bottom:1px solid #ddd;margin-bottom:20px">
+        <button id="tabbtn-dashboard" class="tab-btn" onclick="switchTab('dashboard')" style="background:none;border:none;padding:10px 16px;cursor:pointer;font-size:14px">Dashboard</button>
         <button id="tabbtn-application" class="tab-btn" onclick="switchTab('application')" style="background:none;border:none;padding:10px 16px;cursor:pointer;font-size:14px">New Application</button>
         <button id="tabbtn-loans" class="tab-btn" onclick="switchTab('loans')" style="background:none;border:none;padding:10px 16px;cursor:pointer;font-size:14px">Loans List</button>
         <button id="tabbtn-arrears" class="tab-btn" onclick="switchTab('arrears')" style="background:none;border:none;padding:10px 16px;cursor:pointer;font-size:14px">Loan Arrears</button>
         <button id="tabbtn-products" class="tab-btn" onclick="switchTab('products')" style="background:none;border:none;padding:10px 16px;cursor:pointer;font-size:14px">Loan Products</button>
+      </div>
+
+      <div id="tab-dashboard" class="tab-panel" style="display:none">
+        <div class="card">
+          <h2>Loan Portfolio Overview</h2>
+          <div id="dash-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:12px">Loading…</div>
+        </div>
       </div>
 
       <div id="tab-application" class="tab-panel" style="display:none">
@@ -113,7 +121,7 @@
     let orgId, products = [], cashAccounts = [];
 
     function switchTab(name) {
-      const tabs = ['application','loans','arrears','products'];
+      const tabs = ['dashboard','application','loans','arrears','products'];
       tabs.forEach(t => {
         document.getElementById('tab-'+t).style.display = (t === name) ? 'block' : 'none';
         const btn = document.getElementById('tabbtn-'+t);
@@ -127,6 +135,49 @@
           btn.style.color = 'var(--color-muted, #666)';
         }
       });
+    }
+
+    async function loadDashboard() {
+      const statsEl = document.getElementById('dash-stats');
+      statsEl.innerHTML = 'Loading…';
+
+      const { data: loanRows, error } = await supabaseClient.from('loans')
+        .select('id, principal, status').eq('organisation_id', orgId);
+      if (error) { statsEl.innerHTML = `<p class="error">${error.message}</p>`; return; }
+
+      const rows = loanRows || [];
+      const pending  = rows.filter(l => l.status === 'draft' || l.status === 'pending_approval');
+      const approved = rows.filter(l => l.status === 'approved');
+      const active   = rows.filter(l => l.status === 'active' || l.status === 'disbursed');
+      const closed   = rows.filter(l => l.status === 'closed');
+      const totalDisbursed = rows
+        .filter(l => ['active','disbursed','closed'].includes(l.status))
+        .reduce((s,l) => s + Number(l.principal), 0);
+
+      const { data: schedule } = await supabaseClient.from('loan_schedule')
+        .select('principal_due, principal_paid, interest_due, interest_paid')
+        .eq('organisation_id', orgId).neq('status', 'paid');
+      const outstanding = (schedule || []).reduce((s,r) =>
+        s + (Number(r.principal_due) - Number(r.principal_paid)) + (Number(r.interest_due) - Number(r.interest_paid)), 0);
+
+      const { data: arrears } = await supabaseClient.rpc('fn_loan_arrears', { p_organisation_id: orgId });
+      const arrearsRows = arrears || [];
+      const arrearsAmount = arrearsRows.reduce((s,a) => s + Number(a.overdue_amount), 0);
+
+      const cards = [
+        { label: 'Pending Approval', value: pending.length, sub: `KES ${money(pending.reduce((s,l)=>s+Number(l.principal),0))} requested` },
+        { label: 'Awaiting Disbursement', value: approved.length, sub: `KES ${money(approved.reduce((s,l)=>s+Number(l.principal),0))} approved` },
+        { label: 'Active Loans', value: active.length, sub: `KES ${money(outstanding)} outstanding` },
+        { label: 'Closed Loans', value: closed.length, sub: `KES ${money(totalDisbursed)} total disbursed` },
+        { label: 'In Arrears', value: arrearsRows.length, sub: `KES ${money(arrearsAmount)} overdue`, alert: arrearsRows.length > 0 },
+      ];
+
+      statsEl.innerHTML = cards.map(c => `
+        <div style="background:${c.alert ? '#FDECEC' : '#F3EBD8'};border-radius:6px;padding:16px">
+          <div style="font-size:28px;font-weight:700;color:${c.alert ? '#b91c1c' : 'inherit'}">${c.value}</div>
+          <div style="font-size:13px;font-weight:600;margin-top:4px">${c.label}</div>
+          <div style="font-size:12px;color:var(--color-muted);margin-top:2px">${c.sub}</div>
+        </div>`).join('');
     }
 
     async function loadMembers() {
@@ -205,6 +256,7 @@
       successEl.style.display = "block";
       document.getElementById("a-principal").value = "";
       loadLoans();
+      loadDashboard();
     }
 
     async function loadLoans() {
@@ -371,7 +423,7 @@
         p_remarks: remarks,
       });
       if (error) { showError(errorEl, error.message); return; }
-      loadLoans(); openLoan(loanId);
+      loadLoans(); loadDashboard(); openLoan(loanId);
     }
 
     async function disburseLoan(loanId) {
@@ -382,7 +434,7 @@
         p_cash_account_id: document.getElementById("disburse-acct").value,
       });
       if (error) { showError(errorEl, error.message); return; }
-      loadLoans(); openLoan(loanId);
+      loadLoans(); loadDashboard(); openLoan(loanId);
     }
 
     async function declineLoan(loanId) {
@@ -397,7 +449,7 @@
         p_loan_id: loanId, p_remarks: remarks,
       });
       if (error) { showError(errorEl, error.message); return; }
-      loadLoans(); openLoan(loanId);
+      loadLoans(); loadDashboard(); openLoan(loanId);
     }
 
     async function createProduct() {
@@ -444,7 +496,8 @@
       await Promise.all([loadMembers(), loadProducts()]);
       loadLoans();
       loadArrears();
-      switchTab('loans');
+      loadDashboard();
+      switchTab('dashboard');
     })();
   </script>
 
