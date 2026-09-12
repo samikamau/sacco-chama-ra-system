@@ -89,6 +89,18 @@
               <option value="loans">Loans</option>
             </select>
           </div>
+          <div class="field" id="stmt-loan-status-wrap" style="margin-bottom:0;min-width:140px">
+            <label>Loan status</label>
+            <select id="stmt-loan-status">
+              <option value="all">All loans</option>
+              <option value="active">Active</option>
+              <option value="disbursed">Disbursed</option>
+              <option value="closed">Closed</option>
+              <option value="pending_approval">Pending approval</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Declined</option>
+            </select>
+          </div>
           <div class="field" style="margin-bottom:0;min-width:130px">
             <label>From</label>
             <input id="stmt-from" type="date">
@@ -197,7 +209,11 @@
   // ── STATEMENT: setup ────────────────────────────────────────────
   let selectedStmtMembers = []; // [{id, label}]
 
-  function onStmtTypeChange() {}
+  function onStmtTypeChange() {
+    const type = document.getElementById('stmt-type').value;
+    const lsWrap = document.getElementById('stmt-loan-status-wrap');
+    if (lsWrap) lsWrap.style.display = (type==='loans'||type==='full') ? 'block' : 'none';
+  }
 
   function switchTab(name) {
     ['members','statements'].forEach(t => {
@@ -270,15 +286,16 @@
     if (!selectedStmtMembers.length) {
       alert('Select at least one member first.'); return;
     }
-    const stmtType = document.getElementById('stmt-type').value;
-    const fromDate = document.getElementById('stmt-from').value || null;
-    const toDate   = document.getElementById('stmt-to').value   || null;
+    const stmtType   = document.getElementById('stmt-type').value;
+    const fromDate   = document.getElementById('stmt-from').value || null;
+    const toDate     = document.getElementById('stmt-to').value   || null;
+    const loanStatus = document.getElementById('stmt-loan-status')?.value || 'all';
     const box = document.getElementById('stmt-body');
     box.innerHTML = '<p style="color:var(--color-muted)">Generating…</p>';
 
     let html = '';
     for (const m of selectedStmtMembers) {
-      html += await buildMemberStatement(m.id, stmtType, fromDate, toDate);
+      html += await buildMemberStatement(m.id, stmtType, fromDate, toDate, loanStatus);
       html += '<div style="page-break-after:always;border-bottom:2px solid var(--color-line);margin:24px 0"></div>';
     }
     box.innerHTML = html;
@@ -286,7 +303,7 @@
     document.getElementById('stmt-export-bar').style.gap = '8px';
   }
 
-  async function buildMemberStatement(memberId, stmtType, fromDate, toDate) {
+  async function buildMemberStatement(memberId, stmtType, fromDate, toDate, loanStatus='all') {
     let payQ = supabaseClient.from('payments')
       .select('transaction_date,reference,amount,payment_allocations(amount,contribution_types(name,category))')
       .eq('member_id', memberId).eq('status','posted')
@@ -297,8 +314,9 @@
     let loanQ = supabaseClient.from('loans')
       .select('id,loan_number,principal,status,application_date,loan_products(name),loan_repayments(amount,principal_portion,interest_portion,created_at)')
       .eq('member_id', memberId).order('application_date', {ascending:true});
-    if (fromDate) loanQ = loanQ.gte('application_date', fromDate);
-    if (toDate)   loanQ = loanQ.lte('application_date', toDate);
+    if (fromDate)              loanQ = loanQ.gte('application_date', fromDate);
+    if (toDate)                loanQ = loanQ.lte('application_date', toDate);
+    if (loanStatus !== 'all')  loanQ = loanQ.eq('status', loanStatus);
 
     const [{data:member},{data:payments},{data:loans}] = await Promise.all([
       supabaseClient.from('members').select('full_name,member_number,status,date_joined').eq('id',memberId).single(),
@@ -309,6 +327,8 @@
     const periodText = fromDate && toDate
       ? `${fromDate} to ${toDate}` : 'All time';
     const typeLabels = {full:'Full Statement',funds:'Fund Balances',contributions:'Contributions Statement',loans:'Loan Statement'};
+    const loanStatusLabel = loanStatus==='all' ? 'All loans'
+      : loanStatus.replace(/_/g,' ').replace(/\w/g,c=>c.toUpperCase()) + ' loans';
     const printDate  = new Date().toLocaleDateString('en-KE',{day:'2-digit',month:'long',year:'numeric'});
 
     // ── COMPANY HEADER ────────────────────────────────────────────
