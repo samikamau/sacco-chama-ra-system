@@ -165,3 +165,38 @@ label { display: block; font-size: 13px; color: var(--color-muted); margin-botto
   justify-content: center;
 }
 .login-card { width: 340px; }
+
+/* ── Accountant nav section ───────────────────────────────────────────── */
+.nav-section-label {
+  padding: 10px 16px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.4);
+  margin-top: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+}
+.nav-section-label::after {
+  content: '▾';
+  font-size: 12px;
+  transition: transform 0.2s;
+}
+.nav-section-label.collapsed::after {
+  transform: rotate(-90deg);
+}
+.nav-accountant-link {
+  transition: max-height 0.2s ease, opacity 0.2s;
+  max-height: 40px;
+  overflow: hidden;
+  opacity: 1;
+}
+.nav-accountant-link.hidden {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
