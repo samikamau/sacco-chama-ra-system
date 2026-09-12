@@ -214,9 +214,14 @@
     const orgType = document.getElementById('s-org-type').value;
 
     // Update org_type on organisations table
-    const { error: orgErr } = await supabaseClient.from('organisations')
-      .update({ org_type: orgType }).eq('id', orgId);
-    if (orgErr) { showError(errorEl, 'Org type: ' + orgErr.message); return; }
+    const { data: orgData, error: orgErr } = await supabaseClient.from('organisations')
+      .update({ org_type: orgType }).eq('id', orgId).select('org_type').single();
+    if (orgErr) {
+      showError(errorEl, 'Could not update org type: ' + orgErr.message +
+        ' (code: ' + orgErr.code + ')');
+      return;
+    }
+    console.log('org_type updated to:', orgData?.org_type);
 
     // Upsert org_settings (upsert with onConflict)
     const { error: setErr } = await supabaseClient.from('org_settings').upsert({
@@ -231,10 +236,18 @@
     }, { onConflict: 'organisation_id' });
     if (setErr) { showError(errorEl, 'Settings: ' + setErr.message); return; }
 
-    // Clear cache so next page load picks up new settings
+    // Clear ALL cached org settings so next page load picks up new values
     sessionStorage.removeItem('org_settings_' + orgId);
+    // Also clear on all keys that might be cached
+    for (const key of Object.keys(sessionStorage)) {
+      if (key.startsWith('org_settings_')) sessionStorage.removeItem(key);
+    }
     successEl.style.display = 'block';
-    setTimeout(() => successEl.style.display = 'none', 3000);
+    // Reload the settings to confirm what was saved
+    setTimeout(async () => {
+      successEl.style.display = 'none';
+      await loadSettings();
+    }, 1500);
   }
 
   async function seedContributionTypes() {
