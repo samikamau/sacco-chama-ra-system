@@ -225,11 +225,22 @@
         : `<tr><td class="empty">None yet.</td></tr>`) + `</tbody></table>`;
 
       if (loan.status === 'pending_approval' || loan.status === 'draft') {
-        html += `<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
-          <div class="field" style="margin-bottom:0"><label>Add guarantor</label>
-            <select id="g-member">${(members||[]).map(m=>`<option value="${m.id}">${m.full_name}</option>`).join("")}</select></div>
-          <div class="field" style="margin-bottom:0"><label>Amount</label><input id="g-amount" type="number"></div>
-          <button class="btn" onclick="addGuarantor('${loanId}')">Add</button>
+        html += `<div style="margin-top:16px">
+          <h3 style="margin-bottom:8px">Add guarantor</h3>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+            <div class="field" style="margin-bottom:0;min-width:200px">
+              <label>Guarantor</label>
+              <select id="g-member" onchange="showGuarantorCapacity('${loanId}')">
+                ${(members||[]).map(m=>`<option value="${m.id}">${m.full_name}</option>`).join("")}
+              </select>
+            </div>
+            <div class="field" style="margin-bottom:0;min-width:160px">
+              <label>Amount to guarantee (KES)</label>
+              <input id="g-amount" type="number" step="0.01">
+            </div>
+            <button class="btn" onclick="addGuarantor('${loanId}')">Add</button>
+          </div>
+          <div id="g-capacity" style="margin-top:8px;font-size:13px"></div>
         </div>`;
       }
 
@@ -269,12 +280,42 @@
       body.innerHTML = html;
     }
 
+    async function showGuarantorCapacity(loanId) {
+      const memberId = document.getElementById("g-member").value;
+      const capDiv = document.getElementById("g-capacity");
+      if (!memberId) { capDiv.textContent = ''; return; }
+      capDiv.textContent = 'Checking capacity…';
+      const { data, error } = await supabaseClient.rpc("fn_guarantor_capacity", {
+        p_member_id: memberId, p_exclude_loan_id: loanId,
+      });
+      if (error) { capDiv.textContent = ''; return; }
+      const available = Number(data.available);
+      const committed = Number(data.committed);
+      const deposits  = Number(data.total_deposits);
+      capDiv.innerHTML = `Deposits: <strong>KES ${money(deposits)}</strong>
+        &nbsp;|&nbsp; Committed: <strong>KES ${money(committed)}</strong>
+        &nbsp;|&nbsp; <span style="color:${available>0?'var(--color-success)':'var(--color-alert)'}">
+        Available: <strong>KES ${money(available)}</strong></span>`;
+      const amtInput = document.getElementById("g-amount");
+      if (!amtInput.value) amtInput.value = available.toFixed(2);
+    }
+
     async function addGuarantor(loanId) {
       const errorEl = document.getElementById("detail-error");
+      const memberId = document.getElementById("g-member").value;
+      const amount = Number(document.getElementById("g-amount").value);
+
+      const { data: cap } = await supabaseClient.rpc("fn_guarantor_capacity", {
+        p_member_id: memberId, p_exclude_loan_id: loanId,
+      });
+      if (cap && amount > Number(cap.available)) {
+        showError(errorEl, `This member can only guarantee KES ${money(Number(cap.available))} (KES ${money(Number(cap.total_deposits))} deposits less KES ${money(Number(cap.committed))} already committed to other loans).`);
+        return;
+      }
       const { error } = await supabaseClient.from("loan_guarantors").insert({
         loan_id: loanId, organisation_id: orgId,
-        guarantor_member_id: document.getElementById("g-member").value,
-        amount_guaranteed: document.getElementById("g-amount").value,
+        guarantor_member_id: memberId,
+        amount_guaranteed: amount,
       });
       if (error) { showError(errorEl, error.message); return; }
       openLoan(loanId);
