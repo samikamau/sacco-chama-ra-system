@@ -65,12 +65,23 @@
         <div class="card">
           <h2>Loans</h2>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">
+            <div class="field" style="margin-bottom:0"><label>Status</label>
+              <select id="loan-status-filter" onchange="onStatusFilterChange()">
+                <option value="all">All statuses</option>
+                <option value="pending">Pending Approval</option>
+                <option value="approved">Awaiting Disbursement</option>
+                <option value="active">Active</option>
+                <option value="closed">Closed</option>
+                <option value="rejected">Declined</option>
+              </select>
+            </div>
             <div class="field" style="margin-bottom:0"><label>Period</label>
               <select id="loan-period-type" onchange="onPeriodTypeChange()">
                 <option value="all">All time</option>
                 <option value="month">Month</option>
                 <option value="quarter">Quarter</option>
                 <option value="year">Year</option>
+                <option value="custom">Custom range</option>
               </select>
             </div>
             <div class="field" id="loan-period-month-wrap" style="margin-bottom:0;display:none"><label>Month</label>
@@ -84,6 +95,10 @@
               <input type="number" id="loan-period-quarter-year" style="width:90px"></div>
             <div class="field" id="loan-period-year-wrap" style="margin-bottom:0;display:none"><label>Year</label>
               <input type="number" id="loan-period-year" style="width:90px"></div>
+            <div class="field" id="loan-period-custom-from-wrap" style="margin-bottom:0;display:none"><label>From</label>
+              <input type="date" id="loan-period-custom-from"></div>
+            <div class="field" id="loan-period-custom-to-wrap" style="margin-bottom:0;display:none"><label>To</label>
+              <input type="date" id="loan-period-custom-to"></div>
             <div class="field" style="margin-bottom:0"><label>Sort by date</label>
               <select id="loan-sort-order"><option value="desc">Newest first</option><option value="asc">Oldest first</option></select>
             </div>
@@ -294,12 +309,34 @@
       closed: 'Closed', rejected: 'Declined',
     };
 
+    const STATUS_FILTER_GROUPS = {
+      pending: ['draft','pending_approval'],
+      approved: ['approved'],
+      active: ['active','disbursed'],
+      closed: ['closed'],
+      rejected: ['rejected'],
+    };
+
+    function onStatusFilterChange() {
+      const key = document.getElementById("loan-status-filter").value;
+      currentLoanFilter = (key === "all") ? null : STATUS_FILTER_GROUPS[key];
+      loadLoans();
+    }
+
     function onPeriodTypeChange() {
       const type = document.getElementById("loan-period-type").value;
       document.getElementById("loan-period-month-wrap").style.display = type === "month" ? "block" : "none";
       document.getElementById("loan-period-quarter-wrap").style.display = type === "quarter" ? "block" : "none";
       document.getElementById("loan-period-quarter-year-wrap").style.display = type === "quarter" ? "block" : "none";
       document.getElementById("loan-period-year-wrap").style.display = type === "year" ? "block" : "none";
+      document.getElementById("loan-period-custom-from-wrap").style.display = type === "custom" ? "block" : "none";
+      document.getElementById("loan-period-custom-to-wrap").style.display = type === "custom" ? "block" : "none";
+    }
+
+    function addOneDay(dateStr) {
+      const d = new Date(dateStr + "T00:00:00");
+      d.setDate(d.getDate() + 1);
+      return d.toISOString().slice(0, 10);
     }
 
     function getLoanDateRange() {
@@ -327,17 +364,27 @@
         if (!y) return null;
         return { from: `${y}-01-01`, to: `${y+1}-01-01`, label: `${y}` };
       }
+      if (type === "custom") {
+        const from = document.getElementById("loan-period-custom-from").value;
+        const to = document.getElementById("loan-period-custom-to").value;
+        if (!from || !to) return null;
+        return { from, to: addOneDay(to), label: `${from} to ${to}` };
+      }
       return null;
     }
 
     function goToLoansFiltered(statuses) {
       currentLoanFilter = statuses;
+      const key = Object.keys(STATUS_FILTER_GROUPS)
+        .find(k => JSON.stringify(STATUS_FILTER_GROUPS[k]) === JSON.stringify(statuses));
+      document.getElementById("loan-status-filter").value = key || "all";
       switchTab('loans');
       loadLoans();
     }
 
     function clearLoanFilter() {
       currentLoanFilter = null;
+      document.getElementById("loan-status-filter").value = "all";
       document.getElementById("loan-period-type").value = "all";
       onPeriodTypeChange();
       loadLoans();
