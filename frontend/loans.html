@@ -264,23 +264,23 @@
         html += `<div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
           <div class="field" style="margin-bottom:0;max-width:160px"><label>Approved amount</label>
             <input id="approve-amount" type="number" step="0.01" value="${loan.principal}"></div>
-          <div class="field" style="margin-bottom:0;max-width:280px"><label>Disburse from account</label><select id="disburse-acct">${cashOpts}</select></div>
           <div class="field" style="margin-bottom:0;min-width:220px;flex:1"><label>Remarks</label>
             <input id="approve-remarks" placeholder="Required if amount is reduced or declining"></div>
-          <button class="btn accent" onclick="approveDisburse('${loanId}')">Approve &amp; disburse</button>
+          <button class="btn accent" onclick="approveLoan('${loanId}')">Approve</button>
+          <button class="btn" style="background:#b91c1c;color:#fff" onclick="declineLoan('${loanId}')">Decline</button>
+        </div>`;
+      } else if (loan.status === 'approved') {
+        html += `<div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <div class="field" style="margin-bottom:0;max-width:280px"><label>Disburse from account</label><select id="disburse-acct">${cashOpts}</select></div>
+          <button class="btn accent" onclick="disburseLoan('${loanId}')">Disburse</button>
+          <div class="field" style="margin-bottom:0;min-width:220px;flex:1"><label>Remarks (only needed to decline)</label>
+            <input id="approve-remarks" placeholder="Reason for declining"></div>
           <button class="btn" style="background:#b91c1c;color:#fff" onclick="declineLoan('${loanId}')">Decline</button>
         </div>`;
       } else if (loan.status === 'rejected') {
         html += `<p style="margin-top:16px;color:#b91c1c">Declined${loan.decision_remarks ? ': ' + loan.decision_remarks : ''}</p>`;
       } else if (loan.status === 'active' || loan.status === 'disbursed') {
-        html += `<div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
-          <div class="field" style="margin-bottom:0"><label>Repayment amount</label><input id="rp-amount" type="number"></div>
-          <div class="field" style="margin-bottom:0"><label>Channel</label>
-            <select id="rp-channel"><option value="mpesa">M-Pesa</option><option value="bank">Bank</option><option value="cash">Cash</option></select></div>
-          <div class="field" style="margin-bottom:0"><label>Into account</label><select id="rp-acct">${cashOpts}</select></div>
-          <div class="field" style="margin-bottom:0"><label>Reference</label><input id="rp-ref"></div>
-          <button class="btn accent" onclick="recordRepayment('${loanId}')">Record repayment</button>
-        </div>`;
+        html += `<p style="margin-top:16px;color:var(--color-muted);font-size:13px">Repayments are recorded from the Payments page.</p>`;
       }
 
       html += `<p id="detail-error" class="error" style="display:none"></p>`;
@@ -328,16 +328,26 @@
       openLoan(loanId);
     }
 
-    async function approveDisburse(loanId) {
+    async function approveLoan(loanId) {
       const errorEl = document.getElementById("detail-error");
       const approvedAmount = document.getElementById("approve-amount").value;
       const remarks = document.getElementById("approve-remarks").value || null;
-      if (!confirm("Approve and disburse this loan? This posts the disbursement and builds the repayment schedule.")) return;
-      const { error } = await supabaseClient.rpc("fn_approve_and_disburse_loan", {
+      if (!confirm("Approve this loan? Guarantor and eligibility checks run now, but no money moves yet.")) return;
+      const { error } = await supabaseClient.rpc("fn_approve_loan", {
         p_loan_id: loanId,
-        p_cash_account_id: document.getElementById("disburse-acct").value,
         p_approved_amount: approvedAmount || null,
         p_remarks: remarks,
+      });
+      if (error) { showError(errorEl, error.message); return; }
+      loadLoans(); openLoan(loanId);
+    }
+
+    async function disburseLoan(loanId) {
+      const errorEl = document.getElementById("detail-error");
+      if (!confirm("Disburse this loan? This posts the disbursement and builds the repayment schedule.")) return;
+      const { error } = await supabaseClient.rpc("fn_disburse_loan", {
+        p_loan_id: loanId,
+        p_cash_account_id: document.getElementById("disburse-acct").value,
       });
       if (error) { showError(errorEl, error.message); return; }
       loadLoans(); openLoan(loanId);
@@ -350,22 +360,9 @@
         showError(errorEl, "Enter a remark explaining why this loan is being declined.");
         return;
       }
-      if (!confirm("Decline this loan application? This cannot be undone.")) return;
+      if (!confirm("Decline this loan? This cannot be undone.")) return;
       const { error } = await supabaseClient.rpc("fn_reject_loan", {
         p_loan_id: loanId, p_remarks: remarks,
-      });
-      if (error) { showError(errorEl, error.message); return; }
-      loadLoans(); openLoan(loanId);
-    }
-
-    async function recordRepayment(loanId) {
-      const errorEl = document.getElementById("detail-error");
-      const { error } = await supabaseClient.rpc("fn_record_loan_repayment", {
-        p_loan_id: loanId,
-        p_amount: document.getElementById("rp-amount").value,
-        p_channel: document.getElementById("rp-channel").value,
-        p_reference: document.getElementById("rp-ref").value || null,
-        p_cash_account_id: document.getElementById("rp-acct").value,
       });
       if (error) { showError(errorEl, error.message); return; }
       loadLoans(); openLoan(loanId);
