@@ -100,15 +100,20 @@
 
       <!-- MEMBER STATEMENTS TAB -->
       <div id="mtab-statements" style="display:none">
-        <div class="card">
-          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
-            <div class="field" style="margin-bottom:0;flex:1;min-width:200px">
-              <label>Select member</label>
-              <select id="stmt-member-select" onchange="loadInlineStatement()"></select>
-            </div>
+
+        <!-- Search bar at the top -->
+        <div class="card" style="padding:12px 16px;margin-bottom:12px">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input id="stmt-search" placeholder="Search by name or member number…"
+              oninput="filterStmtMembers()" style="flex:1;min-width:220px">
+            <select id="stmt-member-select" onchange="loadInlineStatement()"
+              style="flex:2;min-width:220px"></select>
           </div>
-          <div id="inline-statement" style="margin-top:16px"></div>
         </div>
+
+        <!-- Statement renders here — full width, top of screen -->
+        <div id="inline-statement"></div>
+
       </div>
 
     </main>
@@ -172,7 +177,7 @@
   <script src="js/config.js"></script>
   <script src="js/auth.js"></script>
   <script>
-    let orgId;
+    let orgId, stmtMembers = [];
 
     function showToast(msg) {
       const t = document.getElementById("toast");
@@ -348,37 +353,65 @@
   async function populateStmtSelect() {
     const sel = document.getElementById('stmt-member-select');
     if (sel.options.length > 1) { loadInlineStatement(); return; }
-    const {data} = await supabaseClient.from('members')
+    const { data } = await supabaseClient.from('members')
       .select('id,member_number,full_name').eq('organisation_id', orgId)
       .eq('status','active').order('full_name');
-    sel.innerHTML = (data||[]).map(m =>
-      `<option value="${m.id}">${m.member_number} — ${m.full_name}</option>`).join('');
+    stmtMembers = data || [];
+    renderStmtOptions(stmtMembers);
     loadInlineStatement();
+  }
+
+  function renderStmtOptions(members) {
+    const sel = document.getElementById('stmt-member-select');
+    sel.innerHTML = members.map(m =>
+      `<option value="${m.id}">${m.member_number} — ${m.full_name}</option>`).join('');
+  }
+
+  function filterStmtMembers() {
+    const q = document.getElementById('stmt-search').value.toLowerCase();
+    const filtered = q
+      ? stmtMembers.filter(m =>
+          m.full_name.toLowerCase().includes(q) ||
+          m.member_number.toLowerCase().includes(q))
+      : stmtMembers;
+    renderStmtOptions(filtered);
+    if (filtered.length) loadInlineStatement();
+    else document.getElementById('inline-statement').innerHTML =
+      '<p class="empty">No members match your search.</p>';
   }
 
   async function loadInlineStatement() {
     const memberId = document.getElementById('stmt-member-select').value;
     const box = document.getElementById('inline-statement');
-    if (!memberId) return;
-    box.innerHTML = '<p style="color:var(--color-muted)">Loading…</p>';
+    if (!memberId) { box.innerHTML = ''; return; }
+    box.innerHTML = '<p style="color:var(--color-muted);padding:12px 0">Loading…</p>';
 
     const [{ data: member }, { data: payments }, { data: loans }] = await Promise.all([
       supabaseClient.from('members').select('full_name,member_number,status,join_date').eq('id', memberId).single(),
-      supabaseClient.from('payments').select('transaction_date,channel,reference,amount,status').eq('member_id', memberId).order('transaction_date', {ascending:false}).limit(30),
-      supabaseClient.from('loans').select('id,principal,status,application_date,loan_products(name)').eq('member_id', memberId).order('application_date', {ascending:false}),
+      supabaseClient.from('payments').select('transaction_date,channel,reference,amount,status').eq('member_id', memberId).order('transaction_date',{ascending:false}).limit(50),
+      supabaseClient.from('loans').select('id,principal,status,application_date,loan_products(name)').eq('member_id', memberId).order('application_date',{ascending:false}),
     ]);
 
     const totalPaid = (payments||[]).filter(p=>p.status==='posted').reduce((s,p)=>s+Number(p.amount),0);
 
-    let html = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
-      <div><strong>${member.full_name}</strong> &nbsp; ${member.member_number}</div>
-      <div style="color:var(--color-muted)">Joined: ${member.join_date||'—'}</div>
-      <div style="color:var(--color-muted)">Status: ${member.status}</div>
-      <div>Total contributions: <strong>KES ${money(totalPaid)}</strong></div>
-    </div>`;
+    let html = `
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center">
+          <div>
+            <div style="font-size:18px;font-weight:700">${member.full_name}</div>
+            <div style="color:var(--color-muted);font-size:13px">${member.member_number} &nbsp;·&nbsp; Joined: ${member.join_date||'—'} &nbsp;·&nbsp; ${member.status}</div>
+          </div>
+          <div style="margin-left:auto;text-align:right">
+            <div style="font-size:22px;font-weight:700;color:var(--color-accent)">KES ${money(totalPaid)}</div>
+            <div style="font-size:12px;color:var(--color-muted)">Total contributions</div>
+          </div>
+        </div>
+      </div>
 
-    html += `<h3 style="margin-bottom:8px">Payment history</h3>
-    <table><thead><tr><th>Date</th><th>Channel</th><th>Reference</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>`;
+      <div class="card" style="margin-bottom:12px">
+        <h3 style="margin-bottom:10px">Payment history</h3>
+        <table><thead><tr><th>Date</th><th>Channel</th><th>Reference</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>`;
+
     if ((payments||[]).length) {
       html += payments.map(p => `<tr>
         <td>${p.transaction_date}</td><td>${p.channel}</td><td>${p.reference||'—'}</td>
@@ -388,10 +421,12 @@
     } else {
       html += `<tr><td colspan="5" class="empty">No payments recorded.</td></tr>`;
     }
-    html += `</tbody></table>`;
+    html += `</tbody></table></div>`;
 
-    html += `<h3 style="margin-top:16px;margin-bottom:8px">Loans</h3>
-    <table><thead><tr><th>Product</th><th class="num">Principal</th><th>Date</th><th>Status</th></tr></thead><tbody>`;
+    html += `
+      <div class="card">
+        <h3 style="margin-bottom:10px">Loans</h3>
+        <table><thead><tr><th>Product</th><th class="num">Principal</th><th>Date</th><th>Status</th></tr></thead><tbody>`;
     if ((loans||[]).length) {
       html += loans.map(l => `<tr>
         <td>${l.loan_products.name}</td><td class="num">${money(l.principal)}</td>
@@ -401,7 +436,7 @@
     } else {
       html += `<tr><td colspan="4" class="empty">No loans recorded.</td></tr>`;
     }
-    html += `</tbody></table>`;
+    html += `</tbody></table></div>`;
 
     box.innerHTML = html;
   }
