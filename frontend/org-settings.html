@@ -218,7 +218,7 @@
       .update({ org_type: orgType }).eq('id', orgId);
     if (orgErr) { showError(errorEl, 'Org type: ' + orgErr.message); return; }
 
-    // Upsert org_settings
+    // Upsert org_settings (upsert with onConflict)
     const { error: setErr } = await supabaseClient.from('org_settings').upsert({
       organisation_id:    orgId,
       show_loans:         document.getElementById('s-show-loans').checked,
@@ -228,7 +228,7 @@
       member_id_prefix:   document.getElementById('s-member-prefix').value.trim() || 'SC',
       contribution_label: document.getElementById('s-contrib-label').value.trim() || 'Contributions',
       fund_label:         document.getElementById('s-fund-label').value.trim() || 'Member Funds',
-    });
+    }, { onConflict: 'organisation_id' });
     if (setErr) { showError(errorEl, 'Settings: ' + setErr.message); return; }
 
     // Clear cache so next page load picks up new settings
