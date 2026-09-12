@@ -64,6 +64,7 @@
       <div id="tab-loans" class="tab-panel" style="display:none">
         <div class="card">
           <h2>Loans</h2>
+          <div id="loan-filter-banner" style="display:none;margin-bottom:12px;font-size:13px;background:#F3EBD8;padding:8px 12px;border-radius:4px"></div>
           <table>
             <thead><tr><th>Member</th><th>Product</th><th class="num">Principal</th><th>Term</th><th>Status</th><th></th></tr></thead>
             <tbody id="loan-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
@@ -165,15 +166,15 @@
       const arrearsAmount = arrearsRows.reduce((s,a) => s + Number(a.overdue_amount), 0);
 
       const cards = [
-        { label: 'Pending Approval', value: pending.length, sub: `KES ${money(pending.reduce((s,l)=>s+Number(l.principal),0))} requested` },
-        { label: 'Awaiting Disbursement', value: approved.length, sub: `KES ${money(approved.reduce((s,l)=>s+Number(l.principal),0))} approved` },
-        { label: 'Active Loans', value: active.length, sub: `KES ${money(outstanding)} outstanding` },
-        { label: 'Closed Loans', value: closed.length, sub: `KES ${money(totalDisbursed)} total disbursed` },
-        { label: 'In Arrears', value: arrearsRows.length, sub: `KES ${money(arrearsAmount)} overdue`, alert: arrearsRows.length > 0 },
+        { label: 'Pending Approval', value: pending.length, sub: `KES ${money(pending.reduce((s,l)=>s+Number(l.principal),0))} requested`, onclick: "goToLoansFiltered(['draft','pending_approval'])" },
+        { label: 'Awaiting Disbursement', value: approved.length, sub: `KES ${money(approved.reduce((s,l)=>s+Number(l.principal),0))} approved`, onclick: "goToLoansFiltered(['approved'])" },
+        { label: 'Active Loans', value: active.length, sub: `KES ${money(outstanding)} outstanding`, onclick: "goToLoansFiltered(['active','disbursed'])" },
+        { label: 'Closed Loans', value: closed.length, sub: `KES ${money(totalDisbursed)} total disbursed`, onclick: "goToLoansFiltered(['closed'])" },
+        { label: 'In Arrears', value: arrearsRows.length, sub: `KES ${money(arrearsAmount)} overdue`, alert: arrearsRows.length > 0, onclick: "switchTab('arrears')" },
       ];
 
       statsEl.innerHTML = cards.map(c => `
-        <div style="background:${c.alert ? '#FDECEC' : '#F3EBD8'};border-radius:6px;padding:16px">
+        <div onclick="${c.onclick}" style="cursor:pointer;background:${c.alert ? '#FDECEC' : '#F3EBD8'};border-radius:6px;padding:16px" onmouseover="this.style.opacity=0.85" onmouseout="this.style.opacity=1">
           <div style="font-size:28px;font-weight:700;color:${c.alert ? '#b91c1c' : 'inherit'}">${c.value}</div>
           <div style="font-size:13px;font-weight:600;margin-top:4px">${c.label}</div>
           <div style="font-size:12px;color:var(--color-muted);margin-top:2px">${c.sub}</div>
@@ -259,13 +260,45 @@
       loadDashboard();
     }
 
+    let currentLoanFilter = null; // array of loan statuses, or null for all
+
+    const LOAN_FILTER_LABELS = {
+      draft: 'Pending Approval', pending_approval: 'Pending Approval',
+      approved: 'Awaiting Disbursement',
+      active: 'Active', disbursed: 'Active',
+      closed: 'Closed', rejected: 'Declined',
+    };
+
+    function goToLoansFiltered(statuses) {
+      currentLoanFilter = statuses;
+      switchTab('loans');
+      loadLoans();
+    }
+
+    function clearLoanFilter() {
+      currentLoanFilter = null;
+      loadLoans();
+    }
+
     async function loadLoans() {
-      const { data, error } = await supabaseClient.from("loans")
+      let query = supabaseClient.from("loans")
         .select("id, principal, term_months, status, members(full_name), loan_products(name)")
         .eq("organisation_id", orgId).order("created_at", { ascending: false });
+      if (currentLoanFilter) query = query.in("status", currentLoanFilter);
+      const { data, error } = await query;
+
+      const banner = document.getElementById("loan-filter-banner");
+      if (currentLoanFilter) {
+        const label = [...new Set(currentLoanFilter.map(s => LOAN_FILTER_LABELS[s] || s))].join(', ');
+        banner.style.display = "block";
+        banner.innerHTML = `Showing: <strong>${label}</strong> &nbsp; <a href="#" onclick="clearLoanFilter(); return false;">Clear filter</a>`;
+      } else {
+        banner.style.display = "none";
+      }
+
       const tbody = document.getElementById("loan-rows");
       if (error) { tbody.innerHTML = `<tr><td colspan="6" class="error">${error.message}</td></tr>`; return; }
-      if (!data.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty">No loans yet.</td></tr>`; return; }
+      if (!data.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty">No loans match this filter.</td></tr>`; return; }
       tbody.innerHTML = data.map(l => `
         <tr>
           <td>${l.members.full_name}</td>
