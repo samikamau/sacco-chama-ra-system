@@ -72,17 +72,38 @@
     <!-- ── MEMBER STATEMENTS TAB ───────────────────────────────── -->
     <div id="tab-statements" style="display:none">
       <div class="card">
-        <!-- Search — always visible at top -->
-        <input id="stmt-search" placeholder="Search by name or member number…"
-          oninput="searchMembers()" autocomplete="off"
-          style="width:100%;max-width:420px;margin-bottom:12px;box-sizing:border-box">
 
-        <!-- Search results list — hidden until user types -->
-        <div id="stmt-list" style="display:none;border:1px solid var(--color-line);
-          border-radius:4px;max-height:220px;overflow-y:auto;margin-bottom:16px">
+        <!-- Row 1: Search -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">
+          <div class="field" style="margin-bottom:0;flex:2;min-width:200px">
+            <label>Search member</label>
+            <input id="stmt-search" placeholder="Name or member number…"
+              oninput="searchMembers()" autocomplete="off">
+          </div>
+          <div class="field" style="margin-bottom:0;flex:1;min-width:160px">
+            <label>Statement type</label>
+            <select id="stmt-type">
+              <option value="full">Full statement</option>
+              <option value="contributions">Contributions only</option>
+              <option value="loans">Loans only</option>
+              <option value="period">Custom period</option>
+            </select>
+          </div>
+          <div class="field" id="stmt-from-wrap" style="margin-bottom:0;display:none">
+            <label>From</label>
+            <input id="stmt-from" type="date">
+          </div>
+          <div class="field" id="stmt-to-wrap" style="margin-bottom:0;display:none">
+            <label>To</label>
+            <input id="stmt-to" type="date">
+          </div>
         </div>
 
-        <!-- Statement area — empty by default -->
+        <!-- Search results dropdown -->
+        <div id="stmt-list" style="display:none;border:1px solid var(--color-line);
+          border-radius:4px;max-height:200px;overflow-y:auto;margin-bottom:16px"></div>
+
+        <!-- Statement renders here -->
         <div id="stmt-body">
           <p class="empty">Search for a member above to view their statement.</p>
         </div>
@@ -162,6 +183,24 @@
     }
   }
 
+  // ── STATEMENT TYPE TOGGLE ───────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('stmt-type').addEventListener('change', function() {
+      const isPeriod = this.value === 'period';
+      document.getElementById('stmt-from-wrap').style.display = isPeriod ? 'block' : 'none';
+      document.getElementById('stmt-to-wrap').style.display   = isPeriod ? 'block' : 'none';
+      // Set default dates if empty
+      if (isPeriod) {
+        const now = new Date();
+        if (!document.getElementById('stmt-from').value)
+          document.getElementById('stmt-from').value =
+            new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+        if (!document.getElementById('stmt-to').value)
+          document.getElementById('stmt-to').value = now.toISOString().slice(0,10);
+      }
+    });
+  });
+
   // ── STATEMENT SEARCH ────────────────────────────────────────────
   function searchMembers() {
     const q = document.getElementById('stmt-search').value.toLowerCase().trim();
@@ -198,26 +237,45 @@
   }
 
   async function loadStatement(memberId, label) {
-    // Close dropdown, show selected in search box
     document.getElementById('stmt-search').value = label;
     document.getElementById('stmt-list').style.display = 'none';
 
     const box = document.getElementById('stmt-body');
     box.innerHTML = '<p style="color:var(--color-muted)">Loading…</p>';
 
+    const stmtType = document.getElementById('stmt-type').value;
+    const fromDate = document.getElementById('stmt-from').value || null;
+    const toDate   = document.getElementById('stmt-to').value   || null;
+    const isPeriod = stmtType === 'period';
+
+    // Build payments query
+    let payQ = supabaseClient.from('payments')
+      .select('transaction_date,channel,reference,amount,status')
+      .eq('member_id', memberId).order('transaction_date',{ascending:false}).limit(200);
+    if (isPeriod && fromDate) payQ = payQ.gte('transaction_date', fromDate);
+    if (isPeriod && toDate)   payQ = payQ.lte('transaction_date', toDate);
+
+    // Build loans query
+    let loanQ = supabaseClient.from('loans')
+      .select('id,principal,status,application_date,loan_products(name)')
+      .eq('member_id', memberId).order('application_date',{ascending:false});
+    if (isPeriod && fromDate) loanQ = loanQ.gte('application_date', fromDate);
+    if (isPeriod && toDate)   loanQ = loanQ.lte('application_date', toDate);
+
     const [{ data: member }, { data: payments }, { data: loans }] = await Promise.all([
       supabaseClient.from('members')
         .select('full_name,member_number,status,date_joined').eq('id', memberId).single(),
-      supabaseClient.from('payments')
-        .select('transaction_date,channel,reference,amount,status')
-        .eq('member_id', memberId).order('transaction_date',{ascending:false}).limit(50),
-      supabaseClient.from('loans')
-        .select('id,principal,status,application_date,loan_products(name)')
-        .eq('member_id', memberId).order('application_date',{ascending:false}),
+      stmtType === 'loans' ? Promise.resolve({data:[]}) : payQ,
+      stmtType === 'contributions' ? Promise.resolve({data:[]}) : loanQ,
     ]);
 
     const totalPaid = (payments||[])
       .filter(p=>p.status==='posted').reduce((s,p)=>s+Number(p.amount),0);
+
+    // Period label for header
+    const periodLabel = isPeriod && fromDate && toDate
+      ? ` &nbsp;·&nbsp; ${fromDate} to ${toDate}` : '';
+    const typeLabels = {full:'Full Statement',contributions:'Contributions',loans:'Loans',period:'Statement'};
 
     box.innerHTML = `
       <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;
@@ -226,7 +284,8 @@
           <div style="font-size:17px;font-weight:700">${member.full_name}</div>
           <div style="font-size:13px;color:var(--color-muted)">
             ${member.member_number} &nbsp;·&nbsp;
-            Joined: ${member.date_joined||'—'} &nbsp;·&nbsp; ${member.status}
+            Joined: ${member.date_joined||'—'} &nbsp;·&nbsp; ${member.status} &nbsp;·&nbsp;
+            <em>${typeLabels[stmtType]||'Statement'}${periodLabel}</em>
           </div>
         </div>
         <div style="margin-left:auto;text-align:right">
