@@ -2,413 +2,212 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Members — Financial Operating System</title>
+<title>Member Management — Financial Operating System</title>
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<style>
-  .drawer-backdrop {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.35);
-    display: none; z-index: 40;
-  }
-  .drawer-backdrop.open { display: block; }
-  .drawer {
-    position: fixed; top: 0; right: 0; height: 100vh; width: 440px; max-width: 92vw;
-    background: var(--color-surface); z-index: 50; transform: translateX(100%);
-    transition: transform 0.2s ease; overflow-y: auto; padding: var(--space-4);
-    box-shadow: -2px 0 12px rgba(0,0,0,0.12);
-  }
-  .drawer.open { transform: translateX(0); }
-  .drawer h2 { border-bottom: 1px solid var(--color-line); padding-bottom: var(--space-3); }
-  .drawer .section-label {
-    font-family: var(--font-display); font-size: 14px; color: var(--color-primary);
-    margin: var(--space-4) 0 var(--space-2) 0;
-  }
-  .drawer-actions { display: flex; gap: var(--space-2); margin-top: var(--space-4); flex-wrap: wrap; }
-  .toast {
-    position: fixed; bottom: 20px; right: 20px; background: var(--color-success);
-    color: #fff; padding: var(--space-3) var(--space-4); border-radius: var(--radius);
-    z-index: 60; display: none;
-  }
-  .toast.show { display: block; }
-  .loan-tabs { display:flex; gap:0; border-bottom:2px solid var(--color-line); margin-bottom:20px; }
-  .loan-tab-btn { background:none; border:none; padding:10px 18px; cursor:pointer; font-size:14px; color:var(--color-muted); border-bottom:3px solid transparent; margin-bottom:-2px; font-family:inherit; }
-  .loan-tab-btn.active { color:var(--color-ink); font-weight:600; border-bottom-color:var(--color-accent); }
-</style>
 </head>
 <body>
-  <div class="app-shell">
-    <nav class="nav">
-      <div class="brand">Ledger</div>
-      <a href="index.html">Dashboard</a>
-      <a href="members.html" class="active">Member Management</a>
-      <a href="loans.html">Loan Management</a>
-      <a href="expenditure.html">Supplier Management</a>
-      <div class="nav-group">
-        <div class="nav-group-header" onclick="toggleNav(this)">
-          <span>Accountant</span><span class="nav-chevron">›</span>
-        </div>
-        <div class="nav-group-body">
-          <a href="accounts.html">Chart of Accounts</a>
-          <a href="journal.html">General Journal</a>
-          <a href="periods.html">Accounting Periods</a>
-          <a href="banking.html">Opening Balances</a>
-        </div>
+<div class="app-shell">
+  <nav class="nav">
+    <div class="brand">Ledger</div>
+    <a href="index.html">Dashboard</a>
+    <a href="members.html" class="active">Member Management</a>
+    <a href="loans.html">Loan Management</a>
+    <a href="expenditure.html">Supplier Management</a>
+    <div class="nav-group">
+      <div class="nav-group-header" onclick="toggleNav(this)">
+        <span>Accountant</span><span class="nav-chevron">›</span>
       </div>
-      <div class="nav-group">
-        <div class="nav-group-header" onclick="toggleNav(this)">
-          <span>Banking</span><span class="nav-chevron">›</span>
-        </div>
-        <div class="nav-group-body">
-          <a href="banking.html">Bank & Cash</a>
-          <a href="reconcile.html">Reconciliation</a>
-          <a href="payments.html">Payments</a>
-        </div>
+      <div class="nav-group-body">
+        <a href="accounts.html">Chart of Accounts</a>
+        <a href="journal.html">General Journal</a>
+        <a href="periods.html">Accounting Periods</a>
+        <a href="banking.html">Opening Balances</a>
       </div>
-      <div class="nav-group">
-        <div class="nav-group-header" onclick="toggleNav(this)">
-          <span>Administration</span><span class="nav-chevron">›</span>
-        </div>
-        <div class="nav-group-body">
-          <a href="users.html">Users & Access</a>
-          <a href="contributions.html">Contributions</a>
-        </div>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-header" onclick="toggleNav(this)">
+        <span>Banking</span><span class="nav-chevron">›</span>
       </div>
-      <a href="reports.html">Reports</a>
-      <a href="#" onclick="signOut()" class="nav-signout">Sign out</a>
-    </nav>
-    <main class="main">
-      <h1>Member Management</h1>
-      <div class="loan-tabs">
-        <button id="mt-members"    class="loan-tab-btn active" onclick="switchMemberTab('members')">Members</button>
-        <button id="mt-statements" class="loan-tab-btn" onclick="switchMemberTab('statements')">Member Statements</button>
+      <div class="nav-group-body">
+        <a href="banking.html">Bank & Cash</a>
+        <a href="reconcile.html">Reconciliation</a>
+        <a href="payments.html">Payments</a>
       </div>
+    </div>
+    <a href="reports.html">Reports</a>
+    <div class="nav-group">
+      <div class="nav-group-header" onclick="toggleNav(this)">
+        <span>Administration</span><span class="nav-chevron">›</span>
+      </div>
+      <div class="nav-group-body">
+        <a href="users.html">Users & Access</a>
+        <a href="contributions.html">Contributions</a>
+      </div>
+    </div>
+    <a href="#" onclick="signOut()" class="nav-signout">Sign out</a>
+  </nav>
 
-      <!-- MEMBERS TAB -->
-      <div id="mtab-members">
-        <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
-          <button class="btn accent" onclick="openDrawer()">+ Add Member</button>
+  <main class="main">
+    <h1>Member Management</h1>
+
+    <div class="loan-tabs">
+      <button id="mt-members"    class="loan-tab-btn active" onclick="switchTab('members')">Members</button>
+      <button id="mt-statements" class="loan-tab-btn"        onclick="switchTab('statements')">Member Statements</button>
+    </div>
+
+    <!-- ── MEMBERS TAB ─────────────────────────────────────────── -->
+    <div id="tab-members">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+        <button class="btn accent" onclick="openDrawer()">+ Add Member</button>
+      </div>
+      <div class="card">
+        <table>
+          <thead><tr><th>No.</th><th>Name</th><th>Phone</th><th class="num">Monthly</th><th>KYC</th><th>Status</th></tr></thead>
+          <tbody id="rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ── MEMBER STATEMENTS TAB ───────────────────────────────── -->
+    <div id="tab-statements" style="display:none">
+      <div class="card">
+        <!-- Search — always visible at top -->
+        <input id="stmt-search" placeholder="Search by name or member number…"
+          oninput="searchMembers()" autocomplete="off"
+          style="width:100%;max-width:420px;margin-bottom:12px;box-sizing:border-box">
+
+        <!-- Search results list — hidden until user types -->
+        <div id="stmt-list" style="display:none;border:1px solid var(--color-line);
+          border-radius:4px;max-height:220px;overflow-y:auto;margin-bottom:16px">
         </div>
-        <div class="card">
-          <table>
-            <thead><tr><th>No.</th><th>Name</th><th>Phone</th><th class="num">Monthly</th><th>KYC</th><th>Status</th></tr></thead>
-            <tbody id="rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
-          </table>
+
+        <!-- Statement area — empty by default -->
+        <div id="stmt-body">
+          <p class="empty">Search for a member above to view their statement.</p>
         </div>
       </div>
+    </div>
+  </main>
+</div>
 
-      <!-- MEMBER STATEMENTS TAB -->
-      <div id="mtab-statements" style="display:none">
-        <div class="card">
-          <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
-            <input id="stmt-search" placeholder="Search by name or member number…"
-              oninput="filterStmtMembers()"
-              style="flex:1;max-width:400px">
-          </div>
-          <div id="stmt-results" style="display:none;margin-bottom:16px">
-            <table id="stmt-list">
-              <thead><tr><th>No.</th><th>Name</th><th></th></tr></thead>
-              <tbody id="stmt-rows"></tbody>
-            </table>
-          </div>
-          <div id="inline-statement">
-            <p class="empty">Search for a member above to view their statement.</p>
-          </div>
-        </div>
-      </div>
-
-    </main>
+<!-- ADD MEMBER DRAWER -->
+<div class="drawer-backdrop" id="backdrop" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <h2>Add member</h2>
+  <div class="section-label">Member details</div>
+  <div class="field"><label>Member number (auto-generated, editable)</label><input id="f-number"></div>
+  <div class="field"><label>Full name *</label><input id="f-name"></div>
+  <div class="field"><label>Date of birth</label><input id="f-dob" type="date"></div>
+  <div class="field"><label>Gender</label>
+    <select id="f-gender"><option value="">—</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select>
   </div>
-
-  <div class="drawer-backdrop" id="backdrop" onclick="closeDrawer()"></div>
-  <div class="drawer" id="drawer">
-    <h2>Add member</h2>
-
-    <div class="section-label">Member details</div>
-    <div class="field"><label>Member number (auto-generated, editable)</label><input id="f-number"></div>
-    <div class="field"><label>Full name *</label><input id="f-name"></div>
-    <div class="field"><label>Date of birth</label><input id="f-dob" type="date"></div>
-    <div class="field"><label>Gender</label>
-      <select id="f-gender"><option value="">—</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select>
-    </div>
-    <div class="field"><label>Phone</label><input id="f-phone" placeholder="2547XXXXXXXX"></div>
-    <div class="field"><label>Email</label><input id="f-email" type="email"></div>
-    <div class="field"><label>Physical address</label><input id="f-address"></div>
-
-    <div class="section-label">Membership</div>
-    <div class="field"><label>Date joined</label><input id="f-joined" type="date"></div>
-    <div class="field"><label>Membership category (for category-based contributions)</label><input id="f-category" placeholder="e.g. A"></div>
-    <div class="field"><label>Monthly contribution (optional per-member override)</label><input id="f-amount" type="number"></div>
-    <div class="field"><label>Occupation</label><input id="f-occupation"></div>
-    <div class="field"><label>Employer / business</label><input id="f-employer"></div>
-
-    <div class="section-label">Next of kin</div>
-    <div class="field"><label>Name</label><input id="f-nok-name"></div>
-    <div class="field"><label>Relationship</label><input id="f-nok-rel"></div>
-    <div class="field"><label>Phone</label><input id="f-nok-phone"></div>
-
-    <div class="section-label">Payment information</div>
-    <div class="field"><label>Preferred method</label>
-      <select id="f-pay-method"><option value="">—</option><option value="mpesa">M-Pesa</option><option value="bank">Bank</option><option value="cash">Cash</option></select>
-    </div>
-    <div class="field"><label>M-Pesa number</label><input id="f-mpesa"></div>
-    <div class="field"><label>Bank name</label><input id="f-bank"></div>
-    <div class="field"><label>Bank account number</label><input id="f-bank-acc"></div>
-
-    <div class="section-label">KYC</div>
-    <div class="field"><label>ID type</label>
-      <select id="f-id-type"><option value="national_id">National ID</option><option value="passport">Passport</option><option value="alien_id">Alien ID</option><option value="other">Other</option></select>
-    </div>
-    <div class="field"><label>ID number</label><input id="f-id-number"></div>
-    <div class="field"><label>KYC status</label>
-      <select id="f-kyc-status"><option value="pending">Pending</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select>
-    </div>
-    <div class="field"><label>KYC notes</label><input id="f-kyc-notes"></div>
-
-    <p id="drawer-error" class="error" style="display:none"></p>
-    <div class="drawer-actions">
-      <button class="btn accent" onclick="saveMember(false)">Save</button>
-      <button class="btn" onclick="saveMember(true)">Save & add another</button>
-      <button class="btn" style="background:#888" onclick="closeDrawer()">Cancel</button>
-    </div>
+  <div class="field"><label>Phone</label><input id="f-phone" placeholder="2547XXXXXXXX"></div>
+  <div class="field"><label>Email</label><input id="f-email" type="email"></div>
+  <div class="field"><label>Physical address</label><input id="f-address"></div>
+  <div class="section-label">Membership</div>
+  <div class="field"><label>Date joined</label><input id="f-joined" type="date"></div>
+  <div class="field"><label>Membership category</label><input id="f-category" placeholder="e.g. A"></div>
+  <div class="field"><label>Monthly contribution override</label><input id="f-amount" type="number"></div>
+  <div class="field"><label>Occupation</label><input id="f-occupation"></div>
+  <div class="field"><label>Employer / business</label><input id="f-employer"></div>
+  <div class="section-label">Next of kin</div>
+  <div class="field"><label>Name</label><input id="f-nok-name"></div>
+  <div class="field"><label>Relationship</label><input id="f-nok-rel"></div>
+  <div class="field"><label>Phone</label><input id="f-nok-phone"></div>
+  <div class="section-label">Payment information</div>
+  <div class="field"><label>Preferred method</label>
+    <select id="f-pay-method"><option value="">—</option><option value="mpesa">M-Pesa</option><option value="bank">Bank</option><option value="cash">Cash</option></select>
   </div>
+  <div class="field"><label>M-Pesa number</label><input id="f-mpesa"></div>
+  <div class="field"><label>Bank name</label><input id="f-bank"></div>
+  <div class="field"><label>Bank account number</label><input id="f-bank-acc"></div>
+  <div class="section-label">KYC</div>
+  <div class="field"><label>ID type</label>
+    <select id="f-id-type"><option value="national_id">National ID</option><option value="passport">Passport</option><option value="alien_id">Alien ID</option><option value="other">Other</option></select>
+  </div>
+  <div class="field"><label>ID number</label><input id="f-id-number"></div>
+  <div class="field"><label>KYC status</label>
+    <select id="f-kyc-status"><option value="pending">Pending</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select>
+  </div>
+  <div class="field"><label>KYC notes</label><input id="f-kyc-notes"></div>
+  <p id="drawer-error" class="error" style="display:none"></p>
+  <div class="drawer-actions">
+    <button class="btn accent" onclick="saveMember(false)">Save</button>
+    <button class="btn" onclick="saveMember(true)">Save & add another</button>
+    <button class="btn" style="background:#888" onclick="closeDrawer()">Cancel</button>
+  </div>
+</div>
 
-  <div class="toast" id="toast"></div>
+<div class="toast" id="toast"></div>
 
-  <script src="js/config.js"></script>
-  <script src="js/auth.js"></script>
-  <script>
-    let orgId, stmtMembers = [];
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  let orgId, allMembers = [];
 
-    function showToast(msg) {
-      const t = document.getElementById("toast");
-      t.textContent = msg; t.classList.add("show");
-      setTimeout(() => t.classList.remove("show"), 2500);
-    }
-
-    async function nextMemberNumber() {
-      const { data } = await supabaseClient.from("members")
-        .select("member_number").eq("organisation_id", orgId);
-      // Find highest numeric suffix on existing SC/member numbers, else start at 1.
-      let max = 0;
-      (data || []).forEach(m => {
-        const n = parseInt((m.member_number || "").replace(/\D/g, ""), 10);
-        if (!isNaN(n) && n > max) max = n;
-      });
-      return "SC" + String(max + 1).padStart(3, "0");
-    }
-
-    async function openDrawer() {
-      document.getElementById("drawer-error").style.display = "none";
-      document.getElementById("f-number").value = await nextMemberNumber();
-      document.getElementById("f-joined").value = new Date().toISOString().slice(0,10);
-      document.getElementById("backdrop").classList.add("open");
-      document.getElementById("drawer").classList.add("open");
-    }
-    function closeDrawer() {
-      document.getElementById("backdrop").classList.remove("open");
-      document.getElementById("drawer").classList.remove("open");
-    }
-
-    function val(id) { return document.getElementById(id).value.trim(); }
-
-    async function saveMember(addAnother) {
-      const errorEl = document.getElementById("drawer-error");
-      errorEl.style.display = "none";
-
-      const name = val("f-name");
-      if (!val("f-number") || !name) { showError(errorEl, "Member number and full name are required."); return; }
-
-      const idNumber = val("f-id-number");
-      const phone = val("f-phone");
-
-      // Duplicate checks (Section 6)
-      if (idNumber) {
-        const { data: dupId } = await supabaseClient.from("member_kyc")
-          .select("member_id").eq("organisation_id", orgId).eq("id_number", idNumber).limit(1);
-        if (dupId && dupId.length) { showError(errorEl, "A member with this ID number already exists."); return; }
-      }
-      if (phone) {
-        const { data: dupPhone } = await supabaseClient.from("members")
-          .select("id").eq("organisation_id", orgId).eq("phone", phone).limit(1);
-        if (dupPhone && dupPhone.length) { showError(errorEl, "A member with this phone number already exists."); return; }
-      }
-
-      const memberPayload = {
-        organisation_id: orgId,
-        member_number: val("f-number"),
-        full_name: name,
-        date_of_birth: val("f-dob") || null,
-        gender: val("f-gender") || null,
-        phone: phone || null,
-        email: val("f-email") || null,
-        physical_address: val("f-address") || null,
-        date_joined: val("f-joined") || null,
-        membership_category: val("f-category") || null,
-        monthly_contribution: val("f-amount") || null,
-        occupation: val("f-occupation") || null,
-        employer: val("f-employer") || null,
-        preferred_payment_method: val("f-pay-method") || null,
-        mpesa_number: val("f-mpesa") || null,
-        bank_name: val("f-bank") || null,
-        bank_account_number: val("f-bank-acc") || null,
-      };
-
-      const { data: inserted, error } = await supabaseClient.from("members").insert(memberPayload).select("id").single();
-      if (error) { showError(errorEl, error.message); return; }
-
-      // KYC row
-      await supabaseClient.from("member_kyc").insert({
-        member_id: inserted.id,
-        organisation_id: orgId,
-        id_type: val("f-id-type") || null,
-        id_number: idNumber || null,
-        kyc_status: val("f-kyc-status") || "pending",
-        verification_date: val("f-kyc-status") === "verified" ? new Date().toISOString().slice(0,10) : null,
-        kyc_notes: val("f-kyc-notes") || null,
-      });
-
-      // Next of kin (only if a name was given)
-      if (val("f-nok-name")) {
-        await supabaseClient.from("next_of_kin").insert({
-          member_id: inserted.id,
-          organisation_id: orgId,
-          full_name: val("f-nok-name"),
-          relationship: val("f-nok-rel") || null,
-          phone: val("f-nok-phone") || null,
-        });
-      }
-
-      showToast("Member saved.");
-      loadMembers();
-
-      if (addAnother) {
-        // Clear the form but keep the drawer open, fresh member number.
-        ["f-name","f-dob","f-phone","f-email","f-address","f-category","f-amount",
-         "f-occupation","f-employer","f-mpesa","f-bank","f-bank-acc","f-id-number","f-kyc-notes",
-         "f-nok-name","f-nok-rel","f-nok-phone"].forEach(id => document.getElementById(id).value = "");
-        document.getElementById("f-number").value = await nextMemberNumber();
-      } else {
-        closeDrawer();
-      }
-    }
-
-    async function loadMembers() {
-      const { data, error } = await supabaseClient
-        .from("members")
-        .select("id, member_number, full_name, phone, monthly_contribution, status, member_kyc(kyc_status)")
-        .eq("organisation_id", orgId)
-        .order("member_number");
-
-      // Store for statement picker
-      window._members = (data||[]).map(m=>({id:m.id,member_number:m.member_number,full_name:m.full_name}));
-      // Also populate statement member selector
-      const stmtSel = document.getElementById('stmt-member-select');
-      if (stmtSel) stmtSel.innerHTML = (data||[]).map(m=>
-        `<option value="${m.id}">${m.member_number} — ${m.full_name}</option>`).join('');
-
-      const tbody = document.getElementById("rows");
-      if (error) { tbody.innerHTML = `<tr><td colspan="6" class="error">${error.message}</td></tr>`; return; }
-      if (!data.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty">No members yet.</td></tr>`; return; }
-      tbody.innerHTML = data.map(m => {
-        const kyc = m.member_kyc && m.member_kyc.length ? m.member_kyc[0].kyc_status : "pending";
-        const kycClass = kyc === "verified" ? "paid" : kyc === "rejected" ? "unpaid" : "partial";
-        return `
-        <tr style="cursor:pointer" onclick="window.location.href='member.html?id=${m.id}'">
-          <td>${m.member_number}</td>
-          <td>${m.full_name}</td>
-          <td>${m.phone ?? "—"}</td>
-          <td class="num">${money(m.monthly_contribution)}</td>
-          <td><span class="status ${kycClass}">${kyc}</span></td>
-          <td><span class="status ${m.status === 'active' ? 'paid' : 'unpaid'}">${m.status}</span></td>
-        </tr>`;
-      }).join("");
-    }
-
-    (async () => {
-      const session = await requireSession();
-      if (!session) return;
-      const org = await currentOrg();
-      if (!org) return;
-      orgId = org.organisation_id;
-      loadMembers();
-    })();
-  </script>
-
-  <script>
-  function toggleNav(header) {
-    const group = header.parentElement;
-    group.classList.toggle('nav-open');
-  }
-  function switchMemberTab(name) {
+  // ── TABS ────────────────────────────────────────────────────────
+  function switchTab(name) {
     ['members','statements'].forEach(t => {
-      const panel = document.getElementById('mtab-'+t);
-      const btn   = document.getElementById('mt-'+t);
-      if (panel) panel.style.display = t === name ? 'block' : 'none';
-      if (btn)   btn.classList.toggle('active', t === name);
+      document.getElementById('tab-'+t).style.display = t===name ? 'block' : 'none';
+      document.getElementById('mt-'+t).classList.toggle('active', t===name);
     });
     if (name === 'statements') {
-      populateStmtMembers();
-      // Reset to default state — no member selected
-      document.getElementById('inline-statement').innerHTML =
-        '<p class="empty">Search for a member above to view their statement.</p>';
-      document.getElementById('stmt-results').style.display = 'none';
+      // Reset statement tab to clean state
       document.getElementById('stmt-search').value = '';
+      document.getElementById('stmt-list').style.display = 'none';
+      document.getElementById('stmt-list').innerHTML = '';
+      document.getElementById('stmt-body').innerHTML =
+        '<p class="empty">Search for a member above to view their statement.</p>';
     }
   }
 
-  async function populateStmtMembers() {
-    if (stmtMembers.length) return; // already loaded
-    const { data } = await supabaseClient.from('members')
-      .select('id,member_number,full_name').eq('organisation_id', orgId)
-      .eq('status','active').order('full_name');
-    stmtMembers = data || [];
-  }
-
-  function filterStmtMembers() {
+  // ── STATEMENT SEARCH ────────────────────────────────────────────
+  function searchMembers() {
     const q = document.getElementById('stmt-search').value.toLowerCase().trim();
-    const resultsDiv = document.getElementById('stmt-results');
-    const tbody = document.getElementById('stmt-rows');
+    const listEl = document.getElementById('stmt-list');
 
     if (!q) {
-      resultsDiv.style.display = 'none';
-      tbody.innerHTML = '';
-      document.getElementById('inline-statement').innerHTML =
+      listEl.style.display = 'none';
+      listEl.innerHTML = '';
+      document.getElementById('stmt-body').innerHTML =
         '<p class="empty">Search for a member above to view their statement.</p>';
       return;
     }
 
-    const filtered = stmtMembers.filter(m =>
+    const matches = allMembers.filter(m =>
       m.full_name.toLowerCase().includes(q) ||
       m.member_number.toLowerCase().includes(q)
     );
 
-    if (!filtered.length) {
-      resultsDiv.style.display = 'none';
-      document.getElementById('inline-statement').innerHTML =
-        '<p class="empty">No members match your search.</p>';
+    if (!matches.length) {
+      listEl.innerHTML = '<div style="padding:10px 14px;color:var(--color-muted);font-size:13px">No members found.</div>';
+      listEl.style.display = 'block';
       return;
     }
 
-    resultsDiv.style.display = 'block';
-    tbody.innerHTML = filtered.map(m => `
-      <tr style="cursor:pointer" onclick="selectStmtMember('${m.id}','${m.member_number} — ${m.full_name}')">
-        <td>${m.member_number}</td>
-        <td>${m.full_name}</td>
-        <td><button class="btn" style="padding:2px 10px;font-size:12px">View</button></td>
-      </tr>`).join('');
+    listEl.innerHTML = matches.map(m => `
+      <div onclick="loadStatement('${m.id}','${m.member_number} — ${m.full_name}')"
+        style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--color-line);
+               font-size:14px;transition:background 0.1s"
+        onmouseover="this.style.background='var(--color-bg)'"
+        onmouseout="this.style.background=''">
+        <strong>${m.member_number}</strong> — ${m.full_name}
+      </div>`).join('');
+    listEl.style.display = 'block';
   }
 
-  async function selectStmtMember(memberId, label) {
-    // Hide results, clear search
-    document.getElementById('stmt-results').style.display = 'none';
+  async function loadStatement(memberId, label) {
+    // Close dropdown, show selected in search box
     document.getElementById('stmt-search').value = label;
+    document.getElementById('stmt-list').style.display = 'none';
 
-    const box = document.getElementById('inline-statement');
+    const box = document.getElementById('stmt-body');
     box.innerHTML = '<p style="color:var(--color-muted)">Loading…</p>';
 
     const [{ data: member }, { data: payments }, { data: loans }] = await Promise.all([
       supabaseClient.from('members')
-        .select('full_name,member_number,status,join_date').eq('id', memberId).single(),
+        .select('full_name,member_number,status,date_joined').eq('id', memberId).single(),
       supabaseClient.from('payments')
         .select('transaction_date,channel,reference,amount,status')
         .eq('member_id', memberId).order('transaction_date',{ascending:false}).limit(50),
@@ -420,13 +219,14 @@
     const totalPaid = (payments||[])
       .filter(p=>p.status==='posted').reduce((s,p)=>s+Number(p.amount),0);
 
-    let html = `
-      <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center;
-                  padding:12px 0;border-bottom:1px solid var(--color-line);margin-bottom:16px">
+    box.innerHTML = `
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;
+                  padding-bottom:12px;border-bottom:1px solid var(--color-line);margin-bottom:16px">
         <div>
           <div style="font-size:17px;font-weight:700">${member.full_name}</div>
           <div style="font-size:13px;color:var(--color-muted)">
-            ${member.member_number} &nbsp;·&nbsp; Joined: ${member.join_date||'—'} &nbsp;·&nbsp; ${member.status}
+            ${member.member_number} &nbsp;·&nbsp;
+            Joined: ${member.date_joined||'—'} &nbsp;·&nbsp; ${member.status}
           </div>
         </div>
         <div style="margin-left:auto;text-align:right">
@@ -438,43 +238,136 @@
       <h3 style="margin-bottom:8px">Payment history</h3>
       <table><thead><tr>
         <th>Date</th><th>Channel</th><th>Reference</th><th class="num">Amount</th><th>Status</th>
-      </tr></thead><tbody>`;
+      </tr></thead><tbody>
+      ${(payments||[]).length
+        ? payments.map(p=>`<tr>
+            <td>${p.transaction_date}</td><td>${p.channel}</td><td>${p.reference||'—'}</td>
+            <td class="num">${money(p.amount)}</td>
+            <td><span class="status ${p.status==='posted'?'paid':'unpaid'}">${p.status}</span></td>
+          </tr>`).join('')
+        : '<tr><td colspan="5" class="empty">No payments recorded.</td></tr>'}
+      </tbody></table>
 
-    html += (payments||[]).length
-      ? payments.map(p=>`<tr>
-          <td>${p.transaction_date}</td><td>${p.channel}</td><td>${p.reference||'—'}</td>
-          <td class="num">${money(p.amount)}</td>
-          <td><span class="status ${p.status==='posted'?'paid':'unpaid'}">${p.status}</span></td>
-        </tr>`).join('')
-      : `<tr><td colspan="5" class="empty">No payments recorded.</td></tr>`;
-
-    html += `</tbody></table>
-      <h3 style="margin-top:16px;margin-bottom:8px">Loans</h3>
+      <h3 style="margin-top:20px;margin-bottom:8px">Loans</h3>
       <table><thead><tr>
         <th>Product</th><th class="num">Principal</th><th>Date</th><th>Status</th>
-      </tr></thead><tbody>`;
-
-    html += (loans||[]).length
-      ? loans.map(l=>`<tr>
-          <td>${l.loan_products.name}</td><td class="num">${money(l.principal)}</td>
-          <td>${l.application_date||'—'}</td>
-          <td><span class="status ${l.status==='closed'?'paid':['active','disbursed'].includes(l.status)?'partial':'unpaid'}">${l.status}</span></td>
-        </tr>`).join('')
-      : `<tr><td colspan="4" class="empty">No loans recorded.</td></tr>`;
-
-    html += `</tbody></table>`;
-    box.innerHTML = html;
+      </tr></thead><tbody>
+      ${(loans||[]).length
+        ? loans.map(l=>`<tr>
+            <td>${l.loan_products.name}</td><td class="num">${money(l.principal)}</td>
+            <td>${l.application_date||'—'}</td>
+            <td><span class="status ${l.status==='closed'?'paid':['active','disbursed'].includes(l.status)?'partial':'unpaid'}">${l.status}</span></td>
+          </tr>`).join('')
+        : '<tr><td colspan="4" class="empty">No loans recorded.</td></tr>'}
+      </tbody></table>`;
   }
-  function openMemberStatement() {
-    const sel = document.getElementById('stmt-member-select');
-    if (!sel || !sel.value) { alert('Select a member first.'); return; }
-    window.location.href = 'statement.html?member=' + sel.value;
+
+  // ── MEMBERS LIST ─────────────────────────────────────────────────
+  async function loadMembers() {
+    const { data, error } = await supabaseClient.from('members')
+      .select('id,member_number,full_name,phone,monthly_contribution,status,member_kyc(kyc_status)')
+      .eq('organisation_id', orgId).order('member_number');
+
+    allMembers = (data||[]).map(m=>({id:m.id,member_number:m.member_number,full_name:m.full_name}));
+
+    const tbody = document.getElementById('rows');
+    if (error) { tbody.innerHTML=`<tr><td colspan="6" class="error">${error.message}</td></tr>`; return; }
+    if (!data.length) { tbody.innerHTML=`<tr><td colspan="6" class="empty">No members yet.</td></tr>`; return; }
+    tbody.innerHTML = data.map(m => {
+      const kyc = m.member_kyc&&m.member_kyc.length ? m.member_kyc[0].kyc_status : 'pending';
+      return `<tr style="cursor:pointer" onclick="window.location.href='member.html?id=${m.id}'">
+        <td>${m.member_number}</td>
+        <td>${m.full_name}</td>
+        <td>${m.phone||'—'}</td>
+        <td class="num">${money(m.monthly_contribution)}</td>
+        <td><span class="status ${kyc==='verified'?'paid':kyc==='rejected'?'unpaid':'partial'}">${kyc}</span></td>
+        <td><span class="status ${m.status==='active'?'paid':'unpaid'}">${m.status}</span></td>
+      </tr>`;
+    }).join('');
   }
-  document.addEventListener('DOMContentLoaded', () => switchMemberTab('members'));
-  // Auto-open active group on load
-  document.querySelectorAll('.nav-group-header.active').forEach(h => {
-    h.parentElement.classList.add('nav-open');
-  });
-  </script>
+
+  // ── DRAWER ───────────────────────────────────────────────────────
+  function showToast(msg) {
+    const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+    setTimeout(()=>t.classList.remove('show'),2500);
+  }
+  async function nextMemberNumber() {
+    const {data} = await supabaseClient.from('members').select('member_number').eq('organisation_id',orgId);
+    let max=0;
+    (data||[]).forEach(m=>{const n=parseInt((m.member_number||'').replace(/\D/g,''),10);if(!isNaN(n)&&n>max)max=n;});
+    return 'SC'+String(max+1).padStart(3,'0');
+  }
+  async function openDrawer() {
+    document.getElementById('drawer-error').style.display='none';
+    document.getElementById('f-number').value=await nextMemberNumber();
+    document.getElementById('f-joined').value=new Date().toISOString().slice(0,10);
+    document.getElementById('backdrop').classList.add('open');
+    document.getElementById('drawer').classList.add('open');
+  }
+  function closeDrawer() {
+    document.getElementById('backdrop').classList.remove('open');
+    document.getElementById('drawer').classList.remove('open');
+  }
+  function val(id){return document.getElementById(id).value.trim();}
+
+  async function saveMember(addAnother) {
+    const errorEl=document.getElementById('drawer-error');
+    errorEl.style.display='none';
+    if (!val('f-number')||!val('f-name')){showError(errorEl,'Member number and full name are required.');return;}
+    const idNumber=val('f-id-number'), phone=val('f-phone');
+    if (idNumber) {
+      const {data:d}=await supabaseClient.from('member_kyc').select('member_id').eq('organisation_id',orgId).eq('id_number',idNumber).limit(1);
+      if (d&&d.length){showError(errorEl,'A member with this ID number already exists.');return;}
+    }
+    if (phone) {
+      const {data:d}=await supabaseClient.from('members').select('id').eq('organisation_id',orgId).eq('phone',phone).limit(1);
+      if (d&&d.length){showError(errorEl,'A member with this phone number already exists.');return;}
+    }
+    const {data:ins,error}=await supabaseClient.from('members').insert({
+      organisation_id:orgId, member_number:val('f-number'), full_name:val('f-name'),
+      date_of_birth:val('f-dob')||null, gender:val('f-gender')||null,
+      phone:phone||null, email:val('f-email')||null, physical_address:val('f-address')||null,
+      date_joined:val('f-joined')||null, membership_category:val('f-category')||null,
+      monthly_contribution:val('f-amount')||null, occupation:val('f-occupation')||null,
+      employer:val('f-employer')||null, preferred_payment_method:val('f-pay-method')||null,
+      mpesa_number:val('f-mpesa')||null, bank_name:val('f-bank')||null,
+      bank_account_number:val('f-bank-acc')||null,
+    }).select('id').single();
+    if (error){showError(errorEl,error.message);return;}
+    await supabaseClient.from('member_kyc').insert({
+      member_id:ins.id, organisation_id:orgId,
+      id_type:val('f-id-type')||null, id_number:idNumber||null,
+      kyc_status:val('f-kyc-status')||'pending',
+      verification_date:val('f-kyc-status')==='verified'?new Date().toISOString().slice(0,10):null,
+      kyc_notes:val('f-kyc-notes')||null,
+    });
+    if (val('f-nok-name')) {
+      await supabaseClient.from('next_of_kin').insert({
+        member_id:ins.id, organisation_id:orgId,
+        full_name:val('f-nok-name'), relationship:val('f-nok-rel')||null, phone:val('f-nok-phone')||null,
+      });
+    }
+    showToast('Member saved.');
+    loadMembers();
+    if (addAnother) {
+      ['f-name','f-dob','f-phone','f-email','f-address','f-category','f-amount',
+       'f-occupation','f-employer','f-mpesa','f-bank','f-bank-acc','f-id-number','f-kyc-notes',
+       'f-nok-name','f-nok-rel','f-nok-phone'].forEach(id=>document.getElementById(id).value='');
+      document.getElementById('f-number').value=await nextMemberNumber();
+    } else { closeDrawer(); }
+  }
+
+  // ── INIT ─────────────────────────────────────────────────────────
+  (async()=>{
+    const session=await requireSession(); if(!session)return;
+    const org=await currentOrg(); if(!org)return;
+    orgId=org.organisation_id;
+    loadMembers();
+  })();
+</script>
+
+<script>
+function toggleNav(header){header.parentElement.classList.toggle('nav-open');}
+</script>
 </body>
 </html>
