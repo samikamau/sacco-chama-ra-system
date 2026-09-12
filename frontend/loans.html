@@ -449,15 +449,59 @@
 
       // Repayment schedule
       if ((schedule||[]).length) {
-        html += `<h3 style="margin-top:16px">Repayment schedule</h3>
-          <table><thead><tr><th>#</th><th>Due</th><th class="num">Principal</th><th class="num">Interest</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>`;
-        html += (schedule||[]).map(s=>`<tr>
-          <td>${s.installment_no}</td><td>${s.due_date}</td>
-          <td class="num">${money(s.principal_due)}</td><td class="num">${money(s.interest_due)}</td>
-          <td class="num">${money(s.total_due)}</td>
-          <td><span class="status ${s.status==='paid'?'paid':s.status==='partial'?'partial':'unpaid'}">${s.status}</span></td>
-        </tr>`).join('');
-        html += `</tbody></table>`;
+        const totalPrincipal = schedule.reduce((s,r)=>s+Number(r.principal_due),0);
+        const totalInterest  = schedule.reduce((s,r)=>s+Number(r.interest_due),0);
+        const totalDue       = schedule.reduce((s,r)=>s+Number(r.total_due),0);
+        const totalPaid      = schedule.reduce((s,r)=>s+Number(r.principal_paid||0)+Number(r.interest_paid||0),0);
+
+        html += `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;margin-bottom:6px">
+            <h3 style="margin:0">Repayment schedule</h3>
+            <div style="display:flex;gap:6px">
+              <button class="btn" onclick="printLoanSchedule('${loanId}')" style="font-size:12px;padding:4px 10px">⬇ PDF</button>
+              <button class="btn" onclick="exportLoanScheduleCSV('${loanId}')" style="font-size:12px;padding:4px 10px">⬇ Excel</button>
+            </div>
+          </div>
+          <table id="sched-${loanId}">
+            <thead>
+              <tr>
+                <th>#</th><th>Due date</th>
+                <th class="num">Principal</th><th class="num">Interest</th>
+                <th class="num">Total due</th><th class="num">Total paid</th>
+                <th class="num">Balance</th><th>Status</th>
+              </tr>
+            </thead><tbody>`;
+
+        let runBalance = loan.principal;
+        html += (schedule||[]).map(s=>{
+          const paid = Number(s.principal_paid||0)+Number(s.interest_paid||0);
+          runBalance -= Number(s.principal_paid||0);
+          return `<tr>
+            <td>${s.installment_no}</td>
+            <td>${s.due_date}</td>
+            <td class="num">${money(s.principal_due)}</td>
+            <td class="num">${money(s.interest_due)}</td>
+            <td class="num">${money(s.total_due)}</td>
+            <td class="num">${money(paid)}</td>
+            <td class="num"><strong>${money(Math.max(runBalance,0))}</strong></td>
+            <td><span class="status ${s.status==='paid'?'paid':s.status==='partial'?'partial':'unpaid'}">${s.status}</span></td>
+          </tr>`;}).join('');
+
+        html += `</tbody>
+          <tfoot style="font-weight:700;border-top:2px solid var(--color-line)">
+            <tr>
+              <td colspan="2">Totals</td>
+              <td class="num">${money(totalPrincipal)}</td>
+              <td class="num">${money(totalInterest)}</td>
+              <td class="num">${money(totalDue)}</td>
+              <td class="num">${money(totalPaid)}</td>
+              <td class="num">${money(Math.max(totalPrincipal-schedule.reduce((s,r)=>s+Number(r.principal_paid||0),0),0))}</td>
+              <td></td>
+            </tr>
+          </tfoot></table>`;
+      } else if (['pending_approval','draft','approved'].includes(loan.status)) {
+        html += `<p style="margin-top:12px;color:var(--color-muted);font-size:13px">
+          Repayment schedule will be generated when the loan is disbursed.</p>`;
       }
 
       // Actions
@@ -602,6 +646,66 @@
         <td class="num">${a.days_overdue}</td>
         <td class="num">${a.installments_overdue}</td>
       </tr>`).join('');
+    }
+
+    // ── LOAN SCHEDULE EXPORTS ────────────────────────────────────────────
+    async function printLoanSchedule(loanId) {
+      // Fetch loan details for header
+      const [{data:loan}] = await Promise.all([
+        supabaseClient.from('loans')
+          .select('loan_number,principal,term_months,annual_interest_rate,application_date,disbursed_at,members(full_name),loan_products(name,interest_method)')
+          .eq('id',loanId).single(),
+      ]);
+
+      const tbl = document.getElementById('sched-'+loanId);
+      if (!tbl) { alert('Open the loan first to view the schedule.'); return; }
+
+      const win = window.open('','_blank');
+      win.document.write(`<!DOCTYPE html><html><head>
+        <title>Loan Schedule — ${loan.loan_number||loanId}</title>
+        <style>
+          body{font-family:Arial,sans-serif;font-size:12px;padding:28px;color:#1a1a1a;max-width:900px;margin:auto}
+          h2{margin:0 0 4px}
+          .meta{font-size:12px;color:#666;margin-bottom:16px}
+          table{width:100%;border-collapse:collapse;margin-top:12px}
+          th,td{padding:6px 10px;border:1px solid #ccc;text-align:left}
+          th{background:#f0f0f0;font-weight:600}
+          td.num,th.num{text-align:right}
+          tfoot tr{font-weight:700;background:#f5f5f5}
+          @media print{@page{margin:15mm}}
+        </style></head><body>
+        <h2>Loan Repayment Schedule</h2>
+        <div class="meta">
+          <strong>Loan No:</strong> ${loan.loan_number||'—'} &nbsp;&nbsp;
+          <strong>Member:</strong> ${loan.members.full_name} &nbsp;&nbsp;
+          <strong>Product:</strong> ${loan.loan_products.name} &nbsp;&nbsp;
+          <strong>Principal:</strong> KES ${money(loan.principal)} &nbsp;&nbsp;
+          <strong>Term:</strong> ${loan.term_months} months &nbsp;&nbsp;
+          <strong>Rate:</strong> ${loan.annual_interest_rate}% p.a. (${loan.loan_products.interest_method})<br>
+          <strong>Applied:</strong> ${loan.application_date||'—'} &nbsp;&nbsp;
+          <strong>Disbursed:</strong> ${loan.disbursed_at?loan.disbursed_at.slice(0,10):'—'} &nbsp;&nbsp;
+          <strong>Printed:</strong> ${new Date().toLocaleDateString('en-KE',{day:'2-digit',month:'long',year:'numeric'})}
+        </div>
+        ${tbl.outerHTML}
+        </body></html>`);
+      win.document.close();
+      setTimeout(()=>win.print(),400);
+    }
+
+    function exportLoanScheduleCSV(loanId) {
+      const tbl = document.getElementById('sched-'+loanId);
+      if (!tbl) { alert('Open the loan first to view the schedule.'); return; }
+      const rows = [];
+      tbl.querySelectorAll('tr').forEach(tr => {
+        rows.push([...tr.querySelectorAll('th,td')]
+          .map(c=>`"${c.textContent.trim().replace(/"/g,'""')}"`).join(','));
+      });
+      const csv = rows.join('
+');
+      const a = document.createElement('a');
+      a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+      a.download = `loan_schedule_${loanId}.csv`;
+      a.click();
     }
 
     // ── INIT ──────────────────────────────────────────────────────────────
