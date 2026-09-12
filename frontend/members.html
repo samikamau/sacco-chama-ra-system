@@ -71,43 +71,54 @@
 
     <!-- ── MEMBER STATEMENTS TAB ───────────────────────────────── -->
     <div id="tab-statements" style="display:none">
-      <div class="card">
+      <div class="card" style="margin-bottom:12px">
 
-        <!-- Row 1: Search -->
+        <!-- Controls row -->
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">
           <div class="field" style="margin-bottom:0;flex:2;min-width:200px">
             <label>Search member</label>
             <input id="stmt-search" placeholder="Name or member number…"
               oninput="searchMembers()" autocomplete="off">
           </div>
-          <div class="field" style="margin-bottom:0;flex:1;min-width:160px">
+          <div class="field" style="margin-bottom:0;flex:1;min-width:150px">
             <label>Statement type</label>
-            <select id="stmt-type">
+            <select id="stmt-type" onchange="onStmtTypeChange()">
               <option value="full">Full statement</option>
-              <option value="contributions">Contributions only</option>
-              <option value="loans">Loans only</option>
-              <option value="period">Custom period</option>
+              <option value="funds">Fund balances</option>
+              <option value="contributions">Contributions</option>
+              <option value="loans">Loans</option>
             </select>
           </div>
-          <div class="field" id="stmt-from-wrap" style="margin-bottom:0;display:none">
+          <div class="field" style="margin-bottom:0;min-width:130px">
             <label>From</label>
             <input id="stmt-from" type="date">
           </div>
-          <div class="field" id="stmt-to-wrap" style="margin-bottom:0;display:none">
+          <div class="field" style="margin-bottom:0;min-width:130px">
             <label>To</label>
             <input id="stmt-to" type="date">
           </div>
+          <button class="btn accent" onclick="generateStatements()" style="white-space:nowrap">Generate</button>
         </div>
 
         <!-- Search results dropdown -->
         <div id="stmt-list" style="display:none;border:1px solid var(--color-line);
-          border-radius:4px;max-height:200px;overflow-y:auto;margin-bottom:16px"></div>
+          border-radius:4px;max-height:200px;overflow-y:auto;margin-bottom:8px"></div>
 
-        <!-- Statement renders here -->
-        <div id="stmt-body">
-          <p class="empty">Search for a member above to view their statement.</p>
-        </div>
+        <!-- Selected members chips -->
+        <div id="stmt-selected" style="display:flex;flex-wrap:wrap;gap:6px;min-height:28px"></div>
+        <p style="font-size:12px;color:var(--color-muted);margin-top:4px">
+          Select one or more members from search, then click Generate.
+        </p>
       </div>
+
+      <!-- Export buttons — shown after generation -->
+      <div id="stmt-export-bar" style="display:none;margin-bottom:12px;display:none">
+        <button class="btn" onclick="exportStmtPDF()">⬇ PDF</button>
+        <button class="btn" onclick="exportStmtExcel()" style="margin-left:6px">⬇ Excel</button>
+      </div>
+
+      <!-- Statement output -->
+      <div id="stmt-body"></div>
     </div>
   </main>
 </div>
@@ -183,145 +194,248 @@
     }
   }
 
-  // ── STATEMENT TYPE TOGGLE ───────────────────────────────────────
-  document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('stmt-type').addEventListener('change', function() {
-      const isPeriod = this.value === 'period';
-      document.getElementById('stmt-from-wrap').style.display = isPeriod ? 'block' : 'none';
-      document.getElementById('stmt-to-wrap').style.display   = isPeriod ? 'block' : 'none';
-      // Set default dates if empty
-      if (isPeriod) {
-        const now = new Date();
-        if (!document.getElementById('stmt-from').value)
-          document.getElementById('stmt-from').value =
-            new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
-        if (!document.getElementById('stmt-to').value)
-          document.getElementById('stmt-to').value = now.toISOString().slice(0,10);
-      }
-    });
-  });
+  // ── STATEMENT: setup ────────────────────────────────────────────
+  let selectedStmtMembers = []; // [{id, label}]
 
-  // ── STATEMENT SEARCH ────────────────────────────────────────────
+  function onStmtTypeChange() {}
+
+  function switchTab(name) {
+    ['members','statements'].forEach(t => {
+      document.getElementById('tab-'+t).style.display = t===name ? 'block' : 'none';
+      document.getElementById('mt-'+t).classList.toggle('active', t===name);
+    });
+    if (name === 'statements') {
+      const now = new Date();
+      if (!document.getElementById('stmt-from').value)
+        document.getElementById('stmt-from').value =
+          new Date(now.getFullYear(), 0, 1).toISOString().slice(0,10);
+      if (!document.getElementById('stmt-to').value)
+        document.getElementById('stmt-to').value = now.toISOString().slice(0,10);
+      selectedStmtMembers = [];
+      renderSelectedChips();
+      document.getElementById('stmt-body').innerHTML = '';
+      document.getElementById('stmt-export-bar').style.display = 'none';
+    }
+  }
+
+  // ── SEARCH ───────────────────────────────────────────────────────
   function searchMembers() {
     const q = document.getElementById('stmt-search').value.toLowerCase().trim();
     const listEl = document.getElementById('stmt-list');
-
-    if (!q) {
-      listEl.style.display = 'none';
-      listEl.innerHTML = '';
-      document.getElementById('stmt-body').innerHTML =
-        '<p class="empty">Search for a member above to view their statement.</p>';
-      return;
-    }
-
+    if (!q) { listEl.style.display='none'; listEl.innerHTML=''; return; }
     const matches = allMembers.filter(m =>
       m.full_name.toLowerCase().includes(q) ||
       m.member_number.toLowerCase().includes(q)
     );
-
     if (!matches.length) {
-      listEl.innerHTML = '<div style="padding:10px 14px;color:var(--color-muted);font-size:13px">No members found.</div>';
-      listEl.style.display = 'block';
-      return;
+      listEl.innerHTML='<div style="padding:10px 14px;color:var(--color-muted);font-size:13px">No members found.</div>';
+      listEl.style.display='block'; return;
     }
-
     listEl.innerHTML = matches.map(m => `
-      <div onclick="loadStatement('${m.id}','${m.member_number} — ${m.full_name}')"
-        style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--color-line);
-               font-size:14px;transition:background 0.1s"
+      <div onclick="addStmtMember('${m.id}','${m.member_number} — ${m.full_name}')"
+        style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--color-line);font-size:14px"
         onmouseover="this.style.background='var(--color-bg)'"
         onmouseout="this.style.background=''">
         <strong>${m.member_number}</strong> — ${m.full_name}
       </div>`).join('');
-    listEl.style.display = 'block';
+    listEl.style.display='block';
   }
 
-  async function loadStatement(memberId, label) {
-    document.getElementById('stmt-search').value = label;
-    document.getElementById('stmt-list').style.display = 'none';
+  function addStmtMember(id, label) {
+    if (!selectedStmtMembers.find(m=>m.id===id))
+      selectedStmtMembers.push({id, label});
+    document.getElementById('stmt-search').value='';
+    document.getElementById('stmt-list').style.display='none';
+    document.getElementById('stmt-list').innerHTML='';
+    renderSelectedChips();
+  }
 
-    const box = document.getElementById('stmt-body');
-    box.innerHTML = '<p style="color:var(--color-muted)">Loading…</p>';
+  function removeStmtMember(id) {
+    selectedStmtMembers = selectedStmtMembers.filter(m=>m.id!==id);
+    renderSelectedChips();
+  }
 
+  function renderSelectedChips() {
+    document.getElementById('stmt-selected').innerHTML =
+      selectedStmtMembers.map(m=>`
+        <span style="background:var(--color-primary);color:#fff;padding:4px 10px;
+          border-radius:999px;font-size:12px;display:inline-flex;align-items:center;gap:6px">
+          ${m.label}
+          <span onclick="removeStmtMember('${m.id}')" style="cursor:pointer;opacity:0.7;font-size:14px">×</span>
+        </span>`).join('');
+  }
+
+  // ── GENERATE ─────────────────────────────────────────────────────
+  async function generateStatements() {
+    if (!selectedStmtMembers.length) {
+      alert('Select at least one member first.'); return;
+    }
     const stmtType = document.getElementById('stmt-type').value;
     const fromDate = document.getElementById('stmt-from').value || null;
     const toDate   = document.getElementById('stmt-to').value   || null;
-    const isPeriod = stmtType === 'period';
+    const box = document.getElementById('stmt-body');
+    box.innerHTML = '<p style="color:var(--color-muted)">Generating…</p>';
 
-    // Build payments query
+    let html = '';
+    for (const m of selectedStmtMembers) {
+      html += await buildMemberStatement(m.id, stmtType, fromDate, toDate);
+      html += '<div style="page-break-after:always;border-bottom:2px solid var(--color-line);margin:24px 0"></div>';
+    }
+    box.innerHTML = html;
+    document.getElementById('stmt-export-bar').style.display = 'flex';
+    document.getElementById('stmt-export-bar').style.gap = '8px';
+  }
+
+  async function buildMemberStatement(memberId, stmtType, fromDate, toDate) {
     let payQ = supabaseClient.from('payments')
       .select('transaction_date,channel,reference,amount,status')
-      .eq('member_id', memberId).order('transaction_date',{ascending:false}).limit(200);
-    if (isPeriod && fromDate) payQ = payQ.gte('transaction_date', fromDate);
-    if (isPeriod && toDate)   payQ = payQ.lte('transaction_date', toDate);
+      .eq('member_id', memberId).order('transaction_date',{ascending:false});
+    if (fromDate) payQ = payQ.gte('transaction_date', fromDate);
+    if (toDate)   payQ = payQ.lte('transaction_date', toDate);
 
-    // Build loans query
     let loanQ = supabaseClient.from('loans')
-      .select('id,principal,status,application_date,loan_products(name)')
+      .select('id,principal,status,application_date,disbursed_at,loan_products(name),loan_repayments(amount,created_at)')
       .eq('member_id', memberId).order('application_date',{ascending:false});
-    if (isPeriod && fromDate) loanQ = loanQ.gte('application_date', fromDate);
-    if (isPeriod && toDate)   loanQ = loanQ.lte('application_date', toDate);
+    if (fromDate) loanQ = loanQ.gte('application_date', fromDate);
+    if (toDate)   loanQ = loanQ.lte('application_date', toDate);
 
-    const [{ data: member }, { data: payments }, { data: loans }] = await Promise.all([
-      supabaseClient.from('members')
-        .select('full_name,member_number,status,date_joined').eq('id', memberId).single(),
-      stmtType === 'loans' ? Promise.resolve({data:[]}) : payQ,
-      stmtType === 'contributions' ? Promise.resolve({data:[]}) : loanQ,
-    ]);
+    let allocQ = supabaseClient.from('payment_allocations')
+      .select('amount,contribution_types(name,category),payments!inner(transaction_date,member_id)')
+      .eq('payments.member_id', memberId);
 
-    const totalPaid = (payments||[])
-      .filter(p=>p.status==='posted').reduce((s,p)=>s+Number(p.amount),0);
+    const fetches = [
+      supabaseClient.from('members').select('full_name,member_number,status,date_joined').eq('id',memberId).single(),
+      stmtType==='loans' ? Promise.resolve({data:[]}) : payQ,
+      stmtType==='contributions' ? Promise.resolve({data:[]}) : loanQ,
+      (stmtType==='full'||stmtType==='funds'||stmtType==='contributions') ? allocQ : Promise.resolve({data:[]}),
+    ];
 
-    // Period label for header
-    const periodLabel = isPeriod && fromDate && toDate
-      ? ` &nbsp;·&nbsp; ${fromDate} to ${toDate}` : '';
-    const typeLabels = {full:'Full Statement',contributions:'Contributions',loans:'Loans',period:'Statement'};
+    const [{data:member},{data:payments},{data:loans},{data:allocs}] = await Promise.all(fetches);
 
-    box.innerHTML = `
-      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;
-                  padding-bottom:12px;border-bottom:1px solid var(--color-line);margin-bottom:16px">
-        <div>
-          <div style="font-size:17px;font-weight:700">${member.full_name}</div>
-          <div style="font-size:13px;color:var(--color-muted)">
-            ${member.member_number} &nbsp;·&nbsp;
-            Joined: ${member.date_joined||'—'} &nbsp;·&nbsp; ${member.status} &nbsp;·&nbsp;
-            <em>${typeLabels[stmtType]||'Statement'}${periodLabel}</em>
+    const periodText = fromDate&&toDate ? `${fromDate} to ${toDate}` : 'All time';
+    const typeLabels = {full:'Full Statement',funds:'Fund Balances',contributions:'Contributions',loans:'Loans'};
+
+    // Fund balances from allocations
+    const fundMap = {};
+    (allocs||[]).forEach(a => {
+      const name = a.contribution_types?.name || 'Other';
+      fundMap[name] = (fundMap[name]||0) + Number(a.amount);
+    });
+
+    const totalContribs = (payments||[]).filter(p=>p.status==='posted').reduce((s,p)=>s+Number(p.amount),0);
+    const totalLoans    = (loans||[]).reduce((s,l)=>s+Number(l.principal),0);
+
+    let h = `
+      <div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="font-size:18px;font-weight:700">${member.full_name}</div>
+            <div style="font-size:13px;color:var(--color-muted)">
+              ${member.member_number} &nbsp;·&nbsp; Joined: ${member.date_joined||'—'} &nbsp;·&nbsp; ${member.status}
+            </div>
+          </div>
+          <div style="text-align:right;font-size:13px;color:var(--color-muted)">
+            <strong>${typeLabels[stmtType]||'Statement'}</strong><br>${periodText}
           </div>
         </div>
-        <div style="margin-left:auto;text-align:right">
-          <div style="font-size:20px;font-weight:700;color:var(--color-accent)">KES ${money(totalPaid)}</div>
-          <div style="font-size:12px;color:var(--color-muted)">Total contributions</div>
-        </div>
-      </div>
+      </div>`;
 
-      <h3 style="margin-bottom:8px">Payment history</h3>
-      <table><thead><tr>
-        <th>Date</th><th>Channel</th><th>Reference</th><th class="num">Amount</th><th>Status</th>
-      </tr></thead><tbody>
-      ${(payments||[]).length
+    // Summary KPIs
+    h += `<div style="display:flex;gap:12px;flex-wrap:wrap;margin:12px 0">`;
+    if (stmtType!=='loans') h += `
+      <div style="flex:1;min-width:130px;background:var(--color-bg);padding:10px 14px;border-radius:4px">
+        <div style="font-size:18px;font-weight:700;color:var(--color-accent)">KES ${money(totalContribs)}</div>
+        <div style="font-size:12px;color:var(--color-muted)">Total contributions</div>
+      </div>`;
+    if (stmtType!=='contributions') h += `
+      <div style="flex:1;min-width:130px;background:var(--color-bg);padding:10px 14px;border-radius:4px">
+        <div style="font-size:18px;font-weight:700">${(loans||[]).filter(l=>['active','disbursed'].includes(l.status)).length}</div>
+        <div style="font-size:12px;color:var(--color-muted)">Active loans &nbsp;·&nbsp; KES ${money(totalLoans)} total</div>
+      </div>`;
+    h += `</div>`;
+
+    // Fund balances section
+    if ((stmtType==='full'||stmtType==='funds') && Object.keys(fundMap).length) {
+      h += `<h3 style="margin-bottom:6px">Fund balances</h3>
+        <table><thead><tr><th>Fund</th><th class="num">Balance (KES)</th></tr></thead><tbody>`;
+      Object.entries(fundMap).forEach(([fund,amt]) => {
+        h += `<tr><td>${fund}</td><td class="num"><strong>${money(amt)}</strong></td></tr>`;
+      });
+      h += `<tr style="font-weight:700;border-top:2px solid var(--color-line)">
+        <td>Total</td><td class="num">${money(Object.values(fundMap).reduce((a,b)=>a+b,0))}</td>
+      </tr></tbody></table>`;
+    }
+
+    // Contributions / payments
+    if (stmtType!=='loans' && stmtType!=='funds') {
+      h += `<h3 style="margin-top:16px;margin-bottom:6px">Payment history</h3>
+        <table><thead><tr><th>Date</th><th>Channel</th><th>Reference</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>`;
+      h += (payments||[]).length
         ? payments.map(p=>`<tr>
             <td>${p.transaction_date}</td><td>${p.channel}</td><td>${p.reference||'—'}</td>
             <td class="num">${money(p.amount)}</td>
             <td><span class="status ${p.status==='posted'?'paid':'unpaid'}">${p.status}</span></td>
           </tr>`).join('')
-        : '<tr><td colspan="5" class="empty">No payments recorded.</td></tr>'}
-      </tbody></table>
+        : '<tr><td colspan="5" class="empty">No payments in this period.</td></tr>';
+      h += `</tbody></table>`;
+    }
 
-      <h3 style="margin-top:20px;margin-bottom:8px">Loans</h3>
-      <table><thead><tr>
-        <th>Product</th><th class="num">Principal</th><th>Date</th><th>Status</th>
-      </tr></thead><tbody>
-      ${(loans||[]).length
-        ? loans.map(l=>`<tr>
-            <td>${l.loan_products.name}</td><td class="num">${money(l.principal)}</td>
-            <td>${l.application_date||'—'}</td>
-            <td><span class="status ${l.status==='closed'?'paid':['active','disbursed'].includes(l.status)?'partial':'unpaid'}">${l.status}</span></td>
-          </tr>`).join('')
-        : '<tr><td colspan="4" class="empty">No loans recorded.</td></tr>'}
-      </tbody></table>`;
+    // Loans
+    if (stmtType!=='contributions' && stmtType!=='funds') {
+      h += `<h3 style="margin-top:16px;margin-bottom:6px">Loans</h3>
+        <table><thead><tr><th>Product</th><th class="num">Principal</th><th>Disbursed</th><th class="num">Repaid</th><th>Status</th></tr></thead><tbody>`;
+      h += (loans||[]).length
+        ? loans.map(l=>{
+            const repaid=(l.loan_repayments||[]).reduce((s,r)=>s+Number(r.amount),0);
+            return `<tr>
+              <td>${l.loan_products.name}</td><td class="num">${money(l.principal)}</td>
+              <td>${l.application_date||'—'}</td><td class="num">${money(repaid)}</td>
+              <td><span class="status ${l.status==='closed'?'paid':['active','disbursed'].includes(l.status)?'partial':'unpaid'}">${l.status}</span></td>
+            </tr>`;}).join('')
+        : '<tr><td colspan="5" class="empty">No loans in this period.</td></tr>';
+      h += `</tbody></table>`;
+    }
+
+    return h;
   }
 
-  // ── MEMBERS LIST ─────────────────────────────────────────────────
+  // ── EXPORT ───────────────────────────────────────────────────────
+  function exportStmtPDF() {
+    const content = document.getElementById('stmt-body').innerHTML;
+    const win = window.open('','_blank');
+    win.document.write(`<!DOCTYPE html><html><head><title>Member Statements</title>
+      <style>
+        body{font-family:Arial,sans-serif;font-size:13px;padding:24px;color:#1a1a1a}
+        table{width:100%;border-collapse:collapse;margin-bottom:12px}
+        th,td{padding:6px 10px;border:1px solid #ddd;text-align:left}
+        th{background:#f5f5f5;font-weight:600}
+        .num{text-align:right}
+        h3{margin:16px 0 6px}
+        @media print{.page-break{page-break-after:always}}
+      </style></head><body>${content}</body></html>`);
+    win.document.close();
+    setTimeout(()=>win.print(),400);
+  }
+
+  function exportStmtExcel() {
+    const rows = [['Member','Date','Channel','Reference','Amount','Status','Type']];
+    // Collect table rows from rendered HTML
+    document.querySelectorAll('#stmt-body table').forEach(tbl => {
+      const headers = [...tbl.querySelectorAll('th')].map(th=>th.textContent.trim());
+      tbl.querySelectorAll('tbody tr').forEach(tr => {
+        const cells = [...tr.querySelectorAll('td')].map(td=>td.textContent.trim());
+        if (cells.length > 1) rows.push(cells);
+      });
+      rows.push([]);
+    });
+    const csv = rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const a = document.createElement('a');
+    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+    a.download = 'member_statements.csv';
+    a.click();
+  }
+
+    // ── MEMBERS LIST ─────────────────────────────────────────────────
   async function loadMembers() {
     const { data, error } = await supabaseClient.from('members')
       .select('id,member_number,full_name,phone,monthly_contribution,status,member_kyc(kyc_status)')
