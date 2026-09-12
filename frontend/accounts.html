@@ -5,25 +5,7 @@
 <title>Chart of Accounts — Financial Operating System</title>
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<style>
-  .coa-category { margin-bottom:10px; border:1px solid var(--color-line); border-radius:var(--radius); overflow:hidden; }
-  .coa-cat-header { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; color:#fff; cursor:pointer; user-select:none; }
-  .coa-cat-header h3 { margin:0; font-size:14px; color:#fff; font-weight:600; }
-  .coa-cat-header .meta { font-size:12px; opacity:0.8; display:flex; align-items:center; gap:10px; }
-  .toggle-icon { font-size:18px; font-weight:300; transition:transform 0.2s; line-height:1; }
-  .coa-cat-body { display:none; }
-  .coa-cat-body.open { display:block; }
-  .coa-row { display:grid; grid-template-columns:90px 1fr 90px 90px 150px; gap:8px; align-items:center; padding:7px 16px; border-bottom:1px solid var(--color-line); font-size:13px; }
-  .coa-row:last-child { border-bottom:none; }
-  .coa-row:hover { background:var(--color-bg); }
-  .coa-hdr { background:#F3EBD8; font-weight:600; font-size:12px; color:var(--color-muted); }
-  .coa-inactive { opacity:0.45; }
-  .coa-inactive .coa-name { text-decoration:line-through; }
-  .drawer-backdrop { position:fixed;inset:0;background:rgba(0,0,0,0.35);display:none;z-index:40; }
-  .drawer-backdrop.open { display:block; }
-  .drawer { position:fixed;top:0;right:0;height:100vh;width:420px;max-width:94vw;background:var(--color-surface);z-index:50;transform:translateX(100%);transition:transform 0.2s;overflow-y:auto;padding:var(--space-4);box-shadow:-2px 0 16px rgba(0,0,0,0.12); }
-  .drawer.open { transform:translateX(0); }
-</style>
+
 </head>
 <body>
   <div class="app-shell">
