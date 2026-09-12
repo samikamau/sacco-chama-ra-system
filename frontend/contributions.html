@@ -310,6 +310,8 @@
       const org = await currentOrg();
       if (!org) return;
       orgId = org.organisation_id;
+    const orgSettings = await getOrgSettings(orgId);
+    applyOrgNav(orgSettings);
       await loadAccounts();
       await loadFundTypes();
       await loadRules();

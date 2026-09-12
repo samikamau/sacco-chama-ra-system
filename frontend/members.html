@@ -40,6 +40,7 @@
         <div class="nav-group-body">
           <a href="users.html">Users & Access</a>
           <a href="contributions.html">Contributions</a>
+          <a href="org-settings.html">Org Settings</a>
         </div>
       </div>
       <a href="#" onclick="signOut()" class="nav-signout">Sign out</a>
@@ -615,6 +616,8 @@
     const session=await requireSession(); if(!session)return;
     const org=await currentOrg(); if(!org)return;
     orgId = org.organisation_id;
+    const orgSettings = await getOrgSettings(orgId);
+    applyOrgNav(orgSettings);
     orgName = org.organisations?.name || 'Organisation';
     orgType = org.organisations?.org_type || '';
     loadMembers();

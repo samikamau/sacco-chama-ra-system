@@ -48,6 +48,7 @@
         <div class="nav-group-body">
           <a href="users.html">Users & Access</a>
           <a href="contributions.html">Contributions</a>
+          <a href="org-settings.html">Org Settings</a>
         </div>
       </div>
       <a href="#" onclick="signOut()" class="nav-signout">Sign out</a>
@@ -332,6 +333,8 @@
       const org = await currentOrg();
       if (!org) return;
       orgId = org.organisation_id;
+    const orgSettings = await getOrgSettings(orgId);
+    applyOrgNav(orgSettings);
       await loadFilters();
       loadJournals();
     })();

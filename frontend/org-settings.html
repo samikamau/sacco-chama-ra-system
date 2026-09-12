@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Organisation Settings — Financial Operating System</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+<div class="app-shell">
+  <nav class="nav">
+    <div class="brand">Ledger</div>
+    <a href="index.html">Dashboard</a>
+    <a href="members.html">Member Management</a>
+    <a href="loans.html">Loan Management</a>
+    <a href="expenditure.html">Supplier Management</a>
+    <a href="accounts.html">Accountant</a>
+    <div class="nav-group">
+      <div class="nav-group-header" onclick="toggleNav(this)">
+        <span>Banking</span><span class="nav-chevron">›</span>
+      </div>
+      <div class="nav-group-body">
+        <a href="banking.html">Bank & Cash</a>
+        <a href="reconcile.html">Reconciliation</a>
+        <a href="payments.html">Payments</a>
+      </div>
+    </div>
+    <a href="reports.html">Reports</a>
+    <div class="nav-group nav-open">
+      <div class="nav-group-header active" onclick="toggleNav(this)">
+        <span>Administration</span><span class="nav-chevron">›</span>
+      </div>
+      <div class="nav-group-body">
+        <a href="users.html">Users & Access</a>
+        <a href="contributions.html">Contributions</a>
+        <a href="org-settings.html" class="active">Org Settings</a>
+      </div>
+    </div>
+    <a href="#" onclick="signOut()" class="nav-signout">Sign out</a>
+  </nav>
+
+  <main class="main">
+    <h1>Organisation Settings</h1>
+
+    <div class="card">
+      <h2>Organisation type</h2>
+      <p style="color:var(--color-muted);font-size:13px">
+        The organisation type controls which modules are visible and how members are identified.
+        Changing this affects all users immediately.
+      </p>
+
+      <div class="field" style="max-width:300px">
+        <label>Organisation type</label>
+        <select id="s-org-type">
+          <option value="sacco">SACCO</option>
+          <option value="chama">Chama / Investment Group</option>
+          <option value="residents_association">Residents Association</option>
+          <option value="investment_group">Investment Club</option>
+          <option value="welfare_group">Welfare Group</option>
+        </select>
+      </div>
+
+      <div style="margin-top:16px;padding:12px;background:var(--color-bg);border-radius:4px;font-size:13px" id="type-description"></div>
+    </div>
+
+    <div class="card">
+      <h2>Module visibility</h2>
+      <div class="field">
+        <label><input type="checkbox" id="s-show-loans"> Enable Loan Management</label>
+        <p style="font-size:12px;color:var(--color-muted);margin:4px 0 0 20px">
+          Show the Loan Management module in the navigation. Disable for RAs and pure investment groups.
+        </p>
+      </div>
+      <div class="field">
+        <label><input type="checkbox" id="s-show-investments"> Enable Investment Register</label>
+        <p style="font-size:12px;color:var(--color-muted);margin:4px 0 0 20px">
+          Show the Investment module (Fixed Deposits, T-Bills etc.) under Accountant.
+        </p>
+      </div>
+      <div class="field">
+        <label><input type="checkbox" id="s-show-assets"> Enable Fixed Asset Register</label>
+        <p style="font-size:12px;color:var(--color-muted);margin:4px 0 0 20px">
+          Show the Fixed Asset Register under Accountant.
+        </p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Labels</h2>
+      <p style="color:var(--color-muted);font-size:13px">Customise how fields are labelled across the system.</p>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div class="field" style="flex:1;min-width:180px">
+          <label>Member ID label</label>
+          <input id="s-member-label" placeholder="e.g. Member No., Unit No., Plot No.">
+        </div>
+        <div class="field" style="flex:1;min-width:120px">
+          <label>Member ID prefix</label>
+          <input id="s-member-prefix" placeholder="e.g. SC, CH, RA" maxlength="5">
+        </div>
+        <div class="field" style="flex:1;min-width:180px">
+          <label>Contributions label</label>
+          <input id="s-contrib-label" placeholder="e.g. Contributions, Levies, Dues">
+        </div>
+        <div class="field" style="flex:1;min-width:180px">
+          <label>Funds label</label>
+          <input id="s-fund-label" placeholder="e.g. Member Funds, Pool, Reserve">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Default contribution types for this org type</h2>
+      <p style="color:var(--color-muted);font-size:13px">
+        Click to add the standard contribution types for your organisation type.
+        Existing contribution types are not affected.
+      </p>
+      <button class="btn accent" onclick="seedContributionTypes()">Add default contribution types</button>
+      <p id="seed-msg" style="display:none;margin-top:8px;font-size:13px;color:var(--color-success)"></p>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn accent" style="font-size:15px" onclick="saveSettings()">Save settings</button>
+    </div>
+    <p id="save-error" class="error" style="display:none"></p>
+    <p id="save-success" style="display:none;color:var(--color-success)">Settings saved.</p>
+  </main>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  let orgId;
+
+  const ORG_DESCRIPTIONS = {
+    sacco: '🏦 SACCO — Share capital, deposits, loans with savings-based eligibility, SASRA compliance. Members identified by member number.',
+    chama: '🤝 Chama — Monthly contributions, rotating savings (merry-go-round), investment pool, fines. Flexible loan structure.',
+    residents_association: '🏘️ Residents Association — Levy collection, project funds, service charges. Members identified by unit/plot number. No loan management.',
+    investment_group: '📈 Investment Club — Investment pool, dividends, fixed deposits, T-bills. Optional loan advances.',
+    welfare_group: '❤️ Welfare Group — Welfare contributions, benefits, event collections. Optional loan advances.',
+  };
+
+  const ORG_DEFAULTS = {
+    sacco:                 { show_loans:true,  show_investments:false, show_assets:false, member_id_label:'Member No.', member_id_prefix:'SC', contribution_label:'Contributions', fund_label:'Member Funds' },
+    chama:                 { show_loans:true,  show_investments:true,  show_assets:false, member_id_label:'Member No.', member_id_prefix:'CH', contribution_label:'Contributions', fund_label:'Pool Funds' },
+    residents_association: { show_loans:false, show_investments:false, show_assets:true,  member_id_label:'Unit No.', member_id_prefix:'RA', contribution_label:'Levies', fund_label:'Project Funds' },
+    investment_group:      { show_loans:true,  show_investments:true,  show_assets:false, member_id_label:'Member No.', member_id_prefix:'IG', contribution_label:'Contributions', fund_label:'Investment Pool' },
+    welfare_group:         { show_loans:true,  show_investments:false, show_assets:false, member_id_label:'Member No.', member_id_prefix:'WG', contribution_label:'Contributions', fund_label:'Welfare Fund' },
+  };
+
+  const CONTRIB_TYPES = {
+    sacco: [
+      {name:'Share Capital',    category:'share_capital',  description:'Member share capital contributions'},
+      {name:'Share Deposits',   category:'share_deposit',  description:'Member savings deposits'},
+      {name:'Welfare',          category:'welfare',        description:'Member welfare fund contributions'},
+    ],
+    chama: [
+      {name:'Monthly Contribution', category:'monthly',   description:'Regular monthly contributions'},
+      {name:'Merry-go-round',       category:'rotation',  description:'Rotating savings contributions'},
+      {name:'Investment Pool',      category:'investment', description:'Investment fund contributions'},
+      {name:'Fine',                 category:'fine',       description:'Fines for missed meetings or contributions'},
+      {name:'Registration Fee',     category:'joining_fee',description:'One-time joining fee'},
+    ],
+    residents_association: [
+      {name:'Annual Levy',          category:'levy',       description:'Annual service levy'},
+      {name:'Service Charge',       category:'service',    description:'Monthly service charges'},
+      {name:'Special Levy',         category:'special',    description:'Special project levy'},
+      {name:'Penalty',              category:'penalty',    description:'Late payment penalty'},
+    ],
+    investment_group: [
+      {name:'Monthly Contribution', category:'monthly',    description:'Regular monthly contributions'},
+      {name:'Investment Pool',      category:'investment', description:'Investment fund contributions'},
+      {name:'Dividend',             category:'income',     description:'Investment dividends received'},
+    ],
+    welfare_group: [
+      {name:'Monthly Contribution', category:'monthly',    description:'Regular monthly contributions'},
+      {name:'Welfare Fund',         category:'welfare',    description:'Welfare fund contributions'},
+      {name:'Event Collection',     category:'special',    description:'Event or project collection'},
+      {name:'Fine',                 category:'fine',       description:'Fines for missed contributions'},
+    ],
+  };
+
+  document.getElementById('s-org-type').addEventListener('change', function() {
+    const defaults = ORG_DEFAULTS[this.value];
+    if (defaults) {
+      document.getElementById('s-show-loans').checked      = defaults.show_loans;
+      document.getElementById('s-show-investments').checked = defaults.show_investments;
+      document.getElementById('s-show-assets').checked     = defaults.show_assets;
+      document.getElementById('s-member-label').value      = defaults.member_id_label;
+      document.getElementById('s-member-prefix').value     = defaults.member_id_prefix;
+      document.getElementById('s-contrib-label').value     = defaults.contribution_label;
+      document.getElementById('s-fund-label').value        = defaults.fund_label;
+    }
+    document.getElementById('type-description').textContent = ORG_DESCRIPTIONS[this.value] || '';
+  });
+
+  async function loadSettings() {
+    const settings = await getOrgSettings(orgId);
+    document.getElementById('s-org-type').value           = settings.org_type || 'sacco';
+    document.getElementById('s-show-loans').checked       = settings.show_loans !== false;
+    document.getElementById('s-show-investments').checked = !!settings.show_investments;
+    document.getElementById('s-show-assets').checked      = !!settings.show_assets;
+    document.getElementById('s-member-label').value       = settings.member_id_label  || 'Member No.';
+    document.getElementById('s-member-prefix').value      = settings.member_id_prefix || 'SC';
+    document.getElementById('s-contrib-label').value      = settings.contribution_label || 'Contributions';
+    document.getElementById('s-fund-label').value         = settings.fund_label || 'Member Funds';
+    document.getElementById('type-description').textContent = ORG_DESCRIPTIONS[settings.org_type] || '';
+  }
+
+  async function saveSettings() {
+    const errorEl  = document.getElementById('save-error');
+    const successEl = document.getElementById('save-success');
+    errorEl.style.display = 'none'; successEl.style.display = 'none';
+
+    const orgType = document.getElementById('s-org-type').value;
+
+    // Update org_type on organisations table
+    const { error: orgErr } = await supabaseClient.from('organisations')
+      .update({ org_type: orgType }).eq('id', orgId);
+    if (orgErr) { showError(errorEl, 'Org type: ' + orgErr.message); return; }
+
+    // Upsert org_settings
+    const { error: setErr } = await supabaseClient.from('org_settings').upsert({
+      organisation_id:    orgId,
+      show_loans:         document.getElementById('s-show-loans').checked,
+      show_investments:   document.getElementById('s-show-investments').checked,
+      show_assets:        document.getElementById('s-show-assets').checked,
+      member_id_label:    document.getElementById('s-member-label').value.trim() || 'Member No.',
+      member_id_prefix:   document.getElementById('s-member-prefix').value.trim() || 'SC',
+      contribution_label: document.getElementById('s-contrib-label').value.trim() || 'Contributions',
+      fund_label:         document.getElementById('s-fund-label').value.trim() || 'Member Funds',
+    });
+    if (setErr) { showError(errorEl, 'Settings: ' + setErr.message); return; }
+
+    // Clear cache so next page load picks up new settings
+    sessionStorage.removeItem('org_settings_' + orgId);
+    successEl.style.display = 'block';
+    setTimeout(() => successEl.style.display = 'none', 3000);
+  }
+
+  async function seedContributionTypes() {
+    const orgType = document.getElementById('s-org-type').value;
+    const types   = CONTRIB_TYPES[orgType] || [];
+    const msgEl   = document.getElementById('seed-msg');
+    let added = 0;
+
+    for (const ct of types) {
+      const { error } = await supabaseClient.from('contribution_types').insert({
+        organisation_id: orgId,
+        name:            ct.name,
+        category:        ct.category,
+        description:     ct.description,
+        active:          true,
+      });
+      if (!error) added++;
+    }
+
+    msgEl.textContent = `Added ${added} contribution type${added!==1?'s':''}.`;
+    msgEl.style.display = 'block';
+  }
+
+  (async () => {
+    const session = await requireSession(); if (!session) return;
+    const org = await currentOrg(); if (!org) return;
+    orgId = org.organisation_id;
+    await loadSettings();
+  })();
+</script>
+<script>
+function toggleNav(header) { header.parentElement.classList.toggle('nav-open'); }
+</script>
+</body>
+</html>
