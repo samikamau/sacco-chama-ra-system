@@ -32,62 +32,77 @@
     <main class="main">
       <h1>Loans</h1>
 
-      <div class="card">
-        <h2>New loan application</h2>
-        <div class="field"><label>Member</label><select id="a-member" onchange="checkEligibility()"></select></div>
-        <div class="field"><label>Loan product</label><select id="a-product" onchange="checkEligibility()"></select></div>
-        <div id="elig-box" style="background:#F3EBD8;border-radius:3px;padding:12px;margin-bottom:12px;font-size:13px;display:none"></div>
-        <div class="field"><label>Principal requested (KES)</label><input id="a-principal" type="number"></div>
-        <div class="field"><label>Term (months)</label><input id="a-term" type="number" value="12"></div>
-        <button class="btn accent" onclick="createApplication()">Create application</button>
-        <p id="app-error" class="error" style="display:none"></p>
-        <p id="app-success" style="display:none;color:var(--color-success)"></p>
+      <div class="tabs" style="display:flex;gap:4px;border-bottom:1px solid #ddd;margin-bottom:20px">
+        <button id="tabbtn-application" class="tab-btn" onclick="switchTab('application')" style="background:none;border:none;padding:10px 16px;cursor:pointer;font-size:14px">New Application</button>
+        <button id="tabbtn-loans" class="tab-btn" onclick="switchTab('loans')" style="background:none;border:none;padding:10px 16px;cursor:pointer;font-size:14px">Loans List</button>
+        <button id="tabbtn-arrears" class="tab-btn" onclick="switchTab('arrears')" style="background:none;border:none;padding:10px 16px;cursor:pointer;font-size:14px">Loan Arrears</button>
+        <button id="tabbtn-products" class="tab-btn" onclick="switchTab('products')" style="background:none;border:none;padding:10px 16px;cursor:pointer;font-size:14px">Loan Products</button>
       </div>
 
-      <div class="card">
-        <h2>Loans</h2>
-        <table>
-          <thead><tr><th>Member</th><th>Product</th><th class="num">Principal</th><th>Term</th><th>Status</th><th></th></tr></thead>
-          <tbody id="loan-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
-        </table>
-        <p id="loan-error" class="error" style="display:none"></p>
+      <div id="tab-application" class="tab-panel" style="display:none">
+        <div class="card">
+          <h2>New loan application</h2>
+          <div class="field"><label>Member</label><select id="a-member" onchange="checkEligibility()"></select></div>
+          <div class="field"><label>Loan product</label><select id="a-product" onchange="checkEligibility()"></select></div>
+          <div id="elig-box" style="background:#F3EBD8;border-radius:3px;padding:12px;margin-bottom:12px;font-size:13px;display:none"></div>
+          <div class="field"><label>Principal requested (KES)</label><input id="a-principal" type="number"></div>
+          <div class="field"><label>Term (months)</label><input id="a-term" type="number" value="12"></div>
+          <button class="btn accent" onclick="createApplication()">Create application</button>
+          <p id="app-error" class="error" style="display:none"></p>
+          <p id="app-success" style="display:none;color:var(--color-success)"></p>
+        </div>
       </div>
 
-      <div class="card">
-        <h2>Loans in arrears</h2>
-        <table>
-          <thead><tr><th>Member</th><th>Product</th><th class="num">Overdue</th><th class="num">Days</th><th class="num">Missed</th></tr></thead>
-          <tbody id="arrears-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
-        </table>
+      <div id="tab-loans" class="tab-panel" style="display:none">
+        <div class="card">
+          <h2>Loans</h2>
+          <table>
+            <thead><tr><th>Member</th><th>Product</th><th class="num">Principal</th><th>Term</th><th>Status</th><th></th></tr></thead>
+            <tbody id="loan-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+          </table>
+          <p id="loan-error" class="error" style="display:none"></p>
+        </div>
+
+        <div class="card" id="detail-card" style="display:none">
+          <h2 id="detail-title">Loan detail</h2>
+          <div id="detail-body"></div>
+        </div>
       </div>
 
-      <div class="card" id="detail-card" style="display:none">
-        <h2 id="detail-title">Loan detail</h2>
-        <div id="detail-body"></div>
+      <div id="tab-arrears" class="tab-panel" style="display:none">
+        <div class="card">
+          <h2>Loans in arrears</h2>
+          <table>
+            <thead><tr><th>Member</th><th>Product</th><th class="num">Overdue</th><th class="num">Days</th><th class="num">Missed</th></tr></thead>
+            <tbody id="arrears-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
       </div>
 
-      <div class="card">
-        <h2>Loan products</h2>
-        <table>
-          <thead><tr><th>Name</th><th class="num">Multiplier</th><th>Interest</th><th class="num">Rate %</th></tr></thead>
-          <tbody id="product-rows"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
-        </table>
-        <details style="margin-top:12px">
-          <summary style="cursor:pointer;color:var(--color-muted)">Add a loan product</summary>
-          <div style="margin-top:12px">
-            <div class="field"><label>Name</label><input id="pr-name"></div>
-            <div class="field"><label>Savings multiplier (max loan = multiplier x deposits)</label><input id="pr-mult" type="number" value="3"></div>
-            <div class="field"><label>Interest method</label>
-              <select id="pr-method"><option value="reducing">Reducing balance</option><option value="flat">Flat</option></select>
+      <div id="tab-products" class="tab-panel" style="display:none">
+        <div class="card">
+          <h2>Loan products</h2>
+          <table>
+            <thead><tr><th>Name</th><th class="num">Multiplier</th><th>Interest</th><th class="num">Rate %</th></tr></thead>
+            <tbody id="product-rows"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+          </table>
+          <details style="margin-top:12px">
+            <summary style="cursor:pointer;color:var(--color-muted)">Add a loan product</summary>
+            <div style="margin-top:12px">
+              <div class="field"><label>Name</label><input id="pr-name"></div>
+              <div class="field"><label>Savings multiplier (max loan = multiplier x deposits)</label><input id="pr-mult" type="number" value="3"></div>
+              <div class="field"><label>Interest method</label>
+                <select id="pr-method"><option value="reducing">Reducing balance</option><option value="flat">Flat</option></select>
+              </div>
+              <div class="field"><label>Annual interest rate %</label><input id="pr-rate" type="number" value="12"></div>
+              <div class="field"><label>Max term (months)</label><input id="pr-term" type="number" value="12"></div>
+              <div class="field"><label>Loan receivable account</label><select id="pr-recv"></select></div>
+              <div class="field"><label>Interest income account</label><select id="pr-int"></select></div>
+              <button class="btn accent" onclick="createProduct()">Save product</button>
+              <p id="pr-error" class="error" style="display:none"></p>
             </div>
-            <div class="field"><label>Annual interest rate %</label><input id="pr-rate" type="number" value="12"></div>
-            <div class="field"><label>Max term (months)</label><input id="pr-term" type="number" value="12"></div>
-            <div class="field"><label>Loan receivable account</label><select id="pr-recv"></select></div>
-            <div class="field"><label>Interest income account</label><select id="pr-int"></select></div>
-            <button class="btn accent" onclick="createProduct()">Save product</button>
-            <p id="pr-error" class="error" style="display:none"></p>
-          </div>
-        </details>
+          </details>
+        </div>
       </div>
     </main>
   </div>
@@ -96,6 +111,23 @@
   <script src="js/auth.js"></script>
   <script>
     let orgId, products = [], cashAccounts = [];
+
+    function switchTab(name) {
+      const tabs = ['application','loans','arrears','products'];
+      tabs.forEach(t => {
+        document.getElementById('tab-'+t).style.display = (t === name) ? 'block' : 'none';
+        const btn = document.getElementById('tabbtn-'+t);
+        if (t === name) {
+          btn.style.borderBottom = '3px solid var(--color-accent, #1a5632)';
+          btn.style.fontWeight = '600';
+          btn.style.color = 'inherit';
+        } else {
+          btn.style.borderBottom = '3px solid transparent';
+          btn.style.fontWeight = '400';
+          btn.style.color = 'var(--color-muted, #666)';
+        }
+      });
+    }
 
     async function loadMembers() {
       const { data } = await supabaseClient.from("members")
@@ -169,7 +201,7 @@
       if (!payload.principal || Number(payload.principal) <= 0) { showError(errorEl, "Enter a principal amount."); return; }
       const { error } = await supabaseClient.from("loans").insert(payload);
       if (error) { showError(errorEl, error.message); return; }
-      successEl.textContent = "Application created. Add guarantors, then approve & disburse below.";
+      successEl.textContent = "Application created. Add guarantors, then approve it from the Loans List tab.";
       successEl.style.display = "block";
       document.getElementById("a-principal").value = "";
       loadLoans();
@@ -412,6 +444,7 @@
       await Promise.all([loadMembers(), loadProducts()]);
       loadLoans();
       loadArrears();
+      switchTab('loans');
     })();
   </script>
 
