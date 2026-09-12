@@ -64,10 +64,35 @@
       <div id="tab-loans" class="tab-panel" style="display:none">
         <div class="card">
           <h2>Loans</h2>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">
+            <div class="field" style="margin-bottom:0"><label>Period</label>
+              <select id="loan-period-type" onchange="onPeriodTypeChange()">
+                <option value="all">All time</option>
+                <option value="month">Month</option>
+                <option value="quarter">Quarter</option>
+                <option value="year">Year</option>
+              </select>
+            </div>
+            <div class="field" id="loan-period-month-wrap" style="margin-bottom:0;display:none"><label>Month</label>
+              <input type="month" id="loan-period-month"></div>
+            <div class="field" id="loan-period-quarter-wrap" style="margin-bottom:0;display:none"><label>Quarter</label>
+              <select id="loan-period-quarter">
+                <option value="1">Q1 (Jan–Mar)</option><option value="2">Q2 (Apr–Jun)</option>
+                <option value="3">Q3 (Jul–Sep)</option><option value="4">Q4 (Oct–Dec)</option>
+              </select></div>
+            <div class="field" id="loan-period-quarter-year-wrap" style="margin-bottom:0;display:none"><label>Year</label>
+              <input type="number" id="loan-period-quarter-year" style="width:90px"></div>
+            <div class="field" id="loan-period-year-wrap" style="margin-bottom:0;display:none"><label>Year</label>
+              <input type="number" id="loan-period-year" style="width:90px"></div>
+            <div class="field" style="margin-bottom:0"><label>Sort by date</label>
+              <select id="loan-sort-order"><option value="desc">Newest first</option><option value="asc">Oldest first</option></select>
+            </div>
+            <button class="btn" onclick="loadLoans()">Apply</button>
+          </div>
           <div id="loan-filter-banner" style="display:none;margin-bottom:12px;font-size:13px;background:#F3EBD8;padding:8px 12px;border-radius:4px"></div>
           <table>
-            <thead><tr><th>Member</th><th>Product</th><th class="num">Principal</th><th>Term</th><th>Status</th><th></th></tr></thead>
-            <tbody id="loan-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+            <thead><tr><th>Member</th><th>Product</th><th class="num">Principal</th><th>Term</th><th>Applied</th><th>Status</th><th></th></tr></thead>
+            <tbody id="loan-rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
           </table>
           <p id="loan-error" class="error" style="display:none"></p>
         </div>
@@ -269,6 +294,42 @@
       closed: 'Closed', rejected: 'Declined',
     };
 
+    function onPeriodTypeChange() {
+      const type = document.getElementById("loan-period-type").value;
+      document.getElementById("loan-period-month-wrap").style.display = type === "month" ? "block" : "none";
+      document.getElementById("loan-period-quarter-wrap").style.display = type === "quarter" ? "block" : "none";
+      document.getElementById("loan-period-quarter-year-wrap").style.display = type === "quarter" ? "block" : "none";
+      document.getElementById("loan-period-year-wrap").style.display = type === "year" ? "block" : "none";
+    }
+
+    function getLoanDateRange() {
+      const type = document.getElementById("loan-period-type").value;
+      if (type === "month") {
+        const val = document.getElementById("loan-period-month").value; // "YYYY-MM"
+        if (!val) return null;
+        const [y, m] = val.split("-").map(Number);
+        const from = `${y}-${String(m).padStart(2,"0")}-01`;
+        const to = m === 12 ? `${y+1}-01-01` : `${y}-${String(m+1).padStart(2,"0")}-01`;
+        return { from, to, label: new Date(y, m-1).toLocaleString('default',{month:'long',year:'numeric'}) };
+      }
+      if (type === "quarter") {
+        const q = Number(document.getElementById("loan-period-quarter").value);
+        const y = Number(document.getElementById("loan-period-quarter-year").value);
+        if (!y) return null;
+        const startMonth = (q-1)*3 + 1;
+        const endMonth = startMonth + 3;
+        const from = `${y}-${String(startMonth).padStart(2,"0")}-01`;
+        const to = endMonth > 12 ? `${y+1}-01-01` : `${y}-${String(endMonth).padStart(2,"0")}-01`;
+        return { from, to, label: `Q${q} ${y}` };
+      }
+      if (type === "year") {
+        const y = Number(document.getElementById("loan-period-year").value);
+        if (!y) return null;
+        return { from: `${y}-01-01`, to: `${y+1}-01-01`, label: `${y}` };
+      }
+      return null;
+    }
+
     function goToLoansFiltered(statuses) {
       currentLoanFilter = statuses;
       switchTab('loans');
@@ -277,34 +338,47 @@
 
     function clearLoanFilter() {
       currentLoanFilter = null;
+      document.getElementById("loan-period-type").value = "all";
+      onPeriodTypeChange();
       loadLoans();
     }
 
     async function loadLoans() {
       let query = supabaseClient.from("loans")
-        .select("id, principal, term_months, status, members(full_name), loan_products(name)")
-        .eq("organisation_id", orgId).order("created_at", { ascending: false });
+        .select("id, principal, term_months, status, application_date, members(full_name), loan_products(name)")
+        .eq("organisation_id", orgId);
+
       if (currentLoanFilter) query = query.in("status", currentLoanFilter);
+
+      const range = getLoanDateRange();
+      if (range) query = query.gte("application_date", range.from).lt("application_date", range.to);
+
+      const sortAsc = document.getElementById("loan-sort-order")?.value === "asc";
+      query = query.order("application_date", { ascending: sortAsc });
+
       const { data, error } = await query;
 
       const banner = document.getElementById("loan-filter-banner");
-      if (currentLoanFilter) {
-        const label = [...new Set(currentLoanFilter.map(s => LOAN_FILTER_LABELS[s] || s))].join(', ');
+      const parts = [];
+      if (currentLoanFilter) parts.push([...new Set(currentLoanFilter.map(s => LOAN_FILTER_LABELS[s] || s))].join(', '));
+      if (range) parts.push(range.label);
+      if (parts.length) {
         banner.style.display = "block";
-        banner.innerHTML = `Showing: <strong>${label}</strong> &nbsp; <a href="#" onclick="clearLoanFilter(); return false;">Clear filter</a>`;
+        banner.innerHTML = `Showing: <strong>${parts.join(' · ')}</strong> &nbsp; <a href="#" onclick="clearLoanFilter(); return false;">Clear filter</a>`;
       } else {
         banner.style.display = "none";
       }
 
       const tbody = document.getElementById("loan-rows");
-      if (error) { tbody.innerHTML = `<tr><td colspan="6" class="error">${error.message}</td></tr>`; return; }
-      if (!data.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty">No loans match this filter.</td></tr>`; return; }
+      if (error) { tbody.innerHTML = `<tr><td colspan="7" class="error">${error.message}</td></tr>`; return; }
+      if (!data.length) { tbody.innerHTML = `<tr><td colspan="7" class="empty">No loans match this filter.</td></tr>`; return; }
       tbody.innerHTML = data.map(l => `
         <tr>
           <td>${l.members.full_name}</td>
           <td>${l.loan_products.name}</td>
           <td class="num">${money(l.principal)}</td>
           <td>${l.term_months}m</td>
+          <td>${l.application_date}</td>
           <td><span class="status ${l.status==='closed'?'paid':l.status==='active'||l.status==='disbursed'?'partial':'unpaid'}">${l.status}</span></td>
           <td><button class="btn" onclick="openLoan('${l.id}')">Open</button></td>
         </tr>`).join("");
@@ -388,6 +462,8 @@
         </div>`;
       } else if (loan.status === 'approved') {
         html += `<div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <div class="field" style="margin-bottom:0;max-width:160px"><label>Disbursed amount</label>
+            <input id="disburse-amount" type="number" step="0.01" value="${loan.principal}"></div>
           <div class="field" style="margin-bottom:0;max-width:280px"><label>Disburse from account</label><select id="disburse-acct">${cashOpts}</select></div>
           <button class="btn accent" onclick="disburseLoan('${loanId}')">Disburse</button>
           <div class="field" style="margin-bottom:0;min-width:220px;flex:1"><label>Remarks (only needed to decline)</label>
@@ -429,6 +505,17 @@
       const memberId = document.getElementById("g-member").value;
       const amount = Number(document.getElementById("g-amount").value);
 
+      const { data: loanRow } = await supabaseClient.from("loans")
+        .select("principal").eq("id", loanId).single();
+      const { data: existingGuarantors } = await supabaseClient.from("loan_guarantors")
+        .select("amount_guaranteed").eq("loan_id", loanId);
+      const alreadyGuaranteed = (existingGuarantors||[]).reduce((s,g)=>s+Number(g.amount_guaranteed),0);
+      const roomLeft = Number(loanRow.principal) - alreadyGuaranteed;
+      if (amount > roomLeft) {
+        showError(errorEl, `This would push total guarantees above the loan principal of KES ${money(Number(loanRow.principal))}. At most KES ${money(roomLeft)} more can be guaranteed.`);
+        return;
+      }
+
       const { data: cap } = await supabaseClient.rpc("fn_guarantor_capacity", {
         p_member_id: memberId, p_exclude_loan_id: loanId,
       });
@@ -461,10 +548,12 @@
 
     async function disburseLoan(loanId) {
       const errorEl = document.getElementById("detail-error");
+      const disbursedAmount = document.getElementById("disburse-amount").value;
       if (!confirm("Disburse this loan? This posts the disbursement and builds the repayment schedule.")) return;
       const { error } = await supabaseClient.rpc("fn_disburse_loan", {
         p_loan_id: loanId,
         p_cash_account_id: document.getElementById("disburse-acct").value,
+        p_disbursed_amount: disbursedAmount || null,
       });
       if (error) { showError(errorEl, error.message); return; }
       loadLoans(); loadDashboard(); openLoan(loanId);
