@@ -323,6 +323,15 @@
     const group = header.parentElement;
     group.classList.toggle('nav-open');
   }
+  function switchMemberTab(name) {
+    ['members','statements'].forEach(t => {
+      const panel = document.getElementById('mtab-'+t);
+      const btn   = document.getElementById('mt-'+t);
+      if (panel) panel.style.display = t === name ? 'block' : 'none';
+      if (btn)   btn.classList.toggle('active', t === name);
+    });
+  }
+  document.addEventListener('DOMContentLoaded', () => switchMemberTab('members'));
   // Auto-open active group on load
   document.querySelectorAll('.nav-group-header.active').forEach(h => {
     h.parentElement.classList.add('nav-open');

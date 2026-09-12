@@ -60,10 +60,10 @@
     <main class="main">
       <h1>Banking</h1>
 
-      <div class="tabs">
-        <div class="tab active" onclick="switchTab(0)">Opening Balances</div>
-        <div class="tab" onclick="switchTab(1)">Bank Transfer</div>
-        <div class="tab" onclick="switchTab(2)">Account Balances</div>
+      <div class="loan-tabs">
+        <button id="bt-0" class="loan-tab-btn active" onclick="switchTab(0)">Opening Balances</button>
+        <button id="bt-1" class="loan-tab-btn" onclick="switchTab(1)">Bank Transfer</button>
+        <button id="bt-2" class="loan-tab-btn" onclick="switchTab(2)">Account Balances</button>
       </div>
 
       <!-- OPENING BALANCES -->
@@ -146,7 +146,7 @@
 
     function switchTab(i) {
       [0,1,2].forEach(n => document.getElementById('pane-'+n).style.display = n===i?'block':'none');
-      document.querySelectorAll('.tab').forEach((el,n) => el.classList.toggle('active', n===i));
+      [0,1,2].forEach(n => document.getElementById('bt-'+n).classList.toggle('active', n===i));
       if (i===1) loadTransferHistory();
       if (i===2) loadBalances();
     }
