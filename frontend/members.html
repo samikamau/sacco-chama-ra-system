@@ -102,8 +102,14 @@
       <div id="mtab-statements" style="display:none">
         <div class="card">
           <h2>Member Statements</h2>
-          <p style="color:var(--color-muted);font-size:13px">View individual member account statements.</p>
-          <a href="statement.html" class="btn accent" style="text-decoration:none;display:inline-block;margin-top:8px">Open Statements</a>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-top:8px">
+            <div class="field" style="margin-bottom:0;flex:1;min-width:200px">
+              <label>Select member</label>
+              <select id="stmt-member-select"></select>
+            </div>
+            <button class="btn accent" onclick="openMemberStatement()">Open statement</button>
+          </div>
+          <p style="font-size:13px;color:var(--color-muted);margin-top:8px">Select a member then click Open statement to view their full account history.</p>
         </div>
       </div>
 
@@ -290,6 +296,13 @@
         .eq("organisation_id", orgId)
         .order("member_number");
 
+      // Store for statement picker
+      window._members = (data||[]).map(m=>({id:m.id,member_number:m.member_number,full_name:m.full_name}));
+      // Also populate statement member selector
+      const stmtSel = document.getElementById('stmt-member-select');
+      if (stmtSel) stmtSel.innerHTML = (data||[]).map(m=>
+        `<option value="${m.id}">${m.member_number} — ${m.full_name}</option>`).join('');
+
       const tbody = document.getElementById("rows");
       if (error) { tbody.innerHTML = `<tr><td colspan="6" class="error">${error.message}</td></tr>`; return; }
       if (!data.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty">No members yet.</td></tr>`; return; }
@@ -330,6 +343,12 @@
       if (panel) panel.style.display = t === name ? 'block' : 'none';
       if (btn)   btn.classList.toggle('active', t === name);
     });
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  }
+  function openMemberStatement() {
+    const sel = document.getElementById('stmt-member-select');
+    if (!sel || !sel.value) { alert('Select a member first.'); return; }
+    window.location.href = 'statement.html?member=' + sel.value;
   }
   document.addEventListener('DOMContentLoaded', () => switchMemberTab('members'));
   // Auto-open active group on load
