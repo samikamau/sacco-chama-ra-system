@@ -252,7 +252,7 @@
       const tbody = document.getElementById('t-history');
       if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="4" class="empty">No transfers yet.</td></tr>`; return; }
       tbody.innerHTML = data.map(j => {
-        const total = (j.journal_lines||[]).reduce((s,l)=>s+Number(l.debit),0)/2;
+        const total = (j.journal_lines||[]).reduce((s,l)=>s+Number(l.debit),0);
         return `<tr><td><code>${j.journal_number||'—'}</code></td><td>${j.entry_date}</td><td>${j.description}</td><td class="num">${money(total)}</td></tr>`;
       }).join('');
     }
