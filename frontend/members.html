@@ -30,6 +30,9 @@
     z-index: 60; display: none;
   }
   .toast.show { display: block; }
+  .loan-tabs { display:flex; gap:0; border-bottom:2px solid var(--color-line); margin-bottom:20px; }
+  .loan-tab-btn { background:none; border:none; padding:10px 18px; cursor:pointer; font-size:14px; color:var(--color-muted); border-bottom:3px solid transparent; margin-bottom:-2px; font-family:inherit; }
+  .loan-tab-btn.active { color:var(--color-ink); font-weight:600; border-bottom-color:var(--color-accent); }
 </style>
 </head>
 <body>
@@ -37,40 +40,12 @@
     <nav class="nav">
       <div class="brand">Ledger</div>
       <a href="index.html">Dashboard</a>
-      <div class="nav-group nav-open">
-        <div class="nav-group-header active" onclick="toggleNav(this)">
-          <span>Member Management</span>
-          <span class="nav-chevron">›</span>
-        </div>
-        <div class="nav-group-body">
-          <a href="members.html" class="active">Members</a>
-          <a href="contributions.html">Contributions</a>
-          <a href="payments.html">Payments</a>
-          <a href="statement.html">Member Statements</a>
-        </div>
-      </div>
+      <a href="members.html" class="active">Member Management</a>
+      <a href="loans.html">Loan Management</a>
+      <a href="expenditure.html">Supplier Management</a>
       <div class="nav-group">
         <div class="nav-group-header" onclick="toggleNav(this)">
-          <span>Loan Management</span>
-          <span class="nav-chevron">›</span>
-        </div>
-        <div class="nav-group-body">
-          <a href="loans.html">Loans</a>
-        </div>
-      </div>
-      <div class="nav-group">
-        <div class="nav-group-header" onclick="toggleNav(this)">
-          <span>Supplier Management</span>
-          <span class="nav-chevron">›</span>
-        </div>
-        <div class="nav-group-body">
-          <a href="expenditure.html">Suppliers & Bills</a>
-        </div>
-      </div>
-      <div class="nav-group">
-        <div class="nav-group-header" onclick="toggleNav(this)">
-          <span>Accountant</span>
-          <span class="nav-chevron">›</span>
+          <span>Accountant</span><span class="nav-chevron">›</span>
         </div>
         <div class="nav-group-body">
           <a href="accounts.html">Chart of Accounts</a>
@@ -80,8 +55,7 @@
       </div>
       <div class="nav-group">
         <div class="nav-group-header" onclick="toggleNav(this)">
-          <span>Banking</span>
-          <span class="nav-chevron">›</span>
+          <span>Banking</span><span class="nav-chevron">›</span>
         </div>
         <div class="nav-group-body">
           <a href="banking.html">Bank & Cash</a>
@@ -89,20 +63,21 @@
         </div>
       </div>
       <a href="reports.html">Reports</a>
-      <div class="nav-group">
-        <div class="nav-group-header" onclick="toggleNav(this)">
-          <span>Administration</span>
-          <span class="nav-chevron">›</span>
-        </div>
-        <div class="nav-group-body">
-          <a href="users.html">Users & Access</a>
-        </div>
-      </div>
+      <a href="users.html">Administration</a>
       <a href="#" onclick="signOut()" class="nav-signout">Sign out</a>
     </nav>
     <main class="main">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <h1>Members</h1>
+      <h1>Member Management</h1>
+      <div class="loan-tabs">
+        <button id="mt-members"       class="loan-tab-btn" onclick="switchMemberTab('members')">Members</button>
+        <button id="mt-contributions" class="loan-tab-btn" onclick="switchMemberTab('contributions')">Contributions</button>
+        <button id="mt-payments"      class="loan-tab-btn" onclick="switchMemberTab('payments')">Payments</button>
+        <button id="mt-statements"    class="loan-tab-btn" onclick="switchMemberTab('statements')">Member Statements</button>
+      </div>
+
+      <!-- MEMBERS TAB -->
+      <div id="mtab-members">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
         <button class="btn accent" onclick="openDrawer()">+ Add Member</button>
       </div>
 
@@ -112,6 +87,35 @@
           <tbody id="rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
         </table>
       </div>
+      </div><!-- /mtab-members -->
+
+      <!-- CONTRIBUTIONS TAB -->
+      <div id="mtab-contributions" style="display:none">
+        <div class="card">
+          <h2>Contributions</h2>
+          <p style="color:var(--color-muted);font-size:13px">Manage contribution types and view contribution history.</p>
+          <a href="contributions.html" class="btn accent" style="text-decoration:none;display:inline-block;margin-top:8px">Open Contributions</a>
+        </div>
+      </div>
+
+      <!-- PAYMENTS TAB -->
+      <div id="mtab-payments" style="display:none">
+        <div class="card">
+          <h2>Payments</h2>
+          <p style="color:var(--color-muted);font-size:13px">Record member payments — fund contributions and loan repayments.</p>
+          <a href="payments.html" class="btn accent" style="text-decoration:none;display:inline-block;margin-top:8px">Open Payments</a>
+        </div>
+      </div>
+
+      <!-- MEMBER STATEMENTS TAB -->
+      <div id="mtab-statements" style="display:none">
+        <div class="card">
+          <h2>Member Statements</h2>
+          <p style="color:var(--color-muted);font-size:13px">View individual member account statements.</p>
+          <a href="statement.html" class="btn accent" style="text-decoration:none;display:inline-block;margin-top:8px">Open Statements</a>
+        </div>
+      </div>
+
     </main>
   </div>
 
