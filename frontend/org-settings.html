@@ -213,19 +213,10 @@
 
     const orgType = document.getElementById('s-org-type').value;
 
-    // Update org_type on organisations table
-    const { data: orgData, error: orgErr } = await supabaseClient.from('organisations')
-      .update({ org_type: orgType }).eq('id', orgId).select('org_type').single();
-    if (orgErr) {
-      showError(errorEl, 'Could not update org type: ' + orgErr.message +
-        ' (code: ' + orgErr.code + ')');
-      return;
-    }
-    console.log('org_type updated to:', orgData?.org_type);
-
-    // Upsert org_settings (upsert with onConflict)
+    // Store everything in org_settings (avoids organisations table RLS issues)
     const { error: setErr } = await supabaseClient.from('org_settings').upsert({
       organisation_id:    orgId,
+      org_type:           orgType,
       show_loans:         document.getElementById('s-show-loans').checked,
       show_investments:   document.getElementById('s-show-investments').checked,
       show_assets:        document.getElementById('s-show-assets').checked,
