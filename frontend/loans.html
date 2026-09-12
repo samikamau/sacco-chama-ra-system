@@ -194,6 +194,8 @@
         btn.classList.toggle('active', t===name);
       });
     }
+    // Show dashboard immediately — do not wait for async init
+    document.addEventListener('DOMContentLoaded', () => switchTab('dashboard'));
 
     // ── PERIOD FILTER ─────────────────────────────────────────────────────
     function onPeriodTypeChange() {
@@ -713,8 +715,7 @@
         rows.push([...tr.querySelectorAll('th,td')]
           .map(c=>`"${c.textContent.trim().replace(/"/g,'""')}"`).join(','));
       });
-      const csv = rows.join('
-');
+      const csv = rows.join('\n');
       const a = document.createElement('a');
       a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
       a.download = `loan_schedule_${loanId}.csv`;
@@ -731,7 +732,6 @@
       loadLoans();
       loadArrears();
       loadDashboard();
-      switchTab('dashboard');
     })();
   </script>
 
