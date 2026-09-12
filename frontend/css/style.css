@@ -166,18 +166,69 @@ label { display: block; font-size: 13px; color: var(--color-muted); margin-botto
 }
 .login-card { width: 340px; }
 
-/* ── Accountant collapsible nav ──────────────────────────────────────────── */
-.nav-accountant-toggle { position: relative; }
-.nav-accountant-sub a {
-  display: block;
-  padding: 6px 16px 6px 28px;
-  font-size: 13px;
+/* ── 8-tab sidebar nav groups ─────────────────────────────────────────── */
+.nav-group { }
+
+.nav-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
   color: rgba(255,255,255,0.75);
-  text-decoration: none;
-  transition: background 0.15s;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+  user-select: none;
+  border-radius: 0;
 }
-.nav-accountant-sub a:hover,
-.nav-accountant-sub a.active {
-  background: rgba(255,255,255,0.12);
+.nav-group-header:hover {
+  background: rgba(255,255,255,0.08);
   color: #fff;
 }
+.nav-group-header.active {
+  color: #fff;
+  background: rgba(255,255,255,0.1);
+}
+.nav-chevron {
+  font-size: 16px;
+  transition: transform 0.2s;
+  opacity: 0.6;
+  line-height: 1;
+}
+.nav-group.nav-open .nav-chevron {
+  transform: rotate(90deg);
+}
+.nav-group-body {
+  display: none;
+  background: rgba(0,0,0,0.15);
+}
+.nav-group.nav-open .nav-group-body {
+  display: block;
+}
+.nav-group-body a {
+  display: block;
+  padding: 8px 16px 8px 24px;
+  color: rgba(255,255,255,0.65);
+  font-size: 13px;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+  border-left: 3px solid transparent;
+}
+.nav-group-body a:hover {
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+  border-left-color: rgba(255,255,255,0.3);
+}
+.nav-group-body a.active {
+  color: #fff;
+  background: rgba(255,255,255,0.1);
+  border-left-color: var(--color-accent);
+}
+.nav-signout {
+  margin-top: auto;
+  padding: var(--space-3) var(--space-4) !important;
+  opacity: 0.6;
+  font-size: 13px;
+}
+.nav-signout:hover { opacity: 1; }

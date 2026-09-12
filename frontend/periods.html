@@ -11,23 +11,68 @@
     <nav class="nav">
       <div class="brand">Ledger</div>
       <a href="index.html">Dashboard</a>
-      <a href="members.html">Members</a>
-      <a href="payments.html">Payments</a>
-      <a href="loans.html">Loans</a>
-      <a href="expenditure.html">Expenditure</a>
-      <a href="banking.html">Banking</a>
-      <a href="reconcile.html">Reconciliation</a>
-      <a href="statement.html">Member Statements</a>
-      <a href="reports.html">Reports</a>
-      <a href="#" class="nav-accountant-toggle active" onclick="toggleAccountant(event)">Accountant</a>
-      <div class="nav-accountant-sub" style="display:block">
-        <a href="contributions.html" style="padding-left:28px;font-size:13px">Contributions</a>
-        <a href="accounts.html" style="padding-left:28px;font-size:13px">Chart of Accounts</a>
-        <a href="journal.html" style="padding-left:28px;font-size:13px">General Journal</a>
-        <a href="periods.html" class="active" style="padding-left:28px;font-size:13px">Accounting Periods</a>
+      <div class="nav-group">
+        <div class="nav-group-header" onclick="toggleNav(this)">
+          <span>Member Management</span>
+          <span class="nav-chevron">›</span>
+        </div>
+        <div class="nav-group-body">
+          <a href="members.html">Members</a>
+          <a href="contributions.html">Contributions</a>
+          <a href="payments.html">Payments</a>
+          <a href="statement.html">Member Statements</a>
+        </div>
       </div>
-      <a href="users.html">Users</a>
-      <a href="#" onclick="signOut()">Sign out</a>
+      <div class="nav-group">
+        <div class="nav-group-header" onclick="toggleNav(this)">
+          <span>Loan Management</span>
+          <span class="nav-chevron">›</span>
+        </div>
+        <div class="nav-group-body">
+          <a href="loans.html">Loans</a>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-header" onclick="toggleNav(this)">
+          <span>Supplier Management</span>
+          <span class="nav-chevron">›</span>
+        </div>
+        <div class="nav-group-body">
+          <a href="expenditure.html">Suppliers & Bills</a>
+        </div>
+      </div>
+      <div class="nav-group nav-open">
+        <div class="nav-group-header active" onclick="toggleNav(this)">
+          <span>Accountant</span>
+          <span class="nav-chevron">›</span>
+        </div>
+        <div class="nav-group-body">
+          <a href="accounts.html">Chart of Accounts</a>
+          <a href="journal.html">General Journal</a>
+          <a href="periods.html" class="active">Accounting Periods</a>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-group-header" onclick="toggleNav(this)">
+          <span>Banking</span>
+          <span class="nav-chevron">›</span>
+        </div>
+        <div class="nav-group-body">
+          <a href="banking.html">Bank & Cash</a>
+          <a href="reconcile.html">Reconciliation</a>
+        </div>
+      </div>
+      <a href="reports.html">Reports</a>
+      <div class="nav-group">
+        <div class="nav-group-header" onclick="toggleNav(this)">
+          <span>Administration</span>
+          <span class="nav-chevron">›</span>
+        </div>
+        <div class="nav-group-body">
+          <a href="users.html">Users & Access</a>
+        </div>
+      </div>
+      <a href="#" onclick="signOut()" class="nav-signout">Sign out</a>
     </nav>
     <main class="main">
       <h1>Accounting periods</h1>
@@ -128,13 +173,14 @@
   </script>
 
   <script>
-  function toggleAccountant(e) {
-    e.preventDefault();
-    const sub = document.querySelector('.nav-accountant-sub');
-    if (!sub) return;
-    const isVisible = sub.style.display !== 'none';
-    sub.style.display = isVisible ? 'none' : 'block';
+  function toggleNav(header) {
+    const group = header.parentElement;
+    group.classList.toggle('nav-open');
   }
+  // Auto-open active group on load
+  document.querySelectorAll('.nav-group-header.active').forEach(h => {
+    h.parentElement.classList.add('nav-open');
+  });
   </script>
 </body>
 </html>
