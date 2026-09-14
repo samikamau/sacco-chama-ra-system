@@ -7,12 +7,24 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.min.js"></script>
 <style>
+  :root {
+    --dash-green: #1F8A5F; --dash-green-bg: #E7F5EE;
+    --dash-gold: #B8790F;  --dash-gold-bg: #FBF1DF;
+    --dash-red: #C1502E;   --dash-red-bg: #FBEAE3;
+    --dash-blue: #2E6E8E;  --dash-purple: #6C4F8A;
+  }
+  h1#org-name { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.01em; }
+  .main .card h2 { font-family: var(--font-display); font-size: 16px; font-weight: 600; letter-spacing: -0.005em; }
   .kpi-group { margin-bottom: var(--space-4); }
-  .kpi-group h2 { font-size: 15px; color: var(--color-muted); font-weight: 500; margin-bottom: var(--space-2); }
+  .kpi-group h2 {
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--color-muted); margin-bottom: var(--space-2);
+  }
   .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
   .kpi {
     background: var(--color-surface); border: 1px solid var(--color-line);
     border-radius: var(--radius); padding: 14px 16px;
+    box-shadow: 0 1px 2px rgba(20, 30, 40, 0.04);
   }
   .kpi .value { font-family: var(--font-mono); font-size: 20px; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .kpi .label { color: var(--color-muted); font-size: 12px; margin-top: 4px; }
@@ -22,18 +34,18 @@
   .stat:last-child { border-bottom: none; padding-bottom: 0; }
   .stat:first-child { padding-top: 0; }
   .stat-icon {
-    flex-shrink: 0; width: 26px; height: 26px; border-radius: 6px;
-    background: #F3EBD8; color: var(--color-primary);
+    flex-shrink: 0; width: 26px; height: 26px; border-radius: 7px;
+    background: var(--dash-green-bg); color: var(--dash-green);
     display: flex; align-items: center; justify-content: center;
   }
   .stat-icon svg { width: 13px; height: 13px; }
-  .stat-icon.alert { background: #F3E4E0; color: var(--color-alert); }
-  .stat-label { flex: 1; font-size: 13px; color: var(--color-ink, #333); }
-  .stat-value { font-family: var(--font-mono); font-size: 15px; font-weight: 700; white-space: nowrap; }
-  .glance-stat { background: #F0EFEC; border-radius: 6px; padding: 14px; text-align: center; margin-bottom: 10px; }
+  .stat-icon.alert { background: var(--dash-red-bg); color: var(--dash-red); }
+  .stat-label { flex: 1; font-size: 13px; color: var(--color-ink, #2A3439); }
+  .stat-value { font-family: var(--font-mono); font-size: 15px; font-weight: 700; white-space: nowrap; letter-spacing: -0.01em; }
+  .glance-stat { background: var(--color-bg, #F7F6F3); border-radius: 8px; padding: 16px; text-align: center; margin-bottom: 10px; }
   .glance-stat:last-child { margin-bottom: 0; }
-  .glance-value { font-family: var(--font-mono); font-size: 26px; font-weight: 700; }
-  .glance-label { color: var(--color-muted); font-size: 12px; margin-top: 4px; }
+  .glance-value { font-family: var(--font-mono); font-size: 27px; font-weight: 700; letter-spacing: -0.02em; }
+  .glance-label { color: var(--color-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 6px; }
   .arrears-item { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--color-line); font-size: 13px; }
   .arrears-item:last-child { border-bottom: none; }
   .arrears-badge { color: #fff; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
@@ -115,9 +127,9 @@
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
         <div class="card" style="flex:1;min-width:220px">
           <h2 style="text-align:center">Portfolio Health</h2>
-          <div class="glance-stat"><div class="glance-value" id="k-collection-pct" style="color:#2FAE73">—</div><div class="glance-label">Collection rate</div></div>
-          <div class="glance-stat"><div class="glance-value" id="k-atrisk-pct" style="color:#E4A82E">—</div><div class="glance-label">Portfolio at risk</div></div>
-          <div class="glance-stat"><div class="glance-value" id="k-arrears-rate" style="color:#E4602E">—</div><div class="glance-label">Loans in arrears</div></div>
+          <div class="glance-stat"><div class="glance-value" id="k-collection-pct" style="color:#1F8A5F">—</div><div class="glance-label">Collection rate</div></div>
+          <div class="glance-stat"><div class="glance-value" id="k-atrisk-pct" style="color:#B8790F">—</div><div class="glance-label">Portfolio at risk</div></div>
+          <div class="glance-stat"><div class="glance-value" id="k-arrears-rate" style="color:#C1502E">—</div><div class="glance-label">Loans in arrears</div></div>
         </div>
         <div class="card" style="flex:1;min-width:260px">
           <h2 style="text-align:center">Member Funds</h2>
@@ -168,7 +180,7 @@
               labels: ["Shares", "Deposits", "Welfare"],
               datasets: [{
                 data: [Number(kpis.total_shares)||0, Number(kpis.total_deposits)||0, Number(kpis.total_welfare)||0],
-                backgroundColor: ["#1B6E45", "#1B5E75", "#6C3483"],
+                backgroundColor: ["#1F8A5F", "#2E6E8E", "#6C4F8A"],
               }],
             },
             options: {
@@ -239,8 +251,8 @@
             datasets: [{
               label: "Collections (KES)",
               data: months.map(m => totalsByMonth[m.key]),
-              borderColor: "#1B6E45",
-              backgroundColor: "rgba(27,110,69,0.1)",
+              borderColor: "#1F8A5F",
+              backgroundColor: "rgba(31,138,95,0.1)",
               fill: true,
               tension: 0.3,
             }],
@@ -289,7 +301,7 @@
         if (arrears && arrears.length) {
           listEl.innerHTML = arrears.slice(0, 8).map(a => {
             const days = Number(a.days_overdue);
-            const color = days > 60 ? "#E4602E" : days > 30 ? "#E4A82E" : "#2FAE73";
+            const color = days > 60 ? "#C1502E" : days > 30 ? "#B8790F" : "#1F8A5F";
             return `<div class="arrears-item">
               <span>${a.member_name}</span>
               <span class="arrears-badge" style="background:${color}">${days}d overdue</span>
