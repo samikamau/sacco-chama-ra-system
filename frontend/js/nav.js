@@ -86,12 +86,23 @@ function ensureGroupTabStyles() {
   style.id = 'nav-group-tab-styles';
   style.textContent = `
     .nav-group-tab {
-      display: inline-block; padding: 8px 16px; font-size: 14px; text-decoration: none;
-      color: inherit; border-bottom: 3px solid transparent; cursor: pointer;
-      transition: border-color 0.15s ease, background 0.15s ease;
+      display: inline-block; padding: 10px 18px; font-size: 14px; text-decoration: none;
+      color: var(--color-muted, #666); border-bottom: 3px solid transparent;
+      border-radius: 6px 6px 0 0; cursor: pointer; position: relative;
+      transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
     }
-    .nav-group-tab:hover { background: rgba(0,0,0,0.04); }
-    .nav-group-tab.active { border-bottom-color: var(--color-accent, #1B6E45); font-weight: 600; }
+    .nav-group-tab:hover {
+      color: var(--color-primary, #1B6E45);
+      background: var(--color-accent-tint, rgba(27,110,69,0.08));
+      border-bottom-color: rgba(27,110,69,0.35);
+      transform: translateY(-1px);
+    }
+    .nav-group-tab:active { transform: translateY(0); }
+    .nav-group-tab.active {
+      color: var(--color-primary, #1B6E45); font-weight: 600;
+      background: var(--color-accent-tint, rgba(27,110,69,0.1));
+      border-bottom-color: var(--color-accent, #1B6E45);
+    }
   `;
   document.head.appendChild(style);
 }
