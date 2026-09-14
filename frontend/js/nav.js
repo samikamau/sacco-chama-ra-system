@@ -62,7 +62,7 @@ function renderNav() {
   mount.innerHTML = `
     <div class="brand">Ledger</div>
     ${topLinks}
-    <a href="#" class="nav-accountant-toggle ${isAccountantActive ? 'active' : ''}" onclick="toggleAccountant(event)" style="display:flex;align-items:center;gap:6px">
+    <a href="${ACCOUNTANT_ITEMS[0].href}" class="nav-accountant-toggle ${isAccountantActive ? 'active' : ''}" style="display:flex;align-items:center;gap:6px">
       ${NAV_ICONS.calculator}Accountant
     </a>
     <a href="users.html" class="${current === 'users.html' ? 'active' : ''}" style="display:flex;align-items:center;gap:6px">
@@ -99,14 +99,6 @@ function renderGroupBar(barId, items, current, isActive) {
       background:${active ? 'var(--color-primary, #1B6E45)' : '#F3EBD8'};
       color:${active ? '#fff' : 'inherit'};">${i.label}</a>`;
   }).join('');
-}
-
-function toggleAccountant(e) {
-  e.preventDefault();
-  const bar = document.getElementById('accountant-bar');
-  if (!bar) return;
-  const isVisible = bar.style.display !== 'none';
-  bar.style.display = isVisible ? 'none' : 'flex';
 }
 
 document.addEventListener('DOMContentLoaded', renderNav);
