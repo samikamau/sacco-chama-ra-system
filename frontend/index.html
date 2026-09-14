@@ -8,10 +8,10 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   :root {
-    --dash-green: #1F8A5F; --dash-green-bg: #E7F5EE;
-    --dash-gold: #B8790F;  --dash-gold-bg: #FBF1DF;
-    --dash-red: #C1502E;   --dash-red-bg: #FBEAE3;
-    --dash-blue: #2E6E8E;  --dash-purple: #6C4F8A;
+    --dash-green: #10B981; --dash-green-bg: #ECFDF5;
+    --dash-gold: #F97316;  --dash-gold-bg: #FFF7ED;
+    --dash-red: #E11D48;   --dash-red-bg: #FFF1F2;
+    --dash-blue: #0EA5E9;  --dash-purple: #8B5CF6;
   }
   .main > h1 {
     font-family: var(--font-display); font-weight: 600; letter-spacing: -0.01em;
@@ -141,9 +141,9 @@
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
         <div class="card" style="flex:1;min-width:220px">
           <h2 style="text-align:center">Portfolio Health</h2>
-          <div class="glance-stat"><div class="glance-value" id="k-collection-pct" style="color:#1F8A5F">—</div><div class="glance-label">Collection rate</div></div>
-          <div class="glance-stat"><div class="glance-value" id="k-atrisk-pct" style="color:#B8790F">—</div><div class="glance-label">Portfolio at risk</div></div>
-          <div class="glance-stat"><div class="glance-value" id="k-arrears-rate" style="color:#C1502E">—</div><div class="glance-label">Loans in arrears</div></div>
+          <div class="glance-stat"><div class="glance-value" id="k-collection-pct" style="color:#10B981">—</div><div class="glance-label">Collection rate</div></div>
+          <div class="glance-stat"><div class="glance-value" id="k-atrisk-pct" style="color:#F97316">—</div><div class="glance-label">Portfolio at risk</div></div>
+          <div class="glance-stat"><div class="glance-value" id="k-arrears-rate" style="color:#E11D48">—</div><div class="glance-label">Loans in arrears</div></div>
         </div>
         <div class="card" style="flex:1;min-width:260px">
           <h2 style="text-align:center">Member Funds</h2>
@@ -193,7 +193,7 @@
               labels: ["Shares", "Deposits", "Welfare"],
               datasets: [{
                 data: [Number(kpis.total_shares)||0, Number(kpis.total_deposits)||0, Number(kpis.total_welfare)||0],
-                backgroundColor: ["#1F8A5F", "#2E6E8E", "#6C4F8A"],
+                backgroundColor: ["#10B981", "#0EA5E9", "#8B5CF6"],
               }],
             },
             options: {
@@ -264,8 +264,8 @@
             datasets: [{
               label: "Collections (KES)",
               data: months.map(m => totalsByMonth[m.key]),
-              borderColor: "#1F8A5F",
-              backgroundColor: "rgba(31,138,95,0.1)",
+              borderColor: "#10B981",
+              backgroundColor: "rgba(16,185,129,0.12)",
               fill: true,
               tension: 0.3,
             }],
@@ -314,7 +314,7 @@
         if (arrears && arrears.length) {
           listEl.innerHTML = arrears.slice(0, 8).map(a => {
             const days = Number(a.days_overdue);
-            const color = days > 60 ? "#C1502E" : days > 30 ? "#B8790F" : "#1F8A5F";
+            const color = days > 60 ? "#E11D48" : days > 30 ? "#F97316" : "#10B981";
             return `<div class="arrears-item">
               <span>${a.member_name}</span>
               <span class="arrears-badge" style="background:${color}">${days}d overdue</span>
