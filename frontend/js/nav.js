@@ -80,9 +80,27 @@ function renderNav() {
 // no per-page HTML edit needed. Shows automatically when the current
 // page belongs to that group; the Accountant bar can also be toggled
 // from the sidebar's Accountant link.
+function ensureGroupTabStyles() {
+  if (document.getElementById('nav-group-tab-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'nav-group-tab-styles';
+  style.textContent = `
+    .nav-group-tab {
+      display: inline-block; padding: 8px 16px; font-size: 14px; text-decoration: none;
+      color: inherit; border-bottom: 3px solid transparent; cursor: pointer;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .nav-group-tab:hover { background: rgba(0,0,0,0.04); }
+    .nav-group-tab.active { border-bottom-color: var(--color-accent, #1B6E45); font-weight: 600; }
+  `;
+  document.head.appendChild(style);
+}
+
 function renderGroupBar(barId, items, current, isActive) {
   const main = document.querySelector('main.main') || document.querySelector('.main');
   if (!main) return;
+
+  ensureGroupTabStyles();
 
   let bar = document.getElementById(barId);
   if (!bar) {
@@ -91,13 +109,11 @@ function renderGroupBar(barId, items, current, isActive) {
     main.insertBefore(bar, main.firstChild);
   }
 
-  bar.style.cssText = `display:${isActive ? 'flex' : 'none'};gap:8px;flex-wrap:wrap;align-items:center;padding-bottom:16px;margin-bottom:20px;border-bottom:1px solid var(--color-line, #ddd);`;
+  bar.style.cssText = `display:${isActive ? 'flex' : 'none'};gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:20px;border-bottom:2px solid var(--color-line, #ddd);`;
 
   bar.innerHTML = items.map(i => {
     const active = i.href === current;
-    return `<a href="${i.href}" style="padding:6px 14px;border-radius:999px;font-size:13px;text-decoration:none;
-      background:${active ? 'var(--color-primary, #1B6E45)' : '#F3EBD8'};
-      color:${active ? '#fff' : 'inherit'};">${i.label}</a>`;
+    return `<a href="${i.href}" class="nav-group-tab ${active ? 'active' : ''}">${i.label}</a>`;
   }).join('');
 }
 
