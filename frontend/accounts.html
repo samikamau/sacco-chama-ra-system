@@ -7,12 +7,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   .coa-category { margin-bottom:10px; border:1px solid var(--color-line); border-radius:var(--radius); overflow:hidden; }
-  .coa-cat-header { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; color:#fff; cursor:pointer; user-select:none; }
+  .coa-cat-header { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; background:var(--color-primary, #1B6E45); color:#fff; user-select:none; }
   .coa-cat-header h3 { margin:0; font-size:14px; color:#fff; font-weight:600; }
   .coa-cat-header .meta { font-size:12px; opacity:0.8; display:flex; align-items:center; gap:10px; }
-  .toggle-icon { font-size:18px; font-weight:300; transition:transform 0.2s; line-height:1; }
-  .coa-cat-body { display:none; }
-  .coa-cat-body.open { display:block; }
+  .coa-cat-body { display:block; }
   .coa-row { display:grid; grid-template-columns:90px 1fr 90px 90px 150px; gap:8px; align-items:center; padding:7px 16px; border-bottom:1px solid var(--color-line); font-size:13px; }
   .coa-row:last-child { border-bottom:none; }
   .coa-row:hover { background:var(--color-bg); }
@@ -87,15 +85,15 @@
     let orgId, allAccounts = [], editingId = null;
 
     const CATEGORIES = [
-      { code:'1000', label:'Bank',               type:'asset',    color:'#1B6E45' },
-      { code:'1100', label:'Member Receivables', type:'asset',    color:'#1B5E75' },
-      { code:'1200', label:'Investments',        type:'asset',    color:'#1B4E75' },
-      { code:'1300', label:'Fixed Assets',       type:'asset',    color:'#2C4A6E' },
-      { code:'2000', label:'Liabilities',        type:'liability',color:'#922B21' },
-      { code:'3000', label:'Member Funds',       type:'equity',   color:'#6C3483' },
-      { code:'4000', label:'Contributions',      type:'income',   color:'#1A5276' },
-      { code:'5000', label:'Income',             type:'income',   color:'#145A32' },
-      { code:'6000', label:'Expenses',           type:'expense',  color:'#784212' },
+      { code:'1000', label:'Bank',               type:'asset' },
+      { code:'1100', label:'Member Receivables', type:'asset' },
+      { code:'1200', label:'Investments',        type:'asset' },
+      { code:'1300', label:'Fixed Assets',       type:'asset' },
+      { code:'2000', label:'Liabilities',        type:'liability' },
+      { code:'3000', label:'Member Funds',       type:'equity' },
+      { code:'4000', label:'Contributions',      type:'income' },
+      { code:'5000', label:'Income',             type:'income' },
+      { code:'6000', label:'Expenses',           type:'expense' },
     ];
 
     async function loadAccounts() {
@@ -135,7 +133,6 @@
         if (search && !children.length &&
             !catAcct.code.includes(search) && !catAcct.name.toLowerCase().includes(search)) return '';
 
-        const isOpen = true;
         const rows = children.length
           ? children.map(a => `
             <div class="coa-row ${a.is_active === false ? 'coa-inactive' : ''}">
@@ -155,14 +152,13 @@
 
         return `
           <div class="coa-category">
-            <div class="coa-cat-header" style="background:${cat.color}" onclick="toggleCat(this)">
+            <div class="coa-cat-header">
               <h3>${cat.code} &nbsp;${cat.label}</h3>
               <div class="meta">
                 <span>${children.length} account${children.length!==1?'s':''}</span>
-                <span class="toggle-icon">${isOpen?'−':'+'}</span>
               </div>
             </div>
-            <div class="coa-cat-body ${isOpen?'open':''}">
+            <div class="coa-cat-body open">
               <div class="coa-row coa-hdr">
                 <div>Code</div><div>Name</div><div>Type</div><div>Balance</div><div>Actions</div>
               </div>
@@ -175,13 +171,6 @@
             </div>
           </div>`;
       }).join('');
-    }
-
-    function toggleCat(header) {
-      const body = header.nextElementSibling;
-      const icon = header.querySelector('.toggle-icon');
-      const isOpen = body.classList.toggle('open');
-      icon.textContent = isOpen ? '−' : '+';
     }
 
     function openDrawer(id, presetParentId) {
