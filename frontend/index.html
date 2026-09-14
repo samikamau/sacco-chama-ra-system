@@ -26,27 +26,7 @@
 </head>
 <body>
   <div class="app-shell">
-    <nav class="nav">
-      <div class="brand">Ledger</div>
-      <a href="index.html" class="active">Dashboard</a>
-      <a href="members.html">Members</a>
-      <a href="payments.html">Payments</a>
-      <a href="loans.html">Loans</a>
-      <a href="expenditure.html">Expenditure</a>
-      <a href="banking.html">Banking</a>
-      <a href="reconcile.html">Reconciliation</a>
-      <a href="statement.html">Member Statements</a>
-      <a href="reports.html">Reports</a>
-      <a href="#" class="nav-accountant-toggle " onclick="toggleAccountant(event)">Accountant</a>
-      <div class="nav-accountant-sub" style="display:none">
-        <a href="contributions.html" style="padding-left:28px;font-size:13px">Contributions</a>
-        <a href="accounts.html" style="padding-left:28px;font-size:13px">Chart of Accounts</a>
-        <a href="journal.html" style="padding-left:28px;font-size:13px">General Journal</a>
-        <a href="periods.html" style="padding-left:28px;font-size:13px">Accounting Periods</a>
-      </div>
-      <a href="users.html">Users</a>
-      <a href="#" onclick="signOut()">Sign out</a>
-    </nav>
+    <nav class="nav" id="nav-mount"></nav>
     <main class="main">
       <h1 id="org-name">Dashboard</h1>
 
@@ -70,15 +50,6 @@
       </div>
 
       <div class="kpi-group">
-        <h2>Member funds (posted)</h2>
-        <div class="kpi-grid">
-          <div class="kpi"><div class="value" id="k-shares">—</div><div class="label">Total shares (KES)</div></div>
-          <div class="kpi"><div class="value" id="k-deposits">—</div><div class="label">Total deposits (KES)</div></div>
-          <div class="kpi"><div class="value" id="k-welfare">—</div><div class="label">Total welfare (KES)</div></div>
-        </div>
-      </div>
-
-      <div class="kpi-group">
         <h2>Bank and Cash accounts</h2>
         <div class="kpi-grid" id="bank-cash-grid">
           <div class="kpi"><div class="value">—</div><div class="label">Loading…</div></div>
@@ -98,11 +69,11 @@
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:var(--space-4)">
         <div class="card" style="flex:1;min-width:280px">
           <h2>Member funds by category</h2>
-          <div style="max-width:320px;margin:0 auto"><canvas id="chart-funds"></canvas></div>
+          <div style="position:relative;height:240px"><canvas id="chart-funds"></canvas></div>
         </div>
         <div class="card" style="flex:2;min-width:340px">
           <h2>Collections trend (last 6 months)</h2>
-          <canvas id="chart-collections"></canvas>
+          <div style="position:relative;height:240px"><canvas id="chart-collections"></canvas></div>
         </div>
       </div>
 
@@ -114,6 +85,7 @@
   </div>
 
   <script src="js/config.js"></script>
+  <script src="js/nav.js"></script>
   <script src="js/auth.js"></script>
   <script>
     (async () => {
@@ -135,9 +107,6 @@
         document.getElementById("k-received").textContent = money(kpis.received);
         document.getElementById("k-collection").textContent = kpis.collection_pct + "%";
         document.getElementById("k-outstanding").textContent = money(kpis.outstanding);
-        document.getElementById("k-shares").textContent = money(kpis.total_shares);
-        document.getElementById("k-deposits").textContent = money(kpis.total_deposits);
-        document.getElementById("k-welfare").textContent = money(kpis.total_welfare);
 
         new Chart(document.getElementById("chart-funds"), {
           type: "pie",
@@ -149,6 +118,8 @@
             }],
           },
           options: {
+            responsive: true,
+            maintainAspectRatio: false,
             plugins: { legend: { position: "bottom", labels: { font: { size: 12 } } } },
           },
         });
@@ -217,6 +188,8 @@
             }],
           },
           options: {
+            responsive: true,
+            maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: { y: { beginAtZero: true } },
           },
@@ -255,16 +228,6 @@
           </div>`).join("");
       }
     })();
-  </script>
-
-  <script>
-  function toggleAccountant(e) {
-    e.preventDefault();
-    const sub = document.querySelector('.nav-accountant-sub');
-    if (!sub) return;
-    const isVisible = sub.style.display !== 'none';
-    sub.style.display = isVisible ? 'none' : 'block';
-  }
   </script>
 </body>
 </html>
