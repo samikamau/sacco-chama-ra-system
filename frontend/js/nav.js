@@ -60,7 +60,10 @@ function renderNav() {
     </a>`).join('');
 
   mount.innerHTML = `
-    <div class="brand"><span style="color:#F5A623">Na</span><span style="color:#FFFFFF">Save</span></div>
+    <div class="brand" style="line-height:1.15">
+      <span style="font-size:28px;font-weight:700;color:#F5A623">Na</span><span style="font-size:28px;font-weight:700;color:#FFFFFF">Save</span>
+      <div style="font-size:12px;font-weight:400;letter-spacing:0.06em;color:rgba(255,255,255,0.65);margin-top:2px">Ledgers</div>
+    </div>
     ${topLinks}
     <a href="${ACCOUNTANT_ITEMS[0].href}" class="nav-accountant-toggle ${isAccountantActive ? 'active' : ''}" style="display:flex;align-items:center;gap:6px">
       ${NAV_ICONS.calculator}Accountant
