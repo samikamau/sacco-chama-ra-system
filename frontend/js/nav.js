@@ -55,7 +55,7 @@ function renderNav() {
     </a>`).join('');
 
   const subLinks = ACCOUNTANT_ITEMS.map(i => `
-    <a href="${i.href}" class="${i.href === current ? 'active' : ''}" style="padding-left:28px;font-size:13px">${i.label}</a>`).join('');
+    <a href="${i.href}" class="${i.href === current ? 'active' : ''}" style="padding-left:28px;font-size:13px;color:rgba(255,255,255,0.82);display:block">${i.label}</a>`).join('');
 
   mount.innerHTML = `
     <div class="brand">Ledger</div>
