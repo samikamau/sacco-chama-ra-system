@@ -30,7 +30,12 @@
       <div id="tab-application" class="tab-panel" style="display:none">
         <div class="card">
           <h2>New loan application</h2>
-          <div class="field"><label>Member</label><select id="a-member" onchange="checkEligibility()"></select></div>
+          <div class="field" style="position:relative">
+            <label>Member</label>
+            <input id="a-member-search" type="text" placeholder="Search name or number…" autocomplete="off">
+            <input type="hidden" id="a-member">
+            <div id="a-member-list"></div>
+          </div>
           <div class="field"><label>Loan product</label><select id="a-product" onchange="checkEligibility()"></select></div>
           <div id="elig-box" style="background:#F3EBD8;border-radius:3px;padding:12px;margin-bottom:12px;font-size:13px;display:none"></div>
           <div class="field"><label>Principal requested (KES)</label><input id="a-principal" type="number"></div>
@@ -138,6 +143,7 @@
 
   <script src="js/config.js"></script>
   <script src="js/nav.js"></script>
+  <script src="js/member-search.js"></script>
   <script src="js/auth.js"></script>
   <script>
     let orgId, products = [], cashAccounts = [];
@@ -211,8 +217,7 @@
     async function loadMembers() {
       const { data } = await supabaseClient.from("members")
         .select("id, member_number, full_name").eq("organisation_id", orgId).eq("status","active").order("full_name");
-      document.getElementById("a-member").innerHTML =
-        (data||[]).map(m => `<option value="${m.id}">${m.member_number} — ${m.full_name}</option>`).join("");
+      setupMemberSearch("a-member-search", "a-member", "a-member-list", data || [], checkEligibility);
     }
 
     async function loadAccounts() {

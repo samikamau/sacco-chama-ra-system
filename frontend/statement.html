@@ -29,9 +29,11 @@
 
       <div class="card">
         <div class="filter-row">
-          <div class="field">
+          <div class="field" style="position:relative">
             <label>Member</label>
-            <select id="f-member"></select>
+            <input id="f-member-search" type="text" placeholder="Search name or number…" autocomplete="off">
+            <input type="hidden" id="f-member">
+            <div id="f-member-list"></div>
           </div>
           <div class="field">
             <label>Date range</label>
@@ -51,10 +53,16 @@
           <div class="field" id="fld-to" style="display:none"><label>To</label><input id="f-to" type="date"></div>
         </div>
 
-        <div style="margin-top:14px">
-          <label style="font-size:13px;color:var(--color-muted)">Components</label>
-          <div class="component-check" id="components"></div>
-          <label style="font-size:12px;cursor:pointer"><input type="checkbox" id="chk-all" onchange="toggleAll()"> Select all</label>
+        <div style="margin-top:14px;position:relative;max-width:280px">
+          <button type="button" class="btn" style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center" onclick="toggleComponentsMenu()">
+            <span id="components-summary">Components ▾</span>
+          </button>
+          <div id="components-menu" style="display:none;position:absolute;z-index:15;top:100%;left:0;right:0;background:#fff;border:1px solid var(--color-line);border-radius:6px;box-shadow:0 6px 16px rgba(0,0,0,0.1);margin-top:4px;padding:10px 12px">
+            <div class="component-check" id="components"></div>
+            <label style="font-size:12px;cursor:pointer;display:block;margin-top:6px;border-top:1px solid var(--color-line);padding-top:8px">
+              <input type="checkbox" id="chk-all" onchange="toggleAll()"> Select all
+            </label>
+          </div>
         </div>
 
         <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
@@ -70,6 +78,7 @@
 
   <script src="js/config.js"></script>
   <script src="js/nav.js"></script>
+  <script src="js/member-search.js"></script>
   <script src="js/auth.js"></script>
   <script>
     let orgId, orgName, fundTypes = [], members = [], loans = [];
@@ -127,6 +136,7 @@
     function toggleAll() {
       const checked = document.getElementById("chk-all").checked;
       document.querySelectorAll(".comp-check").forEach(c => c.checked = checked);
+      updateComponentsSummary();
     }
 
     // -------------------------------------------------------------------------
@@ -136,8 +146,7 @@
       const { data: m } = await supabaseClient.from("members")
         .select("id, member_number, full_name").eq("organisation_id", orgId).order("full_name");
       members = m || [];
-      document.getElementById("f-member").innerHTML =
-        members.map(mb => `<option value="${mb.id}">${mb.member_number} — ${mb.full_name}</option>`).join("");
+      setupMemberSearch('f-member-search', 'f-member', 'f-member-list', members);
 
       const { data: ft } = await supabaseClient.from("contribution_types")
         .select("id, name, category").eq("organisation_id", orgId).eq("active", true).order("name");
@@ -148,8 +157,28 @@
         { key: "loans", label: "Loans & Repayments" },
       ];
       document.getElementById("components").innerHTML = comps.map(c => `
-        <label><input type="checkbox" class="comp-check" value="${c.key}" checked> ${c.label}</label>`).join("");
+        <label><input type="checkbox" class="comp-check" value="${c.key}" checked onchange="updateComponentsSummary()"> ${c.label}</label>`).join("");
       document.getElementById("chk-all").checked = true;
+      updateComponentsSummary();
+    }
+
+    function toggleComponentsMenu() {
+      const menu = document.getElementById("components-menu");
+      menu.style.display = menu.style.display === "none" ? "block" : "none";
+    }
+    document.addEventListener("click", (e) => {
+      const menu = document.getElementById("components-menu");
+      const btn = e.target.closest("button");
+      if (!menu) return;
+      if (menu.style.display === "block" && !menu.contains(e.target) && !(btn && btn.getAttribute("onclick") === "toggleComponentsMenu()")) {
+        menu.style.display = "none";
+      }
+    });
+    function updateComponentsSummary() {
+      const count = selectedComponents().length;
+      const total = document.querySelectorAll(".comp-check").length;
+      document.getElementById("components-summary").textContent =
+        count === 0 ? "Components ▾" : count === total ? `All components (${total}) ▾` : `${count} component${count!==1?'s':''} selected ▾`;
     }
 
     function selectedComponents() {

@@ -80,9 +80,11 @@
         <div class="card">
           <h2>Payment details</h2>
           <div style="display:flex;gap:12px;flex-wrap:wrap">
-            <div class="field" style="flex:2;min-width:200px">
+            <div class="field" style="flex:2;min-width:200px;position:relative">
               <label>Member *</label>
-              <select id="f-member" onchange="loadMemberLoans()"></select>
+              <input id="f-member-search" type="text" placeholder="Search name or number…" autocomplete="off">
+              <input type="hidden" id="f-member">
+              <div id="f-member-list"></div>
             </div>
             <div class="field" style="flex:1;min-width:140px">
               <label>Date *</label>
@@ -160,6 +162,7 @@
 
   <script src="js/config.js"></script>
   <script src="js/nav.js"></script>
+  <script src="js/member-search.js"></script>
   <script src="js/auth.js"></script>
   <script>
     let orgId, paymentAccounts = [], fundTypes = [], activeLoans = [];
@@ -185,11 +188,10 @@
       document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
 
       // Members, for the Record Payment tab
-      const { data: members } = await supabaseClient.from('members')
+      const { data: paymentMembers } = await supabaseClient.from('members')
         .select('id, member_number, full_name').eq('organisation_id', orgId)
         .eq('status','active').order('full_name');
-      document.getElementById('f-member').innerHTML =
-        (members||[]).map(m=>`<option value="${m.id}">${m.member_number} — ${m.full_name}</option>`).join('');
+      setupMemberSearch('f-member-search', 'f-member', 'f-member-list', paymentMembers || [], loadMemberLoans);
 
       // Fund types, for the Record Payment tab
       const { data: ft } = await supabaseClient.from('contribution_types')
