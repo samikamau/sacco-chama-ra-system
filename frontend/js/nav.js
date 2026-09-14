@@ -29,12 +29,13 @@ const MEMBERS_ITEMS = [
 ];
 
 const ACCOUNTANT_ITEMS = [
-  { href: 'contributions.html', label: 'Contributions' },
-  { href: 'accounts.html',      label: 'Chart of Accounts' },
-  { href: 'journal.html',       label: 'General Journal' },
-  { href: 'periods.html',       label: 'Accounting Periods' },
-  { href: 'reconcile.html',     label: 'Reconciliation' },
-  { href: 'reports.html',       label: 'Reports' },
+  { href: 'contributions.html',     label: 'Contributions' },
+  { href: 'accounts.html',          label: 'Chart of Accounts' },
+  { href: 'journal.html',           label: 'General Journal' },
+  { href: 'periods.html',           label: 'Accounting Periods' },
+  { href: 'opening-balances.html',  label: 'Opening Balances' },
+  { href: 'reconcile.html',         label: 'Reconciliation' },
+  { href: 'reports.html',           label: 'Reports' },
 ];
 
 // Sub-pages that should highlight a top-level item even though their
