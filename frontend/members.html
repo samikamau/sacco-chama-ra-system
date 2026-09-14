@@ -2,630 +2,271 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Member Management — Financial Operating System</title>
+<title>Members — Financial Operating System</title>
 <link rel="stylesheet" href="css/style.css">
-<style>
-  .loan-tabs{display:flex;gap:0;border-bottom:2px solid var(--color-line,#ddd);margin-bottom:20px}
-  .loan-tab-btn{background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;
-    padding:10px 18px;cursor:pointer;font-size:14px;color:var(--color-muted,#888);font-family:inherit;transition:color 0.15s}
-  .loan-tab-btn:hover{color:var(--color-ink,#1a1a1a)}
-  .loan-tab-btn.active{color:var(--color-ink,#1a1a1a);font-weight:600;border-bottom-color:var(--color-accent,#9B6D1E)}
-</style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .drawer-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+    display: none; z-index: 40;
+  }
+  .drawer-backdrop.open { display: block; }
+  .drawer {
+    position: fixed; top: 0; right: 0; height: 100vh; width: 440px; max-width: 92vw;
+    background: var(--color-surface); z-index: 50; transform: translateX(100%);
+    transition: transform 0.2s ease; overflow-y: auto; padding: var(--space-4);
+    box-shadow: -2px 0 12px rgba(0,0,0,0.12);
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer h2 { border-bottom: 1px solid var(--color-line); padding-bottom: var(--space-3); }
+  .drawer .section-label {
+    font-family: var(--font-display); font-size: 14px; color: var(--color-primary);
+    margin: var(--space-4) 0 var(--space-2) 0;
+  }
+  .drawer-actions { display: flex; gap: var(--space-2); margin-top: var(--space-4); flex-wrap: wrap; }
+  .toast {
+    position: fixed; bottom: 20px; right: 20px; background: var(--color-success);
+    color: #fff; padding: var(--space-3) var(--space-4); border-radius: var(--radius);
+    z-index: 60; display: none;
+  }
+  .toast.show { display: block; }
+</style>
 </head>
 <body>
-<div class="app-shell">
-  <nav class="nav">
-      <div class="brand">Ledger</div>
-      <a href="index.html">Dashboard</a>
-      <a href="members.html" class="active">Member Management</a>
-      <a href="loans.html">Loan Management</a>
-      <a href="expenditure.html">Supplier Management</a>
-      <a href="accounts.html">Accountant</a>
-      <div class="nav-group">
-        <div class="nav-group-header" onclick="toggleNav(this)">
-          <span>Banking</span><span class="nav-chevron">›</span>
-        </div>
-        <div class="nav-group-body">
-          <a href="banking.html">Bank & Cash</a>
-          <a href="reconcile.html">Reconciliation</a>
-          <a href="payments.html">Payments</a>
-        </div>
-      </div>
-      <a href="reports.html">Reports</a>
-      <div class="nav-group">
-        <div class="nav-group-header" onclick="toggleNav(this)">
-          <span>Administration</span><span class="nav-chevron">›</span>
-        </div>
-        <div class="nav-group-body">
-          <a href="users.html">Users & Access</a>
-          <a href="contributions.html">Contributions</a>
-          <a href="org-settings.html">Org Settings</a>
-        </div>
-      </div>
-      <a href="#" onclick="signOut()" class="nav-signout">Sign out</a>
-    </nav>
-
-  <main class="main">
-    <h1>Member Management</h1>
-
-    <div class="loan-tabs">
-      <button id="mt-members"    class="loan-tab-btn active" onclick="switchTab('members')">Members</button>
-      <button id="mt-statements" class="loan-tab-btn"        onclick="switchTab('statements')">Member Statements</button>
-    </div>
-
-    <!-- ── MEMBERS TAB ─────────────────────────────────────────── -->
-    <div id="tab-members">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+  <div class="app-shell">
+    <nav class="nav" id="nav-mount"></nav>
+    <main class="main">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h1>Members</h1>
         <button class="btn accent" onclick="openDrawer()">+ Add Member</button>
       </div>
+
       <div class="card">
         <table>
           <thead><tr><th>No.</th><th>Name</th><th>Phone</th><th class="num">Monthly</th><th>KYC</th><th>Status</th></tr></thead>
           <tbody id="rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
         </table>
       </div>
+    </main>
+  </div>
+
+  <div class="drawer-backdrop" id="backdrop" onclick="closeDrawer()"></div>
+  <div class="drawer" id="drawer">
+    <h2>Add member</h2>
+
+    <div class="section-label">Member details</div>
+    <div class="field"><label>Member number (auto-generated, editable)</label><input id="f-number"></div>
+    <div class="field"><label>Full name *</label><input id="f-name"></div>
+    <div class="field"><label>Date of birth</label><input id="f-dob" type="date"></div>
+    <div class="field"><label>Gender</label>
+      <select id="f-gender"><option value="">—</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select>
     </div>
+    <div class="field"><label>Phone</label><input id="f-phone" placeholder="2547XXXXXXXX"></div>
+    <div class="field"><label>Email</label><input id="f-email" type="email"></div>
+    <div class="field"><label>Physical address</label><input id="f-address"></div>
 
-    <!-- ── MEMBER STATEMENTS TAB ───────────────────────────────── -->
-    <div id="tab-statements" style="display:none">
-      <div class="card" style="margin-bottom:12px">
+    <div class="section-label">Membership</div>
+    <div class="field"><label>Date joined</label><input id="f-joined" type="date"></div>
+    <div class="field"><label>Membership category (for category-based contributions)</label><input id="f-category" placeholder="e.g. A"></div>
+    <div class="field"><label>Monthly contribution (optional per-member override)</label><input id="f-amount" type="number"></div>
+    <div class="field"><label>Occupation</label><input id="f-occupation"></div>
+    <div class="field"><label>Employer / business</label><input id="f-employer"></div>
 
-        <!-- Controls row -->
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">
-          <div class="field" style="margin-bottom:0;flex:2;min-width:200px">
-            <label>Search member</label>
-            <input id="stmt-search" placeholder="Name or member number…"
-              oninput="searchMembers()" autocomplete="off">
-          </div>
-          <div class="field" style="margin-bottom:0;flex:1;min-width:150px">
-            <label>Statement type</label>
-            <select id="stmt-type" onchange="onStmtTypeChange()">
-              <option value="full">Full statement</option>
-              <option value="funds">Fund balances</option>
-              <option value="contributions">Contributions</option>
-              <option value="loans">Loans</option>
-            </select>
-          </div>
-          <div class="field" id="stmt-loan-status-wrap" style="margin-bottom:0;min-width:140px">
-            <label>Loan status</label>
-            <select id="stmt-loan-status">
-              <option value="all">All loans</option>
-              <option value="active">Active</option>
-              <option value="disbursed">Disbursed</option>
-              <option value="closed">Closed</option>
-              <option value="pending_approval">Pending approval</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Declined</option>
-            </select>
-          </div>
-          <div class="field" style="margin-bottom:0;min-width:130px">
-            <label>From</label>
-            <input id="stmt-from" type="date">
-          </div>
-          <div class="field" style="margin-bottom:0;min-width:130px">
-            <label>To</label>
-            <input id="stmt-to" type="date">
-          </div>
-          <button class="btn accent" onclick="generateStatements()" style="white-space:nowrap">Generate</button>
-        </div>
+    <div class="section-label">Next of kin</div>
+    <div class="field"><label>Name</label><input id="f-nok-name"></div>
+    <div class="field"><label>Relationship</label><input id="f-nok-rel"></div>
+    <div class="field"><label>Phone</label><input id="f-nok-phone"></div>
 
-        <!-- Search results dropdown -->
-        <div id="stmt-list" style="display:none;border:1px solid var(--color-line);
-          border-radius:4px;max-height:200px;overflow-y:auto;margin-bottom:8px"></div>
-
-        <!-- Selected members chips -->
-        <div id="stmt-selected" style="display:flex;flex-wrap:wrap;gap:6px;min-height:28px"></div>
-        <p style="font-size:12px;color:var(--color-muted);margin-top:4px">
-          Select one or more members from search, then click Generate.
-        </p>
-      </div>
-
-      <!-- Export buttons — shown after generation -->
-      <div id="stmt-export-bar" style="display:none;margin-bottom:12px;display:none">
-        <button class="btn" onclick="exportStmtPDF()">⬇ PDF</button>
-        <button class="btn" onclick="exportStmtExcel()" style="margin-left:6px">⬇ Excel</button>
-      </div>
-
-      <!-- Statement output -->
-      <div id="stmt-body"></div>
+    <div class="section-label">Payment information</div>
+    <div class="field"><label>Preferred method</label>
+      <select id="f-pay-method"><option value="">—</option><option value="mpesa">M-Pesa</option><option value="bank">Bank</option><option value="cash">Cash</option></select>
     </div>
-  </main>
-</div>
+    <div class="field"><label>M-Pesa number</label><input id="f-mpesa"></div>
+    <div class="field"><label>Bank name</label><input id="f-bank"></div>
+    <div class="field"><label>Bank account number</label><input id="f-bank-acc"></div>
 
-<!-- ADD MEMBER DRAWER -->
-<div class="drawer-backdrop" id="backdrop" onclick="closeDrawer()"></div>
-<div class="drawer" id="drawer">
-  <h2>Add member</h2>
-  <div class="section-label">Member details</div>
-  <div class="field"><label>Member number (auto-generated, editable)</label><input id="f-number"></div>
-  <div class="field"><label>Full name *</label><input id="f-name"></div>
-  <div class="field"><label>Date of birth</label><input id="f-dob" type="date"></div>
-  <div class="field"><label>Gender</label>
-    <select id="f-gender"><option value="">—</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select>
+    <div class="section-label">KYC</div>
+    <div class="field"><label>ID type</label>
+      <select id="f-id-type"><option value="national_id">National ID</option><option value="passport">Passport</option><option value="alien_id">Alien ID</option><option value="other">Other</option></select>
+    </div>
+    <div class="field"><label>ID number</label><input id="f-id-number"></div>
+    <div class="field"><label>KYC status</label>
+      <select id="f-kyc-status"><option value="pending">Pending</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select>
+    </div>
+    <div class="field"><label>KYC notes</label><input id="f-kyc-notes"></div>
+
+    <p id="drawer-error" class="error" style="display:none"></p>
+    <div class="drawer-actions">
+      <button class="btn accent" onclick="saveMember(false)">Save</button>
+      <button class="btn" onclick="saveMember(true)">Save & add another</button>
+      <button class="btn" style="background:#888" onclick="closeDrawer()">Cancel</button>
+    </div>
   </div>
-  <div class="field"><label>Phone</label><input id="f-phone" placeholder="2547XXXXXXXX"></div>
-  <div class="field"><label>Email</label><input id="f-email" type="email"></div>
-  <div class="field"><label>Physical address</label><input id="f-address"></div>
-  <div class="section-label">Membership</div>
-  <div class="field"><label>Date joined</label><input id="f-joined" type="date"></div>
-  <div class="field"><label>Membership category</label><input id="f-category" placeholder="e.g. A"></div>
-  <div class="field"><label>Monthly contribution override</label><input id="f-amount" type="number"></div>
-  <div class="field"><label>Occupation</label><input id="f-occupation"></div>
-  <div class="field"><label>Employer / business</label><input id="f-employer"></div>
-  <div class="section-label">Next of kin</div>
-  <div class="field"><label>Name</label><input id="f-nok-name"></div>
-  <div class="field"><label>Relationship</label><input id="f-nok-rel"></div>
-  <div class="field"><label>Phone</label><input id="f-nok-phone"></div>
-  <div class="section-label">Payment information</div>
-  <div class="field"><label>Preferred method</label>
-    <select id="f-pay-method"><option value="">—</option><option value="mpesa">M-Pesa</option><option value="bank">Bank</option><option value="cash">Cash</option></select>
-  </div>
-  <div class="field"><label>M-Pesa number</label><input id="f-mpesa"></div>
-  <div class="field"><label>Bank name</label><input id="f-bank"></div>
-  <div class="field"><label>Bank account number</label><input id="f-bank-acc"></div>
-  <div class="section-label">KYC</div>
-  <div class="field"><label>ID type</label>
-    <select id="f-id-type"><option value="national_id">National ID</option><option value="passport">Passport</option><option value="alien_id">Alien ID</option><option value="other">Other</option></select>
-  </div>
-  <div class="field"><label>ID number</label><input id="f-id-number"></div>
-  <div class="field"><label>KYC status</label>
-    <select id="f-kyc-status"><option value="pending">Pending</option><option value="verified">Verified</option><option value="rejected">Rejected</option></select>
-  </div>
-  <div class="field"><label>KYC notes</label><input id="f-kyc-notes"></div>
-  <p id="drawer-error" class="error" style="display:none"></p>
-  <div class="drawer-actions">
-    <button class="btn accent" onclick="saveMember(false)">Save</button>
-    <button class="btn" onclick="saveMember(true)">Save & add another</button>
-    <button class="btn" style="background:#888" onclick="closeDrawer()">Cancel</button>
-  </div>
-</div>
 
-<div class="toast" id="toast"></div>
+  <div class="toast" id="toast"></div>
 
-<script src="js/config.js"></script>
-<script src="js/auth.js"></script>
-<script>
-  let orgId, allMembers = [], orgName = '', orgType = '';
+  <script src="js/config.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let orgId;
 
-  // ── TABS ────────────────────────────────────────────────────────
-  function switchTab(name) {
-    ['members','statements'].forEach(t => {
-      document.getElementById('tab-'+t).style.display = t===name ? 'block' : 'none';
-      document.getElementById('mt-'+t).classList.toggle('active', t===name);
-    });
-    if (name === 'statements') {
-      // Reset statement tab to clean state
-      document.getElementById('stmt-search').value = '';
-      document.getElementById('stmt-list').style.display = 'none';
-      document.getElementById('stmt-list').innerHTML = '';
-      document.getElementById('stmt-body').innerHTML =
-        '<p class="empty">Search for a member above to view their statement.</p>';
+    function showToast(msg) {
+      const t = document.getElementById("toast");
+      t.textContent = msg; t.classList.add("show");
+      setTimeout(() => t.classList.remove("show"), 2500);
     }
-  }
 
-  // ── STATEMENT: setup ────────────────────────────────────────────
-  let selectedStmtMembers = []; // [{id, label}]
-
-  function onStmtTypeChange() {
-    const type = document.getElementById('stmt-type').value;
-    const lsWrap = document.getElementById('stmt-loan-status-wrap');
-    if (lsWrap) lsWrap.style.display = (type==='loans'||type==='full') ? 'block' : 'none';
-  }
-
-  function switchTab(name) {
-    ['members','statements'].forEach(t => {
-      document.getElementById('tab-'+t).style.display = t===name ? 'block' : 'none';
-      document.getElementById('mt-'+t).classList.toggle('active', t===name);
-    });
-    if (name === 'statements') {
-      const now = new Date();
-      if (!document.getElementById('stmt-from').value)
-        document.getElementById('stmt-from').value =
-          new Date(now.getFullYear(), 0, 1).toISOString().slice(0,10);
-      if (!document.getElementById('stmt-to').value)
-        document.getElementById('stmt-to').value = now.toISOString().slice(0,10);
-      selectedStmtMembers = [];
-      renderSelectedChips();
-      document.getElementById('stmt-body').innerHTML = '';
-      document.getElementById('stmt-export-bar').style.display = 'none';
-    }
-  }
-
-  // ── SEARCH ───────────────────────────────────────────────────────
-  function searchMembers() {
-    const q = document.getElementById('stmt-search').value.toLowerCase().trim();
-    const listEl = document.getElementById('stmt-list');
-    if (!q) { listEl.style.display='none'; listEl.innerHTML=''; return; }
-    const matches = allMembers.filter(m =>
-      m.full_name.toLowerCase().includes(q) ||
-      m.member_number.toLowerCase().includes(q)
-    );
-    if (!matches.length) {
-      listEl.innerHTML='<div style="padding:10px 14px;color:var(--color-muted);font-size:13px">No members found.</div>';
-      listEl.style.display='block'; return;
-    }
-    listEl.innerHTML = matches.map(m => `
-      <div onclick="addStmtMember('${m.id}','${m.member_number} — ${m.full_name}')"
-        style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--color-line);font-size:14px"
-        onmouseover="this.style.background='var(--color-bg)'"
-        onmouseout="this.style.background=''">
-        <strong>${m.member_number}</strong> — ${m.full_name}
-      </div>`).join('');
-    listEl.style.display='block';
-  }
-
-  function addStmtMember(id, label) {
-    if (!selectedStmtMembers.find(m=>m.id===id))
-      selectedStmtMembers.push({id, label});
-    document.getElementById('stmt-search').value='';
-    document.getElementById('stmt-list').style.display='none';
-    document.getElementById('stmt-list').innerHTML='';
-    renderSelectedChips();
-  }
-
-  function removeStmtMember(id) {
-    selectedStmtMembers = selectedStmtMembers.filter(m=>m.id!==id);
-    renderSelectedChips();
-  }
-
-  function renderSelectedChips() {
-    document.getElementById('stmt-selected').innerHTML =
-      selectedStmtMembers.map(m=>`
-        <span style="background:var(--color-primary);color:#fff;padding:4px 10px;
-          border-radius:999px;font-size:12px;display:inline-flex;align-items:center;gap:6px">
-          ${m.label}
-          <span onclick="removeStmtMember('${m.id}')" style="cursor:pointer;opacity:0.7;font-size:14px">×</span>
-        </span>`).join('');
-  }
-
-  // ── GENERATE ─────────────────────────────────────────────────────
-  async function generateStatements() {
-    if (!selectedStmtMembers.length) {
-      alert('Select at least one member first.'); return;
-    }
-    const stmtType   = document.getElementById('stmt-type').value;
-    const fromDate   = document.getElementById('stmt-from').value || null;
-    const toDate     = document.getElementById('stmt-to').value   || null;
-    const loanStatus = document.getElementById('stmt-loan-status')?.value || 'all';
-    const box = document.getElementById('stmt-body');
-    box.innerHTML = '<p style="color:var(--color-muted)">Generating…</p>';
-
-    let html = '';
-    for (const m of selectedStmtMembers) {
-      html += await buildMemberStatement(m.id, stmtType, fromDate, toDate, loanStatus);
-      html += '<div style="page-break-after:always;border-bottom:2px solid var(--color-line);margin:24px 0"></div>';
-    }
-    box.innerHTML = html;
-    document.getElementById('stmt-export-bar').style.display = 'flex';
-    document.getElementById('stmt-export-bar').style.gap = '8px';
-  }
-
-  async function buildMemberStatement(memberId, stmtType, fromDate, toDate, loanStatus='all') {
-    let payQ = supabaseClient.from('payments')
-      .select('transaction_date,reference,amount,payment_allocations(amount,contribution_types(name,category))')
-      .eq('member_id', memberId).eq('status','posted')
-      .order('transaction_date', {ascending:true});
-    if (fromDate) payQ = payQ.gte('transaction_date', fromDate);
-    if (toDate)   payQ = payQ.lte('transaction_date', toDate);
-
-    let loanQ = supabaseClient.from('loans')
-      .select('id,loan_number,principal,status,application_date,loan_products(name),loan_repayments(amount,principal_portion,interest_portion,created_at)')
-      .eq('member_id', memberId).order('application_date', {ascending:true});
-    if (fromDate)              loanQ = loanQ.gte('application_date', fromDate);
-    if (toDate)                loanQ = loanQ.lte('application_date', toDate);
-    if (loanStatus !== 'all')  loanQ = loanQ.eq('status', loanStatus);
-
-    const [{data:member},{data:payments},{data:loans}] = await Promise.all([
-      supabaseClient.from('members').select('full_name,member_number,status,date_joined').eq('id',memberId).single(),
-      stmtType==='loans' ? Promise.resolve({data:[]}) : payQ,
-      stmtType==='contributions' ? Promise.resolve({data:[]}) : loanQ,
-    ]);
-
-    const periodText = fromDate && toDate
-      ? `${fromDate} to ${toDate}` : 'All time';
-    const typeLabels = {full:'Full Statement',funds:'Fund Balances',contributions:'Contributions Statement',loans:'Loan Statement'};
-    const loanStatusLabel = loanStatus==='all' ? 'All loans'
-      : loanStatus.replace(/_/g,' ').replace(/\w/g,c=>c.toUpperCase()) + ' loans';
-    const printDate  = new Date().toLocaleDateString('en-KE',{day:'2-digit',month:'long',year:'numeric'});
-
-    // ── COMPANY HEADER ────────────────────────────────────────────
-    let h = `
-      <div style="border-bottom:3px solid var(--color-primary);padding-bottom:12px;margin-bottom:16px;
-                  display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
-        <div>
-          <div style="font-size:20px;font-weight:800;color:var(--color-primary)">${orgName}</div>
-          <div style="font-size:13px;color:var(--color-muted)">${orgType}</div>
-        </div>
-        <div style="text-align:right;font-size:12px;color:var(--color-muted)">
-          <div><strong>${typeLabels[stmtType]||'Statement'}</strong></div>
-          <div>Period: ${periodText}</div>
-          <div>Printed: ${printDate}</div>
-        </div>
-      </div>
-
-      <div style="margin-bottom:16px;padding:10px 14px;background:var(--color-bg);border-radius:4px">
-        <div style="font-size:16px;font-weight:700">${member.full_name}</div>
-        <div style="font-size:13px;color:var(--color-muted)">
-          Member No: ${member.member_number} &nbsp;·&nbsp;
-          Joined: ${member.date_joined||'—'} &nbsp;·&nbsp;
-          Status: ${member.status}
-        </div>
-      </div>`;
-
-    // ── FUND BALANCES SUMMARY ──────────────────────────────────────
-    const fundMap = {};
-    (payments||[]).forEach(p => {
-      (p.payment_allocations||[]).forEach(a => {
-        const fund = a.contribution_types?.name || 'Other';
-        fundMap[fund] = (fundMap[fund]||0) + Number(a.amount);
+    async function nextMemberNumber() {
+      const { data } = await supabaseClient.from("members")
+        .select("member_number").eq("organisation_id", orgId);
+      // Find highest numeric suffix on existing SC/member numbers, else start at 1.
+      let max = 0;
+      (data || []).forEach(m => {
+        const n = parseInt((m.member_number || "").replace(/\D/g, ""), 10);
+        if (!isNaN(n) && n > max) max = n;
       });
-    });
-
-    if ((stmtType==='full'||stmtType==='funds') && Object.keys(fundMap).length) {
-      h += `<h3 style="margin-bottom:6px">Fund summary</h3>
-        <table style="margin-bottom:16px">
-          <thead><tr><th>Fund</th><th class="num">Total (KES)</th></tr></thead>
-          <tbody>`;
-      let grandTotal = 0;
-      Object.entries(fundMap).forEach(([fund,amt]) => {
-        grandTotal += amt;
-        h += `<tr><td>${fund}</td><td class="num">${money(amt)}</td></tr>`;
-      });
-      h += `<tr style="font-weight:700;border-top:2px solid var(--color-line)">
-              <td>Grand total</td><td class="num">${money(grandTotal)}</td>
-            </tr></tbody></table>`;
+      return "SC" + String(max + 1).padStart(3, "0");
     }
 
-    // ── CONTRIBUTIONS WITH RUNNING BALANCE ─────────────────────────
-    if (stmtType !== 'loans' && stmtType !== 'funds') {
-      h += `<h3 style="margin-bottom:6px">Contributions statement</h3>
-        <table>
-          <thead><tr>
-            <th>Date</th><th>Reference</th><th>Details</th>
-            <th class="num">Amount (KES)</th><th class="num">Running balance (KES)</th>
-          </tr></thead><tbody>`;
+    async function openDrawer() {
+      document.getElementById("drawer-error").style.display = "none";
+      document.getElementById("f-number").value = await nextMemberNumber();
+      document.getElementById("f-joined").value = new Date().toISOString().slice(0,10);
+      document.getElementById("backdrop").classList.add("open");
+      document.getElementById("drawer").classList.add("open");
+    }
+    function closeDrawer() {
+      document.getElementById("backdrop").classList.remove("open");
+      document.getElementById("drawer").classList.remove("open");
+    }
 
-      let runBal = 0;
-      if ((payments||[]).length) {
-        payments.forEach(p => {
-          const amt = Number(p.amount);
-          runBal += amt;
-          const detail = (p.payment_allocations||[])
-            .map(a => `${a.contribution_types?.name||'—'}: ${money(a.amount)}`).join(', ') || '—';
-          h += `<tr>
-            <td>${p.transaction_date}</td>
-            <td>${p.reference||'—'}</td>
-            <td style="font-size:12px;color:var(--color-muted)">${detail}</td>
-            <td class="num">${money(amt)}</td>
-            <td class="num"><strong>${money(runBal)}</strong></td>
-          </tr>`;
+    function val(id) { return document.getElementById(id).value.trim(); }
+
+    async function saveMember(addAnother) {
+      const errorEl = document.getElementById("drawer-error");
+      errorEl.style.display = "none";
+
+      const name = val("f-name");
+      if (!val("f-number") || !name) { showError(errorEl, "Member number and full name are required."); return; }
+
+      const idNumber = val("f-id-number");
+      const phone = val("f-phone");
+
+      // Duplicate checks (Section 6)
+      if (idNumber) {
+        const { data: dupId } = await supabaseClient.from("member_kyc")
+          .select("member_id").eq("organisation_id", orgId).eq("id_number", idNumber).limit(1);
+        if (dupId && dupId.length) { showError(errorEl, "A member with this ID number already exists."); return; }
+      }
+      if (phone) {
+        const { data: dupPhone } = await supabaseClient.from("members")
+          .select("id").eq("organisation_id", orgId).eq("phone", phone).limit(1);
+        if (dupPhone && dupPhone.length) { showError(errorEl, "A member with this phone number already exists."); return; }
+      }
+
+      const memberPayload = {
+        organisation_id: orgId,
+        member_number: val("f-number"),
+        full_name: name,
+        date_of_birth: val("f-dob") || null,
+        gender: val("f-gender") || null,
+        phone: phone || null,
+        email: val("f-email") || null,
+        physical_address: val("f-address") || null,
+        date_joined: val("f-joined") || null,
+        membership_category: val("f-category") || null,
+        monthly_contribution: val("f-amount") || null,
+        occupation: val("f-occupation") || null,
+        employer: val("f-employer") || null,
+        preferred_payment_method: val("f-pay-method") || null,
+        mpesa_number: val("f-mpesa") || null,
+        bank_name: val("f-bank") || null,
+        bank_account_number: val("f-bank-acc") || null,
+      };
+
+      const { data: inserted, error } = await supabaseClient.from("members").insert(memberPayload).select("id").single();
+      if (error) { showError(errorEl, error.message); return; }
+
+      // KYC row
+      await supabaseClient.from("member_kyc").insert({
+        member_id: inserted.id,
+        organisation_id: orgId,
+        id_type: val("f-id-type") || null,
+        id_number: idNumber || null,
+        kyc_status: val("f-kyc-status") || "pending",
+        verification_date: val("f-kyc-status") === "verified" ? new Date().toISOString().slice(0,10) : null,
+        kyc_notes: val("f-kyc-notes") || null,
+      });
+
+      // Next of kin (only if a name was given)
+      if (val("f-nok-name")) {
+        await supabaseClient.from("next_of_kin").insert({
+          member_id: inserted.id,
+          organisation_id: orgId,
+          full_name: val("f-nok-name"),
+          relationship: val("f-nok-rel") || null,
+          phone: val("f-nok-phone") || null,
         });
-        h += `<tr style="font-weight:700;border-top:2px solid var(--color-line)">
-                <td colspan="3">Closing balance</td>
-                <td class="num">${money(runBal)}</td>
-                <td class="num">${money(runBal)}</td>
-              </tr>`;
-      } else {
-        h += `<tr><td colspan="5" class="empty">No contributions in this period.</td></tr>`;
       }
-      h += `</tbody></table>`;
-    }
 
-    // ── LOANS WITH RUNNING BALANCE ─────────────────────────────────
-    if (stmtType !== 'contributions' && stmtType !== 'funds') {
-      h += `<h3 style="margin-top:20px;margin-bottom:6px">Loan statement</h3>`;
+      showToast("Member saved.");
+      loadMembers();
 
-      if (!(loans||[]).length) {
-        h += `<p class="empty">No loans in this period.</p>`;
+      if (addAnother) {
+        // Clear the form but keep the drawer open, fresh member number.
+        ["f-name","f-dob","f-phone","f-email","f-address","f-category","f-amount",
+         "f-occupation","f-employer","f-mpesa","f-bank","f-bank-acc","f-id-number","f-kyc-notes",
+         "f-nok-name","f-nok-rel","f-nok-phone"].forEach(id => document.getElementById(id).value = "");
+        document.getElementById("f-number").value = await nextMemberNumber();
       } else {
-        for (const loan of loans) {
-          const repaid = (loan.loan_repayments||[]).reduce((s,r)=>s+Number(r.amount),0);
-          const outstanding = Number(loan.principal) - repaid;
-          h += `
-            <div style="font-weight:600;margin:10px 0 4px">
-              <code style="font-size:12px;color:var(--color-primary)">${loan.loan_number||'—'}</code>
-              &nbsp; ${loan.loan_products.name} — KES ${money(loan.principal)}
-              <span style="font-weight:400;font-size:13px;color:var(--color-muted)">
-                Applied: ${loan.application_date||'—'} &nbsp;·&nbsp; ${loan.status}
-              </span>
-            </div>
-            <table style="margin-bottom:12px">
-              <thead><tr>
-                <th>Date</th><th>Principal paid</th><th class="num">Interest paid</th>
-                <th class="num">Total paid</th><th class="num">Outstanding</th>
-              </tr></thead><tbody>`;
-
-          // Opening row
-          h += `<tr style="color:var(--color-muted);font-style:italic">
-            <td>${loan.application_date||'—'}</td>
-            <td colspan="3">Loan disbursed</td>
-            <td class="num"><strong>${money(loan.principal)}</strong></td>
-          </tr>`;
-
-          let balance = Number(loan.principal);
-          const repayments = [...(loan.loan_repayments||[])]
-            .sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
-
-          repayments.forEach(r => {
-            const prin = Number(r.principal_portion||0);
-            const int  = Number(r.interest_portion||0);
-            const tot  = Number(r.amount||0);
-            balance -= prin;
-            const dateStr = r.created_at ? r.created_at.slice(0,10) : '—';
-            h += `<tr>
-              <td>${dateStr}</td>
-              <td class="num">${money(prin)}</td>
-              <td class="num">${money(int)}</td>
-              <td class="num">${money(tot)}</td>
-              <td class="num"><strong>${money(Math.max(balance,0))}</strong></td>
-            </tr>`;
-          });
-
-          h += `<tr style="font-weight:700;border-top:2px solid var(--color-line)">
-            <td colspan="3">Balance outstanding</td>
-            <td class="num">${money(repaid)}</td>
-            <td class="num">${money(Math.max(outstanding,0))}</td>
-          </tr></tbody></table>`;
-        }
+        closeDrawer();
       }
     }
 
-    return h;
-  }
+    async function loadMembers() {
+      const { data, error } = await supabaseClient
+        .from("members")
+        .select("id, member_number, full_name, phone, monthly_contribution, status, member_kyc(kyc_status)")
+        .eq("organisation_id", orgId)
+        .order("member_number");
 
-  
-  // ── EXPORT ───────────────────────────────────────────────────────
-  function exportStmtPDF() {
-    const stmtContent = document.getElementById('stmt-body').innerHTML;
-    const win = window.open('','_blank');
-    win.document.write(`<!DOCTYPE html><html><head>
-      <title>${orgName} — Member Statements</title>
-      <style>
-        body{font-family:Arial,sans-serif;font-size:12px;padding:28px;color:#1a1a1a;max-width:900px;margin:auto}
-        table{width:100%;border-collapse:collapse;margin-bottom:10px}
-        th,td{padding:5px 9px;border:1px solid #ccc;text-align:left;font-size:12px}
-        th{background:#f0f0f0;font-weight:600}
-        .num{text-align:right}
-        h3{margin:14px 0 5px;font-size:14px}
-        .empty{color:#888;font-style:italic}
-        @media print{
-          @page{margin:18mm}
-          div[style*="page-break-after"]{page-break-after:always}
-        }
-      </style></head><body>${stmtContent}</body></html>`);
-    win.document.close();
-    setTimeout(()=>win.print(),500);
-  }
-
-  function exportStmtExcel() {
-    const rows = [['Member','Date','Channel','Reference','Amount','Status','Type']];
-    // Collect table rows from rendered HTML
-    document.querySelectorAll('#stmt-body table').forEach(tbl => {
-      const headers = [...tbl.querySelectorAll('th')].map(th=>th.textContent.trim());
-      tbl.querySelectorAll('tbody tr').forEach(tr => {
-        const cells = [...tr.querySelectorAll('td')].map(td=>td.textContent.trim());
-        if (cells.length > 1) rows.push(cells);
-      });
-      rows.push([]);
-    });
-    const csv = rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
-    const a = document.createElement('a');
-    a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-    a.download = 'member_statements.csv';
-    a.click();
-  }
-
-    // ── MEMBERS LIST ─────────────────────────────────────────────────
-  async function loadMembers() {
-    const { data, error } = await supabaseClient.from('members')
-      .select('id,member_number,full_name,phone,monthly_contribution,status,member_kyc(kyc_status)')
-      .eq('organisation_id', orgId).order('member_number');
-
-    allMembers = (data||[]).map(m=>({id:m.id,member_number:m.member_number,full_name:m.full_name}));
-
-    const tbody = document.getElementById('rows');
-    if (error) { tbody.innerHTML=`<tr><td colspan="6" class="error">${error.message}</td></tr>`; return; }
-    if (!data.length) { tbody.innerHTML=`<tr><td colspan="6" class="empty">No members yet.</td></tr>`; return; }
-    tbody.innerHTML = data.map(m => {
-      const kyc = m.member_kyc&&m.member_kyc.length ? m.member_kyc[0].kyc_status : 'pending';
-      return `<tr style="cursor:pointer" onclick="window.location.href='member.html?id=${m.id}'">
-        <td>${m.member_number}</td>
-        <td>${m.full_name}</td>
-        <td>${m.phone||'—'}</td>
-        <td class="num">${money(m.monthly_contribution)}</td>
-        <td><span class="status ${kyc==='verified'?'paid':kyc==='rejected'?'unpaid':'partial'}">${kyc}</span></td>
-        <td><span class="status ${m.status==='active'?'paid':'unpaid'}">${m.status}</span></td>
-      </tr>`;
-    }).join('');
-  }
-
-  // ── DRAWER ───────────────────────────────────────────────────────
-  function showToast(msg) {
-    const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
-    setTimeout(()=>t.classList.remove('show'),2500);
-  }
-  async function nextMemberNumber() {
-    const {data} = await supabaseClient.from('members').select('member_number').eq('organisation_id',orgId);
-    let max=0;
-    (data||[]).forEach(m=>{const n=parseInt((m.member_number||'').replace(/\D/g,''),10);if(!isNaN(n)&&n>max)max=n;});
-    return 'SC'+String(max+1).padStart(3,'0');
-  }
-  async function openDrawer() {
-    document.getElementById('drawer-error').style.display='none';
-    document.getElementById('f-number').value=await nextMemberNumber();
-    document.getElementById('f-joined').value=new Date().toISOString().slice(0,10);
-    document.getElementById('backdrop').classList.add('open');
-    document.getElementById('drawer').classList.add('open');
-  }
-  function closeDrawer() {
-    document.getElementById('backdrop').classList.remove('open');
-    document.getElementById('drawer').classList.remove('open');
-  }
-  function val(id){return document.getElementById(id).value.trim();}
-
-  async function saveMember(addAnother) {
-    const errorEl=document.getElementById('drawer-error');
-    errorEl.style.display='none';
-    if (!val('f-number')||!val('f-name')){showError(errorEl,'Member number and full name are required.');return;}
-    const idNumber=val('f-id-number'), phone=val('f-phone');
-    if (idNumber) {
-      const {data:d}=await supabaseClient.from('member_kyc').select('member_id').eq('organisation_id',orgId).eq('id_number',idNumber).limit(1);
-      if (d&&d.length){showError(errorEl,'A member with this ID number already exists.');return;}
+      const tbody = document.getElementById("rows");
+      if (error) { tbody.innerHTML = `<tr><td colspan="6" class="error">${error.message}</td></tr>`; return; }
+      if (!data.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty">No members yet.</td></tr>`; return; }
+      tbody.innerHTML = data.map(m => {
+        const kyc = m.member_kyc && m.member_kyc.length ? m.member_kyc[0].kyc_status : "pending";
+        const kycClass = kyc === "verified" ? "paid" : kyc === "rejected" ? "unpaid" : "partial";
+        return `
+        <tr style="cursor:pointer" onclick="window.location.href='member.html?id=${m.id}'">
+          <td>${m.member_number}</td>
+          <td>${m.full_name}</td>
+          <td>${m.phone ?? "—"}</td>
+          <td class="num">${money(m.monthly_contribution)}</td>
+          <td><span class="status ${kycClass}">${kyc}</span></td>
+          <td><span class="status ${m.status === 'active' ? 'paid' : 'unpaid'}">${m.status}</span></td>
+        </tr>`;
+      }).join("");
     }
-    if (phone) {
-      const {data:d}=await supabaseClient.from('members').select('id').eq('organisation_id',orgId).eq('phone',phone).limit(1);
-      if (d&&d.length){showError(errorEl,'A member with this phone number already exists.');return;}
-    }
-    const {data:ins,error}=await supabaseClient.from('members').insert({
-      organisation_id:orgId, member_number:val('f-number'), full_name:val('f-name'),
-      date_of_birth:val('f-dob')||null, gender:val('f-gender')||null,
-      phone:phone||null, email:val('f-email')||null, physical_address:val('f-address')||null,
-      date_joined:val('f-joined')||null, membership_category:val('f-category')||null,
-      monthly_contribution:val('f-amount')||null, occupation:val('f-occupation')||null,
-      employer:val('f-employer')||null, preferred_payment_method:val('f-pay-method')||null,
-      mpesa_number:val('f-mpesa')||null, bank_name:val('f-bank')||null,
-      bank_account_number:val('f-bank-acc')||null,
-    }).select('id').single();
-    if (error){showError(errorEl,error.message);return;}
-    await supabaseClient.from('member_kyc').insert({
-      member_id:ins.id, organisation_id:orgId,
-      id_type:val('f-id-type')||null, id_number:idNumber||null,
-      kyc_status:val('f-kyc-status')||'pending',
-      verification_date:val('f-kyc-status')==='verified'?new Date().toISOString().slice(0,10):null,
-      kyc_notes:val('f-kyc-notes')||null,
-    });
-    if (val('f-nok-name')) {
-      await supabaseClient.from('next_of_kin').insert({
-        member_id:ins.id, organisation_id:orgId,
-        full_name:val('f-nok-name'), relationship:val('f-nok-rel')||null, phone:val('f-nok-phone')||null,
-      });
-    }
-    showToast('Member saved.');
-    loadMembers();
-    if (addAnother) {
-      ['f-name','f-dob','f-phone','f-email','f-address','f-category','f-amount',
-       'f-occupation','f-employer','f-mpesa','f-bank','f-bank-acc','f-id-number','f-kyc-notes',
-       'f-nok-name','f-nok-rel','f-nok-phone'].forEach(id=>document.getElementById(id).value='');
-      document.getElementById('f-number').value=await nextMemberNumber();
-    } else { closeDrawer(); }
+
+    (async () => {
+      const session = await requireSession();
+      if (!session) return;
+      const org = await currentOrg();
+      if (!org) return;
+      orgId = org.organisation_id;
+      loadMembers();
+    })();
+  </script>
+
+  <script>
+  function toggleAccountant(e) {
+    e.preventDefault();
+    const sub = document.querySelector('.nav-accountant-sub');
+    if (!sub) return;
+    const isVisible = sub.style.display !== 'none';
+    sub.style.display = isVisible ? 'none' : 'block';
   }
-
-  // ── INIT ─────────────────────────────────────────────────────────
-  (async()=>{
-    const session=await requireSession(); if(!session)return;
-    const org=await currentOrg(); if(!org)return;
-    orgId = org.organisation_id;
-    const orgSettings = await getOrgSettings(orgId);
-    applyOrgNav(orgSettings);
-    orgName = org.organisations?.name || 'Organisation';
-    orgType = org.organisations?.org_type || '';
-    loadMembers();
-  })();
-</script>
-
-<script>
-function toggleNav(header){header.parentElement.classList.toggle('nav-open');}
-</script>
+  </script>
 </body>
 </html>

@@ -18,36 +18,7 @@
 </head>
 <body>
   <div class="app-shell">
-    <nav class="nav">
-      <div class="brand">Ledger</div>
-      <a href="index.html">Dashboard</a>
-      <a href="members.html" class="active">Member Management</a>
-      <a href="loans.html">Loan Management</a>
-      <a href="expenditure.html">Supplier Management</a>
-      <a href="accounts.html">Accountant</a>
-      <div class="nav-group">
-        <div class="nav-group-header" onclick="toggleNav(this)">
-          <span>Banking</span><span class="nav-chevron">›</span>
-        </div>
-        <div class="nav-group-body">
-          <a href="banking.html">Bank & Cash</a>
-          <a href="reconcile.html">Reconciliation</a>
-          <a href="payments.html">Payments</a>
-        </div>
-      </div>
-      <a href="reports.html">Reports</a>
-      <div class="nav-group">
-        <div class="nav-group-header" onclick="toggleNav(this)">
-          <span>Administration</span><span class="nav-chevron">›</span>
-        </div>
-        <div class="nav-group-body">
-          <a href="users.html">Users & Access</a>
-          <a href="contributions.html">Contributions</a>
-          <a href="org-settings.html">Org Settings</a>
-        </div>
-      </div>
-      <a href="#" onclick="signOut()" class="nav-signout">Sign out</a>
-    </nav>
+    <nav class="nav" id="nav-mount"></nav>
     <main class="main">
       <a class="back" href="members.html">&larr; Back to members</a>
       <div id="content"><p class="empty" style="margin-top:16px">Loading…</p></div>
@@ -55,6 +26,7 @@
   </div>
 
   <script src="js/config.js"></script>
+  <script src="js/nav.js"></script>
   <script src="js/auth.js"></script>
   <script>
     let orgId;
@@ -205,14 +177,13 @@
   </script>
 
   <script>
-  function toggleNav(header) {
-    const group = header.parentElement;
-    group.classList.toggle('nav-open');
+  function toggleAccountant(e) {
+    e.preventDefault();
+    const sub = document.querySelector('.nav-accountant-sub');
+    if (!sub) return;
+    const isVisible = sub.style.display !== 'none';
+    sub.style.display = isVisible ? 'none' : 'block';
   }
-  // Auto-open active group on load
-  document.querySelectorAll('.nav-group-header.active').forEach(h => {
-    h.parentElement.classList.add('nav-open');
-  });
   </script>
 </body>
 </html>

@@ -4,78 +4,33 @@
 <meta charset="UTF-8">
 <title>Chart of Accounts — Financial Operating System</title>
 <link rel="stylesheet" href="css/style.css">
-<style>
-  /* Tab bar */
-  .loan-tabs{display:flex;gap:0;border-bottom:2px solid var(--color-line,#ddd);margin-bottom:0}
-  .loan-tab-btn{background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;
-    padding:10px 18px;cursor:pointer;font-size:14px;color:var(--color-muted,#888);
-    font-family:inherit;transition:color 0.15s;text-decoration:none;display:inline-block}
-  .loan-tab-btn:hover{color:var(--color-ink,#1a1a1a)}
-  .loan-tab-btn.active{color:var(--color-ink,#1a1a1a);font-weight:600;border-bottom-color:var(--color-accent,#9B6D1E)}
-
-  /* Chart of Accounts */
-  .coa-category{margin-bottom:10px;border:1px solid var(--color-line,#ddd);border-radius:6px;overflow:hidden}
-  .coa-cat-header{display:flex;align-items:center;justify-content:space-between;
-    padding:10px 16px;color:#fff;user-select:none}
-  .coa-cat-header h3{margin:0;font-size:14px;color:#fff;font-weight:600}
-  .coa-cat-header .meta{font-size:12px;opacity:0.8}
-  .coa-cat-body{display:block}
-  .coa-row{display:grid;grid-template-columns:90px 1fr 90px 90px 150px;gap:8px;
-    align-items:center;padding:7px 16px;border-bottom:1px solid var(--color-line,#eee);font-size:13px}
-  .coa-row:last-child{border-bottom:none}
-  .coa-row:hover{background:#fafafa}
-  .coa-hdr{background:#F3EBD8;font-weight:600;font-size:12px;color:#888}
-  .coa-inactive{opacity:0.45}
-  .coa-inactive .coa-name{text-decoration:line-through}
-</style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
+<style>
+  .coa-category { margin-bottom:10px; border:1px solid var(--color-line); border-radius:var(--radius); overflow:hidden; }
+  .coa-cat-header { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; color:#fff; cursor:pointer; user-select:none; }
+  .coa-cat-header h3 { margin:0; font-size:14px; color:#fff; font-weight:600; }
+  .coa-cat-header .meta { font-size:12px; opacity:0.8; display:flex; align-items:center; gap:10px; }
+  .toggle-icon { font-size:18px; font-weight:300; transition:transform 0.2s; line-height:1; }
+  .coa-cat-body { display:none; }
+  .coa-cat-body.open { display:block; }
+  .coa-row { display:grid; grid-template-columns:90px 1fr 90px 90px 150px; gap:8px; align-items:center; padding:7px 16px; border-bottom:1px solid var(--color-line); font-size:13px; }
+  .coa-row:last-child { border-bottom:none; }
+  .coa-row:hover { background:var(--color-bg); }
+  .coa-hdr { background:#F3EBD8; font-weight:600; font-size:12px; color:var(--color-muted); }
+  .coa-inactive { opacity:0.45; }
+  .coa-inactive .coa-name { text-decoration:line-through; }
+  .drawer-backdrop { position:fixed;inset:0;background:rgba(0,0,0,0.35);display:none;z-index:40; }
+  .drawer-backdrop.open { display:block; }
+  .drawer { position:fixed;top:0;right:0;height:100vh;width:420px;max-width:94vw;background:var(--color-surface);z-index:50;transform:translateX(100%);transition:transform 0.2s;overflow-y:auto;padding:var(--space-4);box-shadow:-2px 0 16px rgba(0,0,0,0.12); }
+  .drawer.open { transform:translateX(0); }
+</style>
 </head>
 <body>
   <div class="app-shell">
-    <nav class="nav">
-      <div class="brand">Ledger</div>
-      <a href="index.html">Dashboard</a>
-      <a href="members.html">Member Management</a>
-      <a href="loans.html">Loan Management</a>
-      <a href="expenditure.html">Supplier Management</a>
-      <a href="accounts.html" class="active">Accountant</a>
-      <div class="nav-group">
-        <div class="nav-group-header" onclick="toggleNav(this)">
-          <span>Banking</span><span class="nav-chevron">›</span>
-        </div>
-        <div class="nav-group-body">
-          <a href="banking.html">Bank & Cash</a>
-          <a href="reconcile.html">Reconciliation</a>
-          <a href="payments.html">Payments</a>
-        </div>
-      </div>
-      <a href="reports.html">Reports</a>
-      <div class="nav-group">
-        <div class="nav-group-header" onclick="toggleNav(this)">
-          <span>Administration</span><span class="nav-chevron">›</span>
-        </div>
-        <div class="nav-group-body">
-          <a href="users.html">Users & Access</a>
-          <a href="contributions.html">Contributions</a>
-          <a href="org-settings.html">Org Settings</a>
-        </div>
-      </div>
-      <a href="#" onclick="signOut()" class="nav-signout">Sign out</a>
-    </nav>
+    <nav class="nav" id="nav-mount"></nav>
     <main class="main">
-
-
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
         <h1>Chart of Accounts</h1>
-      <!-- Accountant horizontal sub-nav -->
-      <div class="loan-tabs" style="margin-bottom:20px">
-        <a href="accounts.html" class="loan-tab-btn active">Chart of Accounts</a>
-        <a href="journal.html"  class="loan-tab-btn ">General Journal</a>
-        <a href="banking.html?tab=ob"  class="loan-tab-btn ">Opening Balances</a>
-        <a href="periods.html"  class="loan-tab-btn ">Accounting Periods</a>
-      </div>
-
         <button class="btn accent" onclick="openDrawer(null)">+ Add account</button>
       </div>
 
@@ -126,6 +81,7 @@
   </div>
 
   <script src="js/config.js"></script>
+  <script src="js/nav.js"></script>
   <script src="js/auth.js"></script>
   <script>
     let orgId, allAccounts = [], editingId = null;
@@ -179,7 +135,7 @@
         if (search && !children.length &&
             !catAcct.code.includes(search) && !catAcct.name.toLowerCase().includes(search)) return '';
 
-        const isOpen = true; // always expanded
+        const isOpen = !!search;
         const rows = children.length
           ? children.map(a => `
             <div class="coa-row ${a.is_active === false ? 'coa-inactive' : ''}">
@@ -221,7 +177,12 @@
       }).join('');
     }
 
-    // toggleCat removed — categories always expanded
+    function toggleCat(header) {
+      const body = header.nextElementSibling;
+      const icon = header.querySelector('.toggle-icon');
+      const isOpen = body.classList.toggle('open');
+      icon.textContent = isOpen ? '−' : '+';
+    }
 
     function openDrawer(id, presetParentId) {
       editingId = id;
@@ -301,21 +262,18 @@
       const session = await requireSession(); if (!session) return;
       const org = await currentOrg(); if (!org) return;
       orgId = org.organisation_id;
-    const orgSettings = await getOrgSettings(orgId);
-    applyOrgNav(orgSettings);
       loadAccounts();
     })();
   </script>
 
   <script>
-  function toggleNav(header) {
-    const group = header.parentElement;
-    group.classList.toggle('nav-open');
+  function toggleAccountant(e) {
+    e.preventDefault();
+    const sub = document.querySelector('.nav-accountant-sub');
+    if (!sub) return;
+    const isVisible = sub.style.display !== 'none';
+    sub.style.display = isVisible ? 'none' : 'block';
   }
-  // Auto-open active group on load
-  document.querySelectorAll('.nav-group-header.active').forEach(h => {
-    h.parentElement.classList.add('nav-open');
-  });
   </script>
 </body>
 </html>
