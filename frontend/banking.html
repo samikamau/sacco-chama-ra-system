@@ -18,7 +18,28 @@
 </head>
 <body>
   <div class="app-shell">
-    <nav class="nav" id="nav-mount"></nav>
+    <nav class="nav">
+      <div class="brand">Ledger</div>
+      <a href="index.html">Dashboard</a>
+      <a href="members.html">Members</a>
+      <a href="payments.html">Payments</a>
+      <a href="loans.html">Loans</a>
+      <a href="expenditure.html">Expenditure</a>
+      <a href="banking.html" class="active">Banking</a>
+      <a href="statement.html">Member Statements</a>
+      <a href="reports.html">Reports</a>
+      <a href="#" class="nav-accountant-toggle " onclick="toggleAccountant(event)">Accountant</a>
+      <div class="nav-accountant-sub" style="display:none">
+        <a href="contributions.html" style="padding-left:28px;font-size:13px">Contributions</a>
+        <a href="accounts.html" style="padding-left:28px;font-size:13px">Chart of Accounts</a>
+        <a href="journal.html" style="padding-left:28px;font-size:13px">General Journal</a>
+        <a href="periods.html" style="padding-left:28px;font-size:13px">Accounting Periods</a>
+        <a href="banking.html" style="padding-left:28px;font-size:13px">Opening Balances</a>
+        <a href="reconcile.html" style="padding-left:28px;font-size:13px">Reconciliation</a>
+      </div>
+      <a href="users.html">Users</a>
+      <a href="#" onclick="signOut()">Sign out</a>
+    </nav>
     <main class="main">
       <h1>Banking</h1>
 
@@ -102,7 +123,6 @@
   </div>
 
   <script src="js/config.js"></script>
-  <script src="js/nav.js"></script>
   <script src="js/auth.js"></script>
   <script>
     let orgId, paymentAccounts = [], allAccounts = [];
@@ -258,14 +278,5 @@
     })();
   </script>
 
-  <script>
-  function toggleAccountant(e) {
-    e.preventDefault();
-    const sub = document.querySelector('.nav-accountant-sub');
-    if (!sub) return;
-    const isVisible = sub.style.display !== 'none';
-    sub.style.display = isVisible ? 'none' : 'block';
-  }
-  </script>
 </body>
 </html>
