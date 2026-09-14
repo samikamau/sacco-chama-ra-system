@@ -13,7 +13,11 @@
     --dash-red: #C1502E;   --dash-red-bg: #FBEAE3;
     --dash-blue: #2E6E8E;  --dash-purple: #6C4F8A;
   }
-  .main > h1 { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.01em; }
+  .main > h1 {
+    font-family: var(--font-display); font-weight: 600; letter-spacing: -0.01em;
+    margin-top: 0; padding-bottom: 14px; margin-bottom: 20px;
+    border-bottom: 1px solid var(--color-line);
+  }
   .main .card h2 { font-family: var(--font-display); font-size: 16px; font-weight: 600; letter-spacing: -0.005em; }
   .kpi-group { margin-bottom: var(--space-4); }
   .kpi-group h2 {
@@ -63,7 +67,7 @@
     <nav class="nav" id="nav-mount"></nav>
     <main class="main">
       <h1 style="display:flex;align-items:center;gap:10px">
-        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="11" x2="17" y2="11"/><line x1="3" y1="16" x2="21" y2="16"/><line x1="3" y1="21" x2="13" y2="21"/></svg>
         Dashboard
       </h1>
 
