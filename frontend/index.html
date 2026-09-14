@@ -13,7 +13,7 @@
     --dash-red: #C1502E;   --dash-red-bg: #FBEAE3;
     --dash-blue: #2E6E8E;  --dash-purple: #6C4F8A;
   }
-  h1#org-name { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.01em; }
+  .main > h1 { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.01em; }
   .main .card h2 { font-family: var(--font-display); font-size: 16px; font-weight: 600; letter-spacing: -0.005em; }
   .kpi-group { margin-bottom: var(--space-4); }
   .kpi-group h2 {
@@ -62,7 +62,10 @@
   <div class="app-shell">
     <nav class="nav" id="nav-mount"></nav>
     <main class="main">
-      <h1 id="org-name">Dashboard</h1>
+      <h1 style="display:flex;align-items:center;gap:10px">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        Dashboard
+      </h1>
 
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
         <div class="kpi-group" style="flex:1;min-width:220px;margin-bottom:0">
@@ -162,7 +165,6 @@
       if (!session) return;
       const org = await currentOrg();
       if (!org) return;
-      document.getElementById("org-name").textContent = org.organisations.name;
       const orgId = org.organisation_id;
 
       const { data: kpis, error: kErr } = await supabaseClient.rpc("fn_dashboard_kpis", { p_organisation_id: orgId });
