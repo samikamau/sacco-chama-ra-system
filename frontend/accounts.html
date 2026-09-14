@@ -135,7 +135,7 @@
         if (search && !children.length &&
             !catAcct.code.includes(search) && !catAcct.name.toLowerCase().includes(search)) return '';
 
-        const isOpen = !!search;
+        const isOpen = true;
         const rows = children.length
           ? children.map(a => `
             <div class="coa-row ${a.is_active === false ? 'coa-inactive' : ''}">
