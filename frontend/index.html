@@ -17,6 +17,9 @@
   .kpi .value { font-family: var(--font-mono); font-size: 20px; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .kpi .label { color: var(--color-muted); font-size: 12px; margin-top: 4px; }
   .kpi.accent { border-left: 3px solid var(--color-accent); }
+  .stat-row { display: flex; gap: 28px; flex-wrap: wrap; }
+  .stat-row .stat .value { font-family: var(--font-mono); font-size: 20px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .stat-row .stat .label { color: var(--color-muted); font-size: 12px; margin-top: 4px; }
   .insight { padding: var(--space-2) 0; border-bottom: 1px solid var(--color-line); display: flex; gap: var(--space-2); align-items: baseline; }
   .insight:last-child { border-bottom: none; }
   .insight .cat { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: #EEE9DC; color: var(--color-muted); flex-shrink: 0; }
@@ -32,37 +35,31 @@
 
       <div class="kpi-group">
         <h2>Membership</h2>
-        <div class="kpi-grid">
-          <div class="kpi"><div class="value" id="k-active">—</div><div class="label">Active members</div></div>
-          <div class="kpi"><div class="value" id="k-inactive">—</div><div class="label">Inactive members</div></div>
-          <div class="kpi"><div class="value" id="k-total">—</div><div class="label">Total members</div></div>
-        </div>
-      </div>
-
-      <div class="kpi-group">
-        <h2>Contributions (all periods)</h2>
-        <div class="kpi-grid">
-          <div class="kpi"><div class="value" id="k-expected">—</div><div class="label">Expected (KES)</div></div>
-          <div class="kpi"><div class="value" id="k-received">—</div><div class="label">Received (KES)</div></div>
-          <div class="kpi accent"><div class="value" id="k-collection">—</div><div class="label">Collection %</div></div>
-          <div class="kpi"><div class="value" id="k-outstanding">—</div><div class="label">Outstanding (KES)</div></div>
+        <div class="kpi">
+          <div class="stat-row">
+            <div class="stat"><div class="value" id="k-active">—</div><div class="label">Active members</div></div>
+            <div class="stat"><div class="value" id="k-inactive">—</div><div class="label">Inactive members</div></div>
+            <div class="stat"><div class="value" id="k-total">—</div><div class="label">Total members</div></div>
+          </div>
         </div>
       </div>
 
       <div class="kpi-group">
         <h2>Bank and Cash accounts</h2>
-        <div class="kpi-grid" id="bank-cash-grid">
-          <div class="kpi"><div class="value">—</div><div class="label">Loading…</div></div>
+        <div class="kpi">
+          <div class="stat-row" id="bank-cash-grid">Loading…</div>
         </div>
       </div>
 
       <div class="kpi-group">
         <h2>Loan portfolio</h2>
-        <div class="kpi-grid">
-          <div class="kpi"><div class="value" id="k-active-loans">—</div><div class="label">Active loans</div></div>
-          <div class="kpi"><div class="value" id="k-outstanding-loans">—</div><div class="label">Outstanding (KES)</div></div>
-          <div class="kpi accent"><div class="value" id="k-overdue-loans">—</div><div class="label">Loans in arrears</div></div>
-          <div class="kpi"><div class="value" id="k-overdue-amount">—</div><div class="label">Overdue amount (KES)</div></div>
+        <div class="kpi">
+          <div class="stat-row">
+            <div class="stat"><div class="value" id="k-active-loans">—</div><div class="label">Active loans</div></div>
+            <div class="stat"><div class="value" id="k-outstanding-loans">—</div><div class="label">Outstanding (KES)</div></div>
+            <div class="stat"><div class="value" id="k-overdue-loans" style="color:var(--color-alert)">—</div><div class="label">Loans in arrears</div></div>
+            <div class="stat"><div class="value" id="k-overdue-amount">—</div><div class="label">Overdue amount (KES)</div></div>
+          </div>
         </div>
       </div>
 
@@ -103,10 +100,6 @@
         document.getElementById("k-active").textContent = kpis.active_members;
         document.getElementById("k-inactive").textContent = kpis.inactive_members;
         document.getElementById("k-total").textContent = kpis.total_members;
-        document.getElementById("k-expected").textContent = money(kpis.expected);
-        document.getElementById("k-received").textContent = money(kpis.received);
-        document.getElementById("k-collection").textContent = kpis.collection_pct + "%";
-        document.getElementById("k-outstanding").textContent = money(kpis.outstanding);
 
         try {
           new Chart(document.getElementById("chart-funds"), {
@@ -132,22 +125,22 @@
         const { data: payAccts } = await supabaseClient.rpc("fn_payment_accounts", { p_organisation_id: orgId });
         const grid = document.getElementById("bank-cash-grid");
         if (payAccts && payAccts.length) {
-          const cards = [];
+          const stats = [];
           let total = 0;
           for (const a of payAccts) {
             const { data: bal } = await supabaseClient.rpc("fn_book_balance", { p_account_id: a.id, p_as_at: null });
             const amt = Number(bal || 0);
             total += amt;
-            cards.push(`<div class="kpi"><div class="value">${money(amt)}</div><div class="label">${a.name}</div></div>`);
+            stats.push(`<div class="stat"><div class="value">${money(amt)}</div><div class="label">${a.name}</div></div>`);
           }
-          cards.push(`<div class="kpi accent"><div class="value">${money(total)}</div><div class="label">Total bank and cash</div></div>`);
-          grid.innerHTML = cards.join("");
+          stats.push(`<div class="stat"><div class="value" style="color:var(--color-accent)">${money(total)}</div><div class="label">Total bank and cash</div></div>`);
+          grid.innerHTML = stats.join("");
         } else {
-          grid.innerHTML = `<div class="kpi"><div class="value">—</div><div class="label">No payment accounts configured</div></div>`;
+          grid.innerHTML = `<div class="stat"><div class="value">—</div><div class="label">No payment accounts configured</div></div>`;
         }
       } catch (e) {
         document.getElementById("bank-cash-grid").innerHTML =
-          `<div class="kpi"><div class="value">—</div><div class="label">Run migration 022 to enable</div></div>`;
+          `<div class="stat"><div class="value">—</div><div class="label">Run migration 022 to enable</div></div>`;
       }
 
       // Collections trend — total posted payments per month, last 6 months
