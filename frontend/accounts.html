@@ -6,15 +6,11 @@
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-  .coa-category { margin-bottom:10px; border:1px solid var(--color-line); border-radius:var(--radius); overflow:hidden; }
-  .coa-cat-header { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; background:var(--color-primary, #1B6E45); color:#fff; user-select:none; }
-  .coa-cat-header h3 { margin:0; font-size:14px; color:#fff; font-weight:600; }
-  .coa-cat-header .meta { font-size:12px; opacity:0.8; display:flex; align-items:center; gap:10px; }
-  .coa-cat-body { display:block; }
+  .coa-cat-label { font-size:14px; font-weight:600; padding:14px 16px 6px; color:var(--color-ink, #222); }
   .coa-row { display:grid; grid-template-columns:90px 1fr 90px 90px 150px; gap:8px; align-items:center; padding:7px 16px; border-bottom:1px solid var(--color-line); font-size:13px; }
   .coa-row:last-child { border-bottom:none; }
   .coa-row:hover { background:var(--color-bg); }
-  .coa-hdr { background:#F3EBD8; font-weight:600; font-size:12px; color:var(--color-muted); }
+  .coa-hdr { background:#F3EBD8; font-weight:600; font-size:12px; color:var(--color-muted); position:sticky; top:0; z-index:1; }
   .coa-inactive { opacity:0.45; }
   .coa-inactive .coa-name { text-decoration:line-through; }
   .drawer-backdrop { position:fixed;inset:0;background:rgba(0,0,0,0.35);display:none;z-index:40; }
@@ -40,7 +36,7 @@
         </select>
       </div>
 
-      <div id="coa-container"></div>
+      <div id="coa-container" style="max-height:70vh;overflow-y:auto;padding-right:4px"></div>
     </main>
   </div>
 
@@ -120,7 +116,7 @@
           return a ? `<option value="${a.id}">${c.code} — ${c.label}</option>` : '';
         }).join('');
 
-      container.innerHTML = CATEGORIES.map(cat => {
+      const sections = CATEGORIES.map(cat => {
         const catAcct = allAccounts.find(a => a.code === cat.code);
         if (!catAcct) return '';
 
@@ -136,8 +132,8 @@
         const rows = children.length
           ? children.map(a => `
             <div class="coa-row ${a.is_active === false ? 'coa-inactive' : ''}">
-              <div style="font-family:var(--font-mono);font-size:12px;color:var(--color-muted)">${a.code}</div>
-              <div class="coa-name">${a.name}</div>
+              <div style="font-family:var(--font-mono);font-size:12px;color:var(--color-muted);padding-left:20px">${a.code}</div>
+              <div class="coa-name" style="padding-left:20px">${a.name}</div>
               <div style="font-size:12px;color:var(--color-muted)">${a.account_type}</div>
               <div style="font-size:12px;color:var(--color-muted)">${a.normal_balance||''}</div>
               <div style="display:flex;gap:4px">
@@ -148,29 +144,25 @@
                 </button>
               </div>
             </div>`).join('')
-          : `<div class="coa-row"><div style="color:var(--color-muted);grid-column:1/-1">No sub-accounts yet.</div></div>`;
+          : `<div class="coa-row"><div style="color:var(--color-muted);grid-column:1/-1;padding-left:20px">No sub-accounts yet.</div></div>`;
 
         return `
-          <div class="coa-category">
-            <div class="coa-cat-header">
-              <h3>${cat.code} &nbsp;${cat.label}</h3>
-              <div class="meta">
-                <span>${children.length} account${children.length!==1?'s':''}</span>
-              </div>
-            </div>
-            <div class="coa-cat-body open">
-              <div class="coa-row coa-hdr">
-                <div>Code</div><div>Name</div><div>Type</div><div>Balance</div><div>Actions</div>
-              </div>
-              ${rows}
-              <div style="padding:8px 16px;border-top:1px solid var(--color-line)">
-                <button class="btn" style="font-size:12px" onclick="openDrawer(null,'${catAcct.id}')">
-                  + Add sub-account
-                </button>
-              </div>
-            </div>
+          <div class="coa-cat-label">${cat.code} &nbsp;${cat.label}
+            <span style="font-weight:400;color:var(--color-muted);font-size:12px">(${children.length} account${children.length!==1?'s':''})</span>
+          </div>
+          ${rows}
+          <div style="padding:6px 0 6px 20px">
+            <button class="btn" style="font-size:12px" onclick="openDrawer(null,'${catAcct.id}')">
+              + Add sub-account
+            </button>
           </div>`;
       }).join('');
+
+      container.innerHTML = `
+        <div class="coa-row coa-hdr">
+          <div>Code</div><div>Name</div><div>Type</div><div>Balance</div><div>Actions</div>
+        </div>
+        ${sections}`;
     }
 
     function openDrawer(id, presetParentId) {
