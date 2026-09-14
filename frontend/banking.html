@@ -59,6 +59,14 @@ a.loan-tab-btn{text-decoration:none;display:inline-block}
     </nav>
     <main class="main">
       <h1>Banking</h1>
+      <!-- Accountant horizontal sub-nav -->
+      <div class="loan-tabs" style="margin-bottom:20px">
+        <a href="accounts.html" class="loan-tab-btn ">Chart of Accounts</a>
+        <a href="journal.html"  class="loan-tab-btn ">General Journal</a>
+        <a href="banking.html?tab=ob"  class="loan-tab-btn active">Opening Balances</a>
+        <a href="periods.html"  class="loan-tab-btn ">Accounting Periods</a>
+      </div>
+
       <div class="loan-tabs">
         <button id="bt-0" class="loan-tab-btn active" onclick="switchTab(0)">Opening Balances</button>
         <button id="bt-1" class="loan-tab-btn" onclick="switchTab(1)">Bank Transfer</button>
@@ -289,6 +297,11 @@ a.loan-tab-btn{text-decoration:none;display:inline-block}
       const session = await requireSession(); if (!session) return;
       const org = await currentOrg(); if (!org) return;
       orgId = org.organisation_id;
+      // Auto-switch tab based on URL param
+      const _tab = new URLSearchParams(window.location.search).get('tab');
+      if (_tab === 'ob') switchTab(0);
+      else if (_tab === 'transfer') switchTab(1);
+      else if (_tab === 'balances') switchTab(2);
     const orgSettings = await getOrgSettings(orgId);
     applyOrgNav(orgSettings);
       await loadRefData();
