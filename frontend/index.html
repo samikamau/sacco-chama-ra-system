@@ -5,17 +5,17 @@
 <title>Dashboard — Financial Operating System</title>
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.min.js"></script>
 <style>
   .kpi-group { margin-bottom: var(--space-4); }
   .kpi-group h2 { font-size: 15px; color: var(--color-muted); font-weight: 500; margin-bottom: var(--space-2); }
-  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--space-3); }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
   .kpi {
     background: var(--color-surface); border: 1px solid var(--color-line);
-    border-radius: var(--radius); padding: var(--space-3);
+    border-radius: var(--radius); padding: 14px 16px;
   }
-  .kpi .value { font-family: var(--font-mono); font-size: 22px; font-variant-numeric: tabular-nums; }
-  .kpi .label { color: var(--color-muted); font-size: 12px; margin-top: 2px; }
+  .kpi .value { font-family: var(--font-mono); font-size: 20px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .kpi .label { color: var(--color-muted); font-size: 12px; margin-top: 4px; }
   .kpi.accent { border-left: 3px solid var(--color-accent); }
   .insight { padding: var(--space-2) 0; border-bottom: 1px solid var(--color-line); display: flex; gap: var(--space-2); align-items: baseline; }
   .insight:last-child { border-bottom: none; }
@@ -108,21 +108,23 @@
         document.getElementById("k-collection").textContent = kpis.collection_pct + "%";
         document.getElementById("k-outstanding").textContent = money(kpis.outstanding);
 
-        new Chart(document.getElementById("chart-funds"), {
-          type: "pie",
-          data: {
-            labels: ["Shares", "Deposits", "Welfare"],
-            datasets: [{
-              data: [Number(kpis.total_shares)||0, Number(kpis.total_deposits)||0, Number(kpis.total_welfare)||0],
-              backgroundColor: ["#1B6E45", "#1B5E75", "#6C3483"],
-            }],
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { position: "bottom", labels: { font: { size: 12 } } } },
-          },
-        });
+        try {
+          new Chart(document.getElementById("chart-funds"), {
+            type: "pie",
+            data: {
+              labels: ["Shares", "Deposits", "Welfare"],
+              datasets: [{
+                data: [Number(kpis.total_shares)||0, Number(kpis.total_deposits)||0, Number(kpis.total_welfare)||0],
+                backgroundColor: ["#1B6E45", "#1B5E75", "#6C3483"],
+              }],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { position: "bottom", labels: { font: { size: 12 } } } },
+            },
+          });
+        } catch (e) { /* chart is a nice-to-have, don't block the rest of the dashboard */ }
       }
 
       // Bank and Cash accounts breakdown (each sub-account of the control)
