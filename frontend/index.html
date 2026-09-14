@@ -17,8 +17,10 @@
   .kpi .value { font-family: var(--font-mono); font-size: 20px; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .kpi .label { color: var(--color-muted); font-size: 12px; margin-top: 4px; }
   .kpi.accent { border-left: 3px solid var(--color-accent); }
-  .stat-row { display: flex; flex-direction: column; gap: 10px; }
-  .stat { display: flex; align-items: center; gap: 10px; }
+  .stat-row { display: flex; flex-direction: column; }
+  .stat { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--color-line); }
+  .stat:last-child { border-bottom: none; padding-bottom: 0; }
+  .stat:first-child { padding-top: 0; }
   .stat-icon {
     flex-shrink: 0; width: 26px; height: 26px; border-radius: 6px;
     background: #F3EBD8; color: var(--color-primary);
@@ -26,6 +28,8 @@
   }
   .stat-icon svg { width: 13px; height: 13px; }
   .stat-icon.alert { background: #F3E4E0; color: var(--color-alert); }
+  .stat-label { flex: 1; font-size: 13px; color: var(--color-ink, #333); }
+  .stat-value { font-family: var(--font-mono); font-size: 15px; font-weight: 700; white-space: nowrap; }
   .glance-stat { background: #F0EFEC; border-radius: 6px; padding: 14px; text-align: center; margin-bottom: 10px; }
   .glance-stat:last-child { margin-bottom: 0; }
   .glance-value { font-family: var(--font-mono); font-size: 26px; font-weight: 700; }
@@ -55,15 +59,18 @@
             <div class="stat-row">
               <div class="stat">
                 <div class="stat-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/></svg></div>
-                <div><div class="value" id="k-active">—</div><div class="label">Active members</div></div>
+                <div class="stat-label">Active members</div>
+                <div class="stat-value" id="k-active">—</div>
               </div>
               <div class="stat">
                 <div class="stat-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/><line x1="4" y1="4" x2="20" y2="20"/></svg></div>
-                <div><div class="value" id="k-inactive">—</div><div class="label">Inactive members</div></div>
+                <div class="stat-label">Inactive members</div>
+                <div class="stat-value" id="k-inactive">—</div>
               </div>
               <div class="stat">
                 <div class="stat-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.4"/><path d="M15.5 14.2c2.4.4 4.5 2.4 4.5 5.8"/></svg></div>
-                <div><div class="value" id="k-total">—</div><div class="label">Total members</div></div>
+                <div class="stat-label">Total members</div>
+                <div class="stat-value" id="k-total">—</div>
               </div>
             </div>
           </div>
@@ -82,19 +89,23 @@
             <div class="stat-row">
               <div class="stat">
                 <div class="stat-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="19" x2="19" y2="5"/><circle cx="7" cy="7" r="2.3"/><circle cx="17" cy="17" r="2.3"/></svg></div>
-                <div><div class="value" id="k-active-loans">—</div><div class="label">Active loans</div></div>
+                <div class="stat-label">Active loans</div>
+                <div class="stat-value" id="k-active-loans">—</div>
               </div>
               <div class="stat">
                 <div class="stat-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5.5" width="19" height="13" rx="2"/><line x1="2.5" y1="10" x2="21.5" y2="10"/><line x1="6" y1="14.5" x2="10" y2="14.5"/></svg></div>
-                <div><div class="value" id="k-outstanding-loans">—</div><div class="label">Outstanding (KES)</div></div>
+                <div class="stat-label">Outstanding (KES)</div>
+                <div class="stat-value" id="k-outstanding-loans">—</div>
               </div>
               <div class="stat">
                 <div class="stat-icon alert"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l9.5 16.5H2.5z"/><line x1="12" y1="9.5" x2="12" y2="14"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg></div>
-                <div><div class="value" id="k-overdue-loans" style="color:var(--color-alert)">—</div><div class="label">Loans in arrears</div></div>
+                <div class="stat-label">Loans in arrears</div>
+                <div class="stat-value" id="k-overdue-loans" style="color:var(--color-alert)">—</div>
               </div>
               <div class="stat">
                 <div class="stat-icon alert"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg></div>
-                <div><div class="value" id="k-overdue-amount">—</div><div class="label">Overdue amount (KES)</div></div>
+                <div class="stat-label">Overdue amount (KES)</div>
+                <div class="stat-value" id="k-overdue-amount">—</div>
               </div>
             </div>
           </div>
@@ -183,16 +194,16 @@
             const { data: bal } = await supabaseClient.rpc("fn_book_balance", { p_account_id: a.id, p_as_at: null });
             const amt = Number(bal || 0);
             total += amt;
-            stats.push(`<div class="stat"><div class="stat-icon">${BANK_ICON}</div><div><div class="value">${money(amt)}</div><div class="label">${a.name}</div></div></div>`);
+            stats.push(`<div class="stat"><div class="stat-icon">${BANK_ICON}</div><div class="stat-label">${a.name}</div><div class="stat-value">${money(amt)}</div></div>`);
           }
-          stats.push(`<div class="stat"><div class="stat-icon">${COIN_ICON}</div><div><div class="value" style="color:var(--color-accent)">${money(total)}</div><div class="label">Total bank and cash</div></div></div>`);
+          stats.push(`<div class="stat"><div class="stat-icon">${COIN_ICON}</div><div class="stat-label">Total bank and cash</div><div class="stat-value" style="color:var(--color-accent)">${money(total)}</div></div>`);
           grid.innerHTML = stats.join("");
         } else {
-          grid.innerHTML = `<div class="stat"><div><div class="value">—</div><div class="label">No payment accounts configured</div></div></div>`;
+          grid.innerHTML = `<div class="stat"><div class="stat-label">No payment accounts configured</div></div>`;
         }
       } catch (e) {
         document.getElementById("bank-cash-grid").innerHTML =
-          `<div class="stat"><div><div class="value">—</div><div class="label">Run migration 022 to enable</div></div></div>`;
+          `<div class="stat"><div class="stat-label">Run migration 022 to enable</div></div>`;
       }
 
       // Collections trend — total posted payments per month, last 6 months
