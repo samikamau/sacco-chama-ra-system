@@ -33,7 +33,6 @@ const ACCOUNTANT_ITEMS = [
   { href: 'accounts.html',      label: 'Chart of Accounts' },
   { href: 'journal.html',       label: 'General Journal' },
   { href: 'periods.html',       label: 'Accounting Periods' },
-  { href: 'banking.html',       label: 'Opening Balances' },
   { href: 'reconcile.html',     label: 'Reconciliation' },
   { href: 'reports.html',       label: 'Reports' },
 ];
