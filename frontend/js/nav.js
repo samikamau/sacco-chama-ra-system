@@ -54,32 +54,53 @@ function renderNav() {
       ${NAV_ICONS[i.icon]}${i.label}
     </a>`).join('');
 
-  const subLinks = ACCOUNTANT_ITEMS.map(i => `
-    <a href="${i.href}" class="${i.href === current ? 'active' : ''}" style="padding-left:28px;font-size:13px;color:rgba(255,255,255,0.82);display:block">${i.label}</a>`).join('');
-
   mount.innerHTML = `
     <div class="brand">Ledger</div>
     ${topLinks}
     <a href="#" class="nav-accountant-toggle ${isAccountantActive ? 'active' : ''}" onclick="toggleAccountant(event)" style="display:flex;align-items:center;gap:6px">
       ${NAV_ICONS.calculator}Accountant
     </a>
-    <div class="nav-accountant-sub" style="display:${isAccountantActive ? 'block' : 'none'}">
-      ${subLinks}
-    </div>
     <a href="users.html" class="${current === 'users.html' ? 'active' : ''}" style="display:flex;align-items:center;gap:6px">
       ${NAV_ICONS.key}Users
     </a>
     <a href="#" onclick="signOut()" style="display:flex;align-items:center;gap:6px">
       ${NAV_ICONS.logout}Sign out
     </a>`;
+
+  renderAccountantBar(current, isAccountantActive);
+}
+
+// Inserted as the first child of <main class="main"> on every page —
+// no per-page HTML edit needed. Shows automatically when the current
+// page is one of the Accountant pages, otherwise toggled from the
+// sidebar's Accountant link.
+function renderAccountantBar(current, isAccountantActive) {
+  const main = document.querySelector('main.main') || document.querySelector('.main');
+  if (!main) return;
+
+  let bar = document.getElementById('accountant-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'accountant-bar';
+    main.insertBefore(bar, main.firstChild);
+  }
+
+  bar.style.cssText = `display:${isAccountantActive ? 'flex' : 'none'};gap:8px;flex-wrap:wrap;align-items:center;padding-bottom:16px;margin-bottom:20px;border-bottom:1px solid var(--color-line, #ddd);`;
+
+  bar.innerHTML = ACCOUNTANT_ITEMS.map(i => {
+    const active = i.href === current;
+    return `<a href="${i.href}" style="padding:6px 14px;border-radius:999px;font-size:13px;text-decoration:none;
+      background:${active ? 'var(--color-primary, #1B6E45)' : '#F3EBD8'};
+      color:${active ? '#fff' : 'inherit'};">${i.label}</a>`;
+  }).join('');
 }
 
 function toggleAccountant(e) {
   e.preventDefault();
-  const sub = document.querySelector('.nav-accountant-sub');
-  if (!sub) return;
-  const isVisible = sub.style.display !== 'none';
-  sub.style.display = isVisible ? 'none' : 'block';
+  const bar = document.getElementById('accountant-bar');
+  if (!bar) return;
+  const isVisible = bar.style.display !== 'none';
+  bar.style.display = isVisible ? 'none' : 'flex';
 }
 
 document.addEventListener('DOMContentLoaded', renderNav);
