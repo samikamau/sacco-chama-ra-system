@@ -16,13 +16,16 @@ const NAV_ICONS = {
 };
 
 const NAV_ITEMS = [
-  { href: 'index.html',       label: 'Dashboard',         icon: 'home' },
-  { href: 'members.html',     label: 'Members',           icon: 'users' },
-  { href: 'payments.html',    label: 'Payments',          icon: 'cash' },
-  { href: 'loans.html',       label: 'Loan Management',   icon: 'percent' },
-  { href: 'expenditure.html', label: 'Expenditure',       icon: 'outbox' },
-  { href: 'banking.html',     label: 'Banking',           icon: 'bank' },
-  { href: 'statement.html',   label: 'Member Statements', icon: 'doc' },
+  { href: 'index.html',       label: 'Dashboard',            icon: 'home' },
+  { href: 'members.html',     label: 'Members Management',   icon: 'users' },
+  { href: 'loans.html',       label: 'Loan Management',      icon: 'percent' },
+  { href: 'expenditure.html', label: 'Expenditure',          icon: 'outbox' },
+  { href: 'banking.html',     label: 'Banking',              icon: 'bank' },
+];
+
+const MEMBERS_ITEMS = [
+  { href: 'members.html',   label: 'All Members' },
+  { href: 'statement.html', label: 'Member Statements' },
 ];
 
 const ACCOUNTANT_ITEMS = [
@@ -48,6 +51,8 @@ function renderNav() {
 
   const accountantHrefs = ACCOUNTANT_ITEMS.map(i => i.href);
   const isAccountantActive = accountantHrefs.includes(current);
+  const membersHrefs = MEMBERS_ITEMS.map(i => i.href);
+  const isMembersActive = membersHrefs.includes(current);
 
   const topLinks = NAV_ITEMS.map(i => `
     <a href="${i.href}" class="${i.href === current ? 'active' : ''}" style="display:flex;align-items:center;gap:6px">
@@ -67,27 +72,28 @@ function renderNav() {
       ${NAV_ICONS.logout}Sign out
     </a>`;
 
-  renderAccountantBar(current, isAccountantActive);
+  renderGroupBar('members-bar', MEMBERS_ITEMS, current, isMembersActive);
+  renderGroupBar('accountant-bar', ACCOUNTANT_ITEMS, current, isAccountantActive);
 }
 
 // Inserted as the first child of <main class="main"> on every page —
 // no per-page HTML edit needed. Shows automatically when the current
-// page is one of the Accountant pages, otherwise toggled from the
-// sidebar's Accountant link.
-function renderAccountantBar(current, isAccountantActive) {
+// page belongs to that group; the Accountant bar can also be toggled
+// from the sidebar's Accountant link.
+function renderGroupBar(barId, items, current, isActive) {
   const main = document.querySelector('main.main') || document.querySelector('.main');
   if (!main) return;
 
-  let bar = document.getElementById('accountant-bar');
+  let bar = document.getElementById(barId);
   if (!bar) {
     bar = document.createElement('div');
-    bar.id = 'accountant-bar';
+    bar.id = barId;
     main.insertBefore(bar, main.firstChild);
   }
 
-  bar.style.cssText = `display:${isAccountantActive ? 'flex' : 'none'};gap:8px;flex-wrap:wrap;align-items:center;padding-bottom:16px;margin-bottom:20px;border-bottom:1px solid var(--color-line, #ddd);`;
+  bar.style.cssText = `display:${isActive ? 'flex' : 'none'};gap:8px;flex-wrap:wrap;align-items:center;padding-bottom:16px;margin-bottom:20px;border-bottom:1px solid var(--color-line, #ddd);`;
 
-  bar.innerHTML = ACCOUNTANT_ITEMS.map(i => {
+  bar.innerHTML = items.map(i => {
     const active = i.href === current;
     return `<a href="${i.href}" style="padding:6px 14px;border-radius:999px;font-size:13px;text-decoration:none;
       background:${active ? 'var(--color-primary, #1B6E45)' : '#F3EBD8'};
