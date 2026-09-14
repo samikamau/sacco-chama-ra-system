@@ -26,6 +26,13 @@
   }
   .stat-icon svg { width: 13px; height: 13px; }
   .stat-icon.alert { background: #F3E4E0; color: var(--color-alert); }
+  .glance-stat { background: #F0EFEC; border-radius: 6px; padding: 14px; text-align: center; margin-bottom: 10px; }
+  .glance-stat:last-child { margin-bottom: 0; }
+  .glance-value { font-family: var(--font-mono); font-size: 26px; font-weight: 700; }
+  .glance-label { color: var(--color-muted); font-size: 12px; margin-top: 4px; }
+  .arrears-item { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--color-line); font-size: 13px; }
+  .arrears-item:last-child { border-bottom: none; }
+  .arrears-badge { color: #fff; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
   .stat .value { font-family: var(--font-mono); font-size: 19px; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .stat .label { color: var(--color-muted); font-size: 12px; margin-top: 2px; }
   .insight { padding: var(--space-2) 0; border-bottom: 1px solid var(--color-line); display: flex; gap: var(--space-2); align-items: baseline; }
@@ -92,15 +99,26 @@
         </div>
       </div>
 
-      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:var(--space-4)">
-        <div class="card" style="flex:1;min-width:280px">
-          <h2>Member funds by category</h2>
-          <div style="position:relative;height:240px"><canvas id="chart-funds"></canvas></div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+        <div class="card" style="flex:1;min-width:220px">
+          <h2 style="text-align:center">Portfolio Health</h2>
+          <div class="glance-stat"><div class="glance-value" id="k-collection-pct" style="color:#2FAE73">—</div><div class="glance-label">Collection rate</div></div>
+          <div class="glance-stat"><div class="glance-value" id="k-atrisk-pct" style="color:#E4A82E">—</div><div class="glance-label">Portfolio at risk</div></div>
+          <div class="glance-stat"><div class="glance-value" id="k-arrears-rate" style="color:#E4602E">—</div><div class="glance-label">Loans in arrears</div></div>
         </div>
-        <div class="card" style="flex:2;min-width:340px">
-          <h2>Collections trend (last 6 months)</h2>
-          <div style="position:relative;height:240px"><canvas id="chart-collections"></canvas></div>
+        <div class="card" style="flex:1;min-width:260px">
+          <h2 style="text-align:center">Member Funds</h2>
+          <div style="position:relative;height:220px"><canvas id="chart-funds"></canvas></div>
         </div>
+        <div class="card" style="flex:1;min-width:260px">
+          <h2 style="text-align:center">Loans in Arrears</h2>
+          <div id="arrears-list"></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:var(--space-4)">
+        <h2>Collections trend (last 6 months)</h2>
+        <div style="position:relative;height:240px"><canvas id="chart-collections"></canvas></div>
       </div>
 
       <div class="card">
@@ -143,7 +161,7 @@
             options: {
               responsive: true,
               maintainAspectRatio: false,
-              plugins: { legend: { position: "bottom", labels: { font: { size: 12 } } } },
+              plugins: { legend: { position: "left", labels: { font: { size: 11 }, boxWidth: 12 } } },
             },
           });
         } catch (e) { /* chart is a nice-to-have, don't block the rest of the dashboard */ }
@@ -239,8 +257,37 @@
             extraInsights.push({ category: "Loans", severity: "warning",
               message: `${port.overdue_loans} loan(s) are in arrears, totalling KES ${money(port.overdue_amount)} overdue.` });
           }
+
+          // Portfolio Health percentages
+          const atRiskPct = Number(port.total_outstanding) > 0
+            ? (Number(port.overdue_amount) / Number(port.total_outstanding)) * 100 : 0;
+          const arrearsRatePct = Number(port.active_loans) > 0
+            ? (Number(port.overdue_loans) / Number(port.active_loans)) * 100 : 0;
+          document.getElementById("k-collection-pct").textContent = (kpis && !kErr ? kpis.collection_pct : 0) + "%";
+          document.getElementById("k-atrisk-pct").textContent = atRiskPct.toFixed(0) + "%";
+          document.getElementById("k-arrears-rate").textContent = arrearsRatePct.toFixed(0) + "%";
         }
       } catch (e) { /* loans functions may not be deployed yet */ }
+
+      // Loans in Arrears list, colored by how overdue each one is
+      try {
+        const { data: arrears } = await supabaseClient.rpc("fn_loan_arrears", { p_organisation_id: orgId });
+        const listEl = document.getElementById("arrears-list");
+        if (arrears && arrears.length) {
+          listEl.innerHTML = arrears.slice(0, 8).map(a => {
+            const days = Number(a.days_overdue);
+            const color = days > 60 ? "#E4602E" : days > 30 ? "#E4A82E" : "#2FAE73";
+            return `<div class="arrears-item">
+              <span>${a.member_name}</span>
+              <span class="arrears-badge" style="background:${color}">${days}d overdue</span>
+            </div>`;
+          }).join("");
+        } else {
+          listEl.innerHTML = `<p class="empty">No loans in arrears.</p>`;
+        }
+      } catch (e) {
+        document.getElementById("arrears-list").innerHTML = `<p class="empty">—</p>`;
+      }
 
       const allInsights = (insights || []).concat(extraInsights);
       if (iErr && !allInsights.length) {
