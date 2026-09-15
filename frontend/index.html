@@ -102,14 +102,14 @@
           </div>
         </div>
 
-        <div class="kpi-group" style="flex:1;min-width:220px;margin-bottom:0">
+        <div class="kpi-group" id="section-banking" style="flex:1;min-width:220px;margin-bottom:0">
           <h2>Bank and Cash accounts</h2>
           <div class="kpi">
             <div class="stat-row" id="bank-cash-grid">Loading…</div>
           </div>
         </div>
 
-        <div class="kpi-group" style="flex:1;min-width:220px;margin-bottom:0">
+        <div class="kpi-group" id="section-loans" style="flex:1;min-width:220px;margin-bottom:0">
           <h2>Loan portfolio</h2>
           <div class="kpi">
             <div class="stat-row">
@@ -136,20 +136,45 @@
             </div>
           </div>
         </div>
+
+        <div class="kpi-group" id="section-income-expenditure" style="flex:1;min-width:220px;margin-bottom:0">
+          <h2>Income &amp; Expenditure (this month)</h2>
+          <div class="kpi">
+            <div class="stat-row">
+              <div class="stat">
+                <div class="stat-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V10"/><path d="M8 14l4-4 4 4"/><path d="M4 5h16"/></svg></div>
+                <div class="stat-label">Income</div>
+                <div class="stat-value" id="k-income-month">—</div>
+              </div>
+              <div class="stat">
+                <div class="stat-icon alert"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="M8 10l4 4 4-4"/><path d="M4 19h16"/></svg></div>
+                <div class="stat-label">Expenditure</div>
+                <div class="stat-value" id="k-expenditure-month">—</div>
+              </div>
+              <div class="stat">
+                <div class="stat-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/></svg></div>
+                <div class="stat-label">Net</div>
+                <div class="stat-value" id="k-net-month">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
         <div class="card" style="flex:1;min-width:220px">
           <h2 style="text-align:center">Portfolio Health</h2>
           <div class="glance-stat"><div class="glance-value" id="k-collection-pct" style="color:#10B981">—</div><div class="glance-label">Collection rate</div></div>
-          <div class="glance-stat"><div class="glance-value" id="k-atrisk-pct" style="color:#F97316">—</div><div class="glance-label">Portfolio at risk</div></div>
-          <div class="glance-stat"><div class="glance-value" id="k-arrears-rate" style="color:#E11D48">—</div><div class="glance-label">Loans in arrears</div></div>
+          <div id="section-loan-health">
+            <div class="glance-stat"><div class="glance-value" id="k-atrisk-pct" style="color:#F97316">—</div><div class="glance-label">Portfolio at risk</div></div>
+            <div class="glance-stat"><div class="glance-value" id="k-arrears-rate" style="color:#E11D48">—</div><div class="glance-label">Loans in arrears</div></div>
+          </div>
         </div>
         <div class="card" style="flex:1;min-width:260px">
           <h2 style="text-align:center">Member Funds</h2>
           <div style="position:relative;height:220px"><canvas id="chart-funds"></canvas></div>
         </div>
-        <div class="card" style="flex:1;min-width:260px">
+        <div class="card" id="section-arrears" style="flex:1;min-width:260px">
           <h2 style="text-align:center">Loans in Arrears</h2>
           <div id="arrears-list"></div>
         </div>
@@ -178,6 +203,19 @@
       if (!org) return;
       const orgId = org.organisation_id;
 
+      // Hide dashboard sections for modules this organisation has turned off.
+      try {
+        const { data: orgRow } = await supabaseClient.from("organisations")
+          .select("enabled_modules").eq("id", orgId).single();
+        const modules = orgRow?.enabled_modules || {};
+        if (modules.loans === false) {
+          ["section-loans", "section-loan-health", "section-arrears"].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = "none";
+          });
+        }
+      } catch (e) { /* module flags are a nice-to-have; show everything if this fails */ }
+
       const { data: kpis, error: kErr } = await supabaseClient.rpc("fn_dashboard_kpis", { p_organisation_id: orgId });
       if (kErr) {
         document.getElementById("insights").innerHTML = `<p class="error">Could not load KPIs: ${kErr.message}</p>`;
@@ -187,21 +225,38 @@
         document.getElementById("k-total").textContent = kpis.total_members;
 
         try {
-          new Chart(document.getElementById("chart-funds"), {
-            type: "pie",
-            data: {
-              labels: ["Shares", "Deposits", "Welfare"],
-              datasets: [{
-                data: [Number(kpis.total_shares)||0, Number(kpis.total_deposits)||0, Number(kpis.total_welfare)||0],
-                backgroundColor: ["#10B981", "#0EA5E9", "#8B5CF6"],
-              }],
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: { legend: { position: "left", labels: { font: { size: 11 }, boxWidth: 12 } } },
-            },
+          const { data: fundRows } = await supabaseClient
+            .from("payment_allocations")
+            .select("amount, contribution_types(name), payments!inner(organisation_id, status)")
+            .eq("payments.organisation_id", orgId)
+            .eq("payments.status", "posted");
+
+          const totalsByName = {};
+          (fundRows || []).forEach(r => {
+            const name = r.contribution_types?.name || "Other";
+            totalsByName[name] = (totalsByName[name] || 0) + Number(r.amount);
           });
+          const fundLabels = Object.keys(totalsByName);
+          const fundValues = fundLabels.map(l => totalsByName[l]);
+          const fundPalette = ["#10B981", "#0EA5E9", "#8B5CF6", "#F97316", "#E11D48", "#6366F1", "#14B8A6", "#F59E0B"];
+
+          if (fundLabels.length) {
+            new Chart(document.getElementById("chart-funds"), {
+              type: "pie",
+              data: {
+                labels: fundLabels,
+                datasets: [{
+                  data: fundValues,
+                  backgroundColor: fundLabels.map((_, i) => fundPalette[i % fundPalette.length]),
+                }],
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: "left", labels: { font: { size: 11 }, boxWidth: 12 } } },
+              },
+            });
+          }
         } catch (e) { /* chart is a nice-to-have, don't block the rest of the dashboard */ }
       }
 
@@ -230,6 +285,27 @@
         document.getElementById("bank-cash-grid").innerHTML =
           `<div class="stat"><div class="stat-label">Run migration 022 to enable</div></div>`;
       }
+
+      // Income & Expenditure — this calendar month, for every organisation type
+      try {
+        const now = new Date();
+        const monthStart = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-01`;
+
+        const { data: incomeRows } = await supabaseClient.from("payments")
+          .select("amount").eq("organisation_id", orgId).eq("status", "posted")
+          .gte("transaction_date", monthStart);
+        const totalIncome = (incomeRows || []).reduce((s,r) => s + Number(r.amount), 0);
+
+        const { data: expRows } = await supabaseClient.from("bill_payments")
+          .select("amount, bills!inner(organisation_id)")
+          .eq("bills.organisation_id", orgId)
+          .gte("payment_date", monthStart);
+        const totalExpenditure = (expRows || []).reduce((s,r) => s + Number(r.amount), 0);
+
+        document.getElementById("k-income-month").textContent = money(totalIncome);
+        document.getElementById("k-expenditure-month").textContent = money(totalExpenditure);
+        document.getElementById("k-net-month").textContent = money(totalIncome - totalExpenditure);
+      } catch (e) { /* nice-to-have, don't block the rest of the dashboard */ }
 
       // Collections trend — total posted payments per month, last 6 months
       try {
