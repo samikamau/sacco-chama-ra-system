@@ -9,12 +9,49 @@ async function requireSession() {
 }
 
 async function currentOrg() {
+  const preferredId = localStorage.getItem("active_org_id");
+
+  if (preferredId) {
+    const { data, error } = await supabaseClient
+      .from("organisation_users")
+      .select("organisation_id, role, organisations(name, org_type, currency)")
+      .eq("status", "active")
+      .eq("organisation_id", preferredId)
+      .limit(1).single();
+    if (!error && data) return data;
+    // Preferred org no longer valid (removed, access revoked) — fall through
+    // to picking any active membership instead.
+    localStorage.removeItem("active_org_id");
+  }
+
   const { data, error } = await supabaseClient
     .from("organisation_users")
     .select("organisation_id, role, organisations(name, org_type, currency)")
     .eq("status", "active").limit(1).single();
   if (error) { console.error("Could not resolve org:", error.message); return null; }
+  if (data) localStorage.setItem("active_org_id", data.organisation_id);
   return data;
+}
+
+// All organisations (SACCO, Chama, Residents Association, etc.) the
+// current user is an active member of — used to populate the org switcher.
+async function listMyOrganisations() {
+  const { data, error } = await supabaseClient
+    .from("organisation_users")
+    .select("organisation_id, role, organisations(name, org_type)")
+    .eq("status", "active");
+  if (error) { console.error("Could not list organisations:", error.message); return []; }
+  return data || [];
+}
+
+// Switch the active organisation and reload so every page re-fetches
+// data scoped to the newly selected org.
+function switchOrg(orgId) {
+  localStorage.setItem("active_org_id", orgId);
+  Object.keys(sessionStorage)
+    .filter(k => k.startsWith("org_settings_"))
+    .forEach(k => sessionStorage.removeItem(k));
+  window.location.href = "index.html";
 }
 
 // Load org settings (feature flags, labels) — cached in sessionStorage
@@ -60,6 +97,7 @@ function applyOrgNav(settings) {
 }
 
 async function signOut() {
+  localStorage.removeItem("active_org_id");
   sessionStorage.clear();
   await supabaseClient.auth.signOut();
   window.location.href = "login.html";

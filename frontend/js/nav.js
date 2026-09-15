@@ -63,11 +63,26 @@ const ACCOUNTANT_ITEMS = [
 // filename differs (e.g. member.html is a detail page under Members).
 const NAV_ALIASES = { 'member.html': 'members.html' };
 
+const ORG_TYPE_LABELS = { sacco: 'SACCO', chama: 'Chama', residents_association: 'Residents Assoc.' };
+
+async function getOrgSwitcherData() {
+  try {
+    if (typeof listMyOrganisations !== 'function' || typeof currentOrg !== 'function') {
+      return { myOrgs: [], activeOrgId: null };
+    }
+    const [myOrgs, active] = await Promise.all([listMyOrganisations(), currentOrg()]);
+    return { myOrgs: myOrgs || [], activeOrgId: active ? active.organisation_id : null };
+  } catch (e) {
+    return { myOrgs: [], activeOrgId: null };
+  }
+}
+
 async function renderNav() {
   const mount = document.getElementById('nav-mount');
   if (!mount) return;
 
   const terms = await getOrgTerms();
+  const { myOrgs, activeOrgId } = await getOrgSwitcherData();
 
   let current = window.location.pathname.split('/').pop() || 'index.html';
   current = NAV_ALIASES[current] || current;
@@ -85,10 +100,34 @@ async function renderNav() {
     </a>`;
   }).join('');
 
+  const activeOrg = myOrgs.find(o => o.organisation_id === activeOrgId);
+  const activeOrgName = activeOrg ? activeOrg.organisations.name : 'Select organisation';
+  const activeOrgTypeLabel = activeOrg ? (ORG_TYPE_LABELS[activeOrg.organisations.org_type] || '') : '';
+
+  const switcherItems = myOrgs.map(o => {
+    const isActive = o.organisation_id === activeOrgId;
+    return `<a href="#" onclick="switchOrg('${o.organisation_id}');return false;"
+      style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;font-size:13px;color:#222;text-decoration:none;${isActive ? 'background:var(--color-bg, #F7F6F3);font-weight:600' : ''}">
+      <span>${o.organisations.name}</span>
+      <span style="font-size:11px;color:var(--color-muted, #888)">${ORG_TYPE_LABELS[o.organisations.org_type] || ''}</span>
+    </a>`;
+  }).join('');
+
   mount.innerHTML = `
     <div class="brand" style="line-height:1.15">
       <span style="font-size:28px;font-weight:700;color:#E63946">e</span><span style="font-size:28px;font-weight:700;color:#FFFFFF">dhafu</span>
       <div style="font-size:12px;font-weight:400;letter-spacing:0.06em;color:rgba(255,255,255,0.65);margin-top:2px">Finance Simplified</div>
+    </div>
+    <div style="position:relative;margin-bottom:12px">
+      <button type="button" onclick="toggleOrgSwitcher(event)"
+        style="width:100%;text-align:left;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#fff;padding:8px 10px;border-radius:6px;font-size:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:6px">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${activeOrgName}${activeOrgTypeLabel ? ' <span style="opacity:0.65">(' + activeOrgTypeLabel + ')</span>' : ''}</span>
+        <span>▾</span>
+      </button>
+      <div id="org-switcher-menu" style="display:none;position:absolute;z-index:30;top:100%;left:0;right:0;background:#fff;border-radius:6px;box-shadow:0 8px 20px rgba(0,0,0,0.25);margin-top:4px;overflow:hidden">
+        ${switcherItems}
+        <a href="create-organisation.html" style="display:block;padding:8px 12px;font-size:13px;color:var(--color-primary, #1B6E45);text-decoration:none;border-top:1px solid var(--color-line, #ddd)">+ New organisation</a>
+      </div>
     </div>
     ${topLinks}
     <a href="${ACCOUNTANT_ITEMS[0].href}" class="nav-accountant-toggle ${isAccountantActive ? 'active' : ''}" style="display:flex;align-items:center;gap:6px">
@@ -108,6 +147,19 @@ async function renderNav() {
   renderGroupBar('accountant-bar', ACCOUNTANT_ITEMS, current, isAccountantActive);
 }
 
+function toggleOrgSwitcher(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  const menu = document.getElementById('org-switcher-menu');
+  if (!menu) return;
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('org-switcher-menu');
+  if (menu && menu.style.display === 'block' && !menu.contains(e.target) && !e.target.closest('button')) {
+    menu.style.display = 'none';
+  }
+});
 // Inserted as the first child of <main class="main"> on every page —
 // no per-page HTML edit needed. Shows automatically when the current
 // page belongs to that group; the Accountant bar can also be toggled
