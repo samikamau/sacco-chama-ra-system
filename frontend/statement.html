@@ -51,17 +51,17 @@
           </div>
           <div class="field" id="fld-from" style="display:none"><label>From</label><input id="f-from" type="date"></div>
           <div class="field" id="fld-to" style="display:none"><label>To</label><input id="f-to" type="date"></div>
-        </div>
-
-        <div style="margin-top:14px;position:relative;max-width:280px">
-          <button type="button" class="btn" style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center" onclick="toggleComponentsMenu()">
-            <span id="components-summary">Components ▾</span>
-          </button>
-          <div id="components-menu" style="display:none;position:absolute;z-index:15;top:100%;left:0;right:0;background:#fff;border:1px solid var(--color-line);border-radius:6px;box-shadow:0 6px 16px rgba(0,0,0,0.1);margin-top:4px;padding:10px 12px">
-            <div class="component-check" id="components"></div>
-            <label style="font-size:12px;cursor:pointer;display:block;margin-top:6px;border-top:1px solid var(--color-line);padding-top:8px">
-              <input type="checkbox" id="chk-all" onchange="toggleAll()"> Select all
-            </label>
+          <div class="field" style="position:relative;min-width:220px">
+            <label>Components</label>
+            <button type="button" class="btn" style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center" onclick="toggleComponentsMenu()">
+              <span id="components-summary">Components ▾</span>
+            </button>
+            <div id="components-menu" style="display:none;position:absolute;z-index:15;top:100%;left:0;right:0;background:#fff;border:1px solid var(--color-line);border-radius:6px;box-shadow:0 6px 16px rgba(0,0,0,0.1);margin-top:4px;padding:10px 12px">
+              <div class="component-check" id="components"></div>
+              <label style="font-size:12px;cursor:pointer;display:block;margin-top:6px;border-top:1px solid var(--color-line);padding-top:8px">
+                <input type="checkbox" id="chk-all" onchange="toggleAll()"> Select all
+              </label>
+            </div>
           </div>
         </div>
 
