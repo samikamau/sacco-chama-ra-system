@@ -137,28 +137,6 @@
           </div>
         </div>
 
-        <div class="kpi-group" id="section-income-expenditure" style="flex:1;min-width:220px;margin-bottom:0">
-          <h2>Income &amp; Expenditure (this month)</h2>
-          <div class="kpi">
-            <div class="stat-row">
-              <div class="stat">
-                <div class="stat-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V10"/><path d="M8 14l4-4 4 4"/><path d="M4 5h16"/></svg></div>
-                <div class="stat-label">Income</div>
-                <div class="stat-value" id="k-income-month">—</div>
-              </div>
-              <div class="stat">
-                <div class="stat-icon alert"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="M8 10l4 4 4-4"/><path d="M4 19h16"/></svg></div>
-                <div class="stat-label">Expenditure</div>
-                <div class="stat-value" id="k-expenditure-month">—</div>
-              </div>
-              <div class="stat">
-                <div class="stat-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/></svg></div>
-                <div class="stat-label">Net</div>
-                <div class="stat-value" id="k-net-month">—</div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
@@ -169,6 +147,12 @@
             <div class="glance-stat"><div class="glance-value" id="k-atrisk-pct" style="color:#F97316">—</div><div class="glance-label">Portfolio at risk</div></div>
             <div class="glance-stat"><div class="glance-value" id="k-arrears-rate" style="color:#E11D48">—</div><div class="glance-label">Loans in arrears</div></div>
           </div>
+        </div>
+        <div class="card" id="section-income-expenditure" style="flex:1;min-width:220px">
+          <h2 style="text-align:center">Income &amp; Expenditure</h2>
+          <div class="glance-stat"><div class="glance-value" id="k-income-month" style="color:#10B981">—</div><div class="glance-label">Income (this month)</div></div>
+          <div class="glance-stat"><div class="glance-value" id="k-expenditure-month" style="color:#E11D48">—</div><div class="glance-label">Expenditure (this month)</div></div>
+          <div class="glance-stat"><div class="glance-value" id="k-net-month" style="color:#0EA5E9">—</div><div class="glance-label">Net</div></div>
         </div>
         <div class="card" style="flex:1;min-width:260px">
           <h2 style="text-align:center">Member Funds</h2>
