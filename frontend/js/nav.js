@@ -37,16 +37,22 @@ const TERMINOLOGY = {
   residents_association:  { sidebarMembers: 'Residents',          allMembers: 'All Residents' },
 };
 
-async function getOrgTerms() {
+async function getOrgContext() {
+  const fallback = { terms: TERMINOLOGY.sacco, modules: { loans: true, expenditure: true, banking: true }, orgType: 'sacco' };
   try {
-    if (typeof currentOrg !== 'function') return TERMINOLOGY.sacco;
+    if (typeof currentOrg !== 'function') return fallback;
     const org = await currentOrg();
-    if (!org) return TERMINOLOGY.sacco;
+    if (!org) return fallback;
     const { data } = await supabaseClient.from('organisations')
-      .select('org_type').eq('id', org.organisation_id).single();
-    return TERMINOLOGY[data?.org_type] || TERMINOLOGY.sacco;
+      .select('org_type, enabled_modules').eq('id', org.organisation_id).single();
+    const orgType = data?.org_type || 'sacco';
+    return {
+      terms: TERMINOLOGY[orgType] || TERMINOLOGY.sacco,
+      modules: data?.enabled_modules || fallback.modules,
+      orgType,
+    };
   } catch (e) {
-    return TERMINOLOGY.sacco;
+    return fallback;
   }
 }
 
@@ -81,7 +87,7 @@ async function renderNav() {
   const mount = document.getElementById('nav-mount');
   if (!mount) return;
 
-  const terms = await getOrgTerms();
+  const { terms, modules, orgType } = await getOrgContext();
   const { myOrgs, activeOrgId } = await getOrgSwitcherData();
 
   let current = window.location.pathname.split('/').pop() || 'index.html';
@@ -92,8 +98,17 @@ async function renderNav() {
   const membersHrefs = MEMBERS_ITEMS.map(i => i.href);
   const isMembersActive = membersHrefs.includes(current);
 
-  const topLinks = NAV_ITEMS.map(i => {
-    const label = i.href === 'members.html' ? terms.sidebarMembers : i.label;
+  // MODULE_MAP ties each optional nav item to its enabled_modules flag.
+  // Items with no entry here are always shown.
+  const MODULE_MAP = { 'loans.html': 'loans', 'expenditure.html': 'expenditure', 'banking.html': 'banking' };
+  const visibleNavItems = NAV_ITEMS.filter(i => {
+    const key = MODULE_MAP[i.href];
+    return !key || modules[key] !== false;
+  });
+
+  const topLinks = visibleNavItems.map(i => {
+    let label = i.href === 'members.html' ? terms.sidebarMembers : i.label;
+    if (i.href === 'loans.html' && orgType === 'chama') label = 'Loans & Advances';
     return `
     <a href="${i.href}" class="${i.href === current ? 'active' : ''}" style="display:flex;align-items:center;gap:6px">
       ${NAV_ICONS[i.icon]}${label}
