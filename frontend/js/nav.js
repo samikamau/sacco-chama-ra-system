@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { href: 'loans.html',       label: 'Loan Management',      icon: 'percent' },
   { href: 'expenditure.html', label: 'Expenditure',          icon: 'outbox' },
   { href: 'banking.html',     label: 'Banking',              icon: 'bank' },
+  { href: 'reports.html',     label: 'Reports',              icon: 'chart' },
 ];
 
 const MEMBERS_ITEMS = [
@@ -35,7 +36,6 @@ const ACCOUNTANT_ITEMS = [
   { href: 'periods.html',           label: 'Accounting Periods' },
   { href: 'opening-balances.html',  label: 'Opening Balances' },
   { href: 'reconcile.html',         label: 'Reconciliation' },
-  { href: 'reports.html',           label: 'Reports' },
 ];
 
 // Sub-pages that should highlight a top-level item even though their
