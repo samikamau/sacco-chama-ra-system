@@ -123,9 +123,9 @@
 
     async function loadAccounts() {
       const { data } = await supabaseClient.from("chart_of_accounts")
-        .select("id, code, name").eq("organisation_id", orgId).eq("is_active", true).order("code");
+        .select("id, code, name, is_control").eq("organisation_id", orgId).eq("is_active", true).order("code");
       document.getElementById("ft-account").innerHTML =
-        (data || []).map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join("");
+        (data || []).filter(a => !a.is_control).map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join("");
     }
 
     async function loadFundTypes() {
@@ -193,14 +193,15 @@
       const errorEl = document.getElementById("rule-error");
       const fundId = document.getElementById("r-fund").value;
       if (!fundId) { showError(errorEl, "Add a fund type first."); return; }
-      const { error } = await supabaseClient.from("contribution_rules").insert({
+      const { data: newRule, error } = await supabaseClient.from("contribution_rules").insert({
         organisation_id: orgId,
         contribution_type_id: fundId,
         name: document.getElementById("r-name").value.trim(),
         amount: 0, // legacy column; real amounts live in versions
-      });
+      }).select("id").single();
       if (error) { showError(errorEl, error.message); return; }
-      loadRules();
+      await loadRules();
+      if (newRule) document.getElementById("v-rule").value = newRule.id;
     }
 
     function parseCategoryAmounts(text) {
@@ -215,6 +216,8 @@
     async function addVersion() {
       const errorEl = document.getElementById("version-error");
       errorEl.style.display = "none";
+      const ruleId = document.getElementById("v-rule").value;
+      if (!ruleId) { showError(errorEl, "Select a rule first (create one above if the list is empty)."); return; }
       const method = document.getElementById("v-method").value;
       const eff = document.getElementById("v-eff").value;
       if (!eff) { showError(errorEl, "Effective from date is required."); return; }
@@ -223,7 +226,7 @@
       if (method === "category") categoryAmounts = parseCategoryAmounts(document.getElementById("v-cat").value);
 
       const { error } = await supabaseClient.rpc("fn_add_rule_version", {
-        p_rule_id: document.getElementById("v-rule").value,
+        p_rule_id: ruleId,
         p_calc_method: method,
         p_fixed_amount: document.getElementById("v-fixed").value || 0,
         p_percentage_rate: document.getElementById("v-pct").value || 0,
