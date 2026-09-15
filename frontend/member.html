@@ -83,7 +83,7 @@
 
       if (error || !m) { content.innerHTML = `<p class="error">${error ? error.message : "Member not found."}</p>`; return; }
 
-      const kyc = m.member_kyc && m.member_kyc.length ? m.member_kyc[0] : {};
+      const kyc = Array.isArray(m.member_kyc) ? (m.member_kyc[0] || {}) : (m.member_kyc || {});
       currentMember = { m, kyc };
 
       // Contributions (expected vs paid across all periods)
@@ -254,14 +254,11 @@
           : null,
       };
 
-      let kErr;
-      if (currentMember.m.member_kyc && currentMember.m.member_kyc.length) {
-        ({ error: kErr } = await supabaseClient.from("member_kyc")
-          .update(kycPayload).eq("member_id", memberId));
-      } else {
-        ({ error: kErr } = await supabaseClient.from("member_kyc")
-          .insert({ member_id: memberId, organisation_id: orgId, ...kycPayload }));
-      }
+      const { error: kErr } = await supabaseClient.from("member_kyc")
+        .upsert(
+          { member_id: memberId, organisation_id: orgId, ...kycPayload },
+          { onConflict: "member_id" }
+        );
       if (kErr) { showError(errorEl, kErr.message); return; }
 
       closeEditDrawer();
