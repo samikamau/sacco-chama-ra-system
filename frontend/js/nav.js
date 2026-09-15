@@ -29,6 +29,27 @@ const MEMBERS_ITEMS = [
   { href: 'statement.html', label: 'Member Statements' },
 ];
 
+// Terminology that changes depending on the organisation's type. Falls
+// back to the SACCO wording whenever org_type is unset or unrecognised.
+const TERMINOLOGY = {
+  sacco:                  { sidebarMembers: 'Members Management', allMembers: 'All Members' },
+  chama:                  { sidebarMembers: 'Chama Members',      allMembers: 'All Chama Members' },
+  residents_association:  { sidebarMembers: 'Residents',          allMembers: 'All Residents' },
+};
+
+async function getOrgTerms() {
+  try {
+    if (typeof currentOrg !== 'function') return TERMINOLOGY.sacco;
+    const org = await currentOrg();
+    if (!org) return TERMINOLOGY.sacco;
+    const { data } = await supabaseClient.from('organisations')
+      .select('org_type').eq('id', org.organisation_id).single();
+    return TERMINOLOGY[data?.org_type] || TERMINOLOGY.sacco;
+  } catch (e) {
+    return TERMINOLOGY.sacco;
+  }
+}
+
 const ACCOUNTANT_ITEMS = [
   { href: 'contributions.html',     label: 'Contributions' },
   { href: 'accounts.html',          label: 'Chart of Accounts' },
@@ -42,9 +63,11 @@ const ACCOUNTANT_ITEMS = [
 // filename differs (e.g. member.html is a detail page under Members).
 const NAV_ALIASES = { 'member.html': 'members.html' };
 
-function renderNav() {
+async function renderNav() {
   const mount = document.getElementById('nav-mount');
   if (!mount) return;
+
+  const terms = await getOrgTerms();
 
   let current = window.location.pathname.split('/').pop() || 'index.html';
   current = NAV_ALIASES[current] || current;
@@ -54,10 +77,13 @@ function renderNav() {
   const membersHrefs = MEMBERS_ITEMS.map(i => i.href);
   const isMembersActive = membersHrefs.includes(current);
 
-  const topLinks = NAV_ITEMS.map(i => `
+  const topLinks = NAV_ITEMS.map(i => {
+    const label = i.href === 'members.html' ? terms.sidebarMembers : i.label;
+    return `
     <a href="${i.href}" class="${i.href === current ? 'active' : ''}" style="display:flex;align-items:center;gap:6px">
-      ${NAV_ICONS[i.icon]}${i.label}
-    </a>`).join('');
+      ${NAV_ICONS[i.icon]}${label}
+    </a>`;
+  }).join('');
 
   mount.innerHTML = `
     <div class="brand" style="line-height:1.15">
@@ -75,7 +101,10 @@ function renderNav() {
       ${NAV_ICONS.logout}Sign out
     </a>`;
 
-  renderGroupBar('members-bar', MEMBERS_ITEMS, current, isMembersActive);
+  const membersItemsThemed = MEMBERS_ITEMS.map(i =>
+    i.href === 'members.html' ? { ...i, label: terms.allMembers } : i
+  );
+  renderGroupBar('members-bar', membersItemsThemed, current, isMembersActive);
   renderGroupBar('accountant-bar', ACCOUNTANT_ITEMS, current, isAccountantActive);
 }
 
