@@ -23,25 +23,6 @@
         <div id="my-invites"></div>
       </div>
 
-      <!-- ORGANISATION SETTINGS -->
-      <div class="card" id="org-settings-card" style="display:none">
-        <h2>Organisation settings</h2>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
-          <div class="field" style="min-width:220px">
-            <label>Organisation type</label>
-            <select id="org-type">
-              <option value="">— not set —</option>
-              <option value="sacco">SACCO</option>
-              <option value="chama">Chama</option>
-              <option value="residents_association">Residents Association</option>
-            </select>
-          </div>
-          <button class="btn accent" onclick="saveOrgType()">Save</button>
-        </div>
-        <p id="org-type-error" class="error" style="display:none"></p>
-        <p id="org-type-success" style="display:none;color:var(--color-success)"></p>
-      </div>
-
       <!-- INVITE -->
       <div class="card" id="invite-card">
         <h2>Invite someone</h2>
@@ -150,25 +131,6 @@
       loadInvites();
     }
 
-    async function loadOrgType() {
-      const { data, error } = await supabaseClient.from("organisations")
-        .select("org_type").eq("id", orgId).single();
-      if (error) return; // column may not exist yet if the migration hasn't run
-      document.getElementById("org-type").value = data?.org_type || "";
-    }
-
-    async function saveOrgType() {
-      const errorEl = document.getElementById("org-type-error");
-      const successEl = document.getElementById("org-type-success");
-      errorEl.style.display = "none"; successEl.style.display = "none";
-      const orgType = document.getElementById("org-type").value || null;
-      const { error } = await supabaseClient.from("organisations")
-        .update({ org_type: orgType }).eq("id", orgId);
-      if (error) { showError(errorEl, error.message); return; }
-      successEl.textContent = "Organisation type saved.";
-      successEl.style.display = "block";
-    }
-
     async function loadUsers() {
       const { data, error } = await supabaseClient.rpc("fn_organisation_users", { p_organisation_id: orgId });
       const tbody = document.getElementById("user-rows");
@@ -179,8 +141,6 @@
       const me = data.find(u=>u.is_me);
       myRole = me ? me.role : null;
       document.getElementById("invite-card").style.display = (myRole==='org_admin') ? 'block' : 'none';
-      document.getElementById("org-settings-card").style.display = (myRole==='org_admin') ? 'block' : 'none';
-      if (myRole === 'org_admin') loadOrgType();
 
       const isAdmin = myRole === 'org_admin';
       tbody.innerHTML = data.map(u=>`
