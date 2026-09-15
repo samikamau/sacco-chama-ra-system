@@ -201,6 +201,25 @@
       if (!p) return;
       document.getElementById('d-type').value = p.account_type;
       document.getElementById('d-normal').value = p.normal_balance || 'debit';
+
+      // Suggest the next available code under this category, but only
+      // when creating a new account — never overwrite an existing one's code.
+      if (!editingId) {
+        document.getElementById('d-code').value = suggestNextCode(pid);
+      }
+    }
+
+    function suggestNextCode(parentId) {
+      const parent = allAccounts.find(a => a.id === parentId);
+      if (!parent) return '';
+      const parentBase = parseInt(parent.code, 10);
+      if (isNaN(parentBase)) return '';
+
+      const siblings = allAccounts.filter(a => a.parent_account_id === parentId);
+      if (!siblings.length) return String(parentBase + 10);
+
+      const maxSiblingCode = Math.max(...siblings.map(a => parseInt(a.code, 10) || parentBase));
+      return String(maxSiblingCode + 10);
     }
 
     async function saveAccount() {
