@@ -117,11 +117,11 @@
         <div class="card">
           <h2>Loan products</h2>
           <table>
-            <thead><tr><th>Name</th><th class="num">Multiplier</th><th>Interest</th><th class="num">Rate %</th></tr></thead>
-            <tbody id="product-rows"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+            <thead><tr><th>Name</th><th class="num">Multiplier</th><th>Interest</th><th class="num">Rate %</th><th></th></tr></thead>
+            <tbody id="product-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
           </table>
-          <details style="margin-top:12px">
-            <summary style="cursor:pointer;color:var(--color-muted)">Add a loan product</summary>
+          <details id="product-form" style="margin-top:12px">
+            <summary style="cursor:pointer;color:var(--color-muted)" id="product-form-summary">Add a loan product</summary>
             <div style="margin-top:12px">
               <div class="field"><label>Name</label><input id="pr-name"></div>
               <div class="field"><label>Savings multiplier (max loan = multiplier x deposits)</label><input id="pr-mult" type="number" value="3"></div>
@@ -133,6 +133,7 @@
               <div class="field"><label>Loan receivable account</label><select id="pr-recv"></select></div>
               <div class="field"><label>Interest income account</label><select id="pr-int"></select></div>
               <button class="btn accent" onclick="createProduct()">Save product</button>
+              <button class="btn" id="product-cancel-btn" style="display:none;background:var(--color-muted)" onclick="cancelProductEdit()">Cancel</button>
               <p id="pr-error" class="error" style="display:none"></p>
             </div>
           </details>
@@ -240,15 +241,46 @@
 
     async function loadProducts() {
       const { data } = await supabaseClient.from("loan_products")
-        .select("id, name, savings_multiplier, interest_method, annual_interest_rate")
+        .select("id, name, savings_multiplier, interest_method, annual_interest_rate, max_term_months, loan_receivable_account_id, interest_income_account_id")
         .eq("organisation_id", orgId).eq("active", true).order("name");
       products = data || [];
       document.getElementById("product-rows").innerHTML = products.length
-        ? products.map(p => `<tr><td>${p.name}</td><td class="num">${p.savings_multiplier}</td><td>${p.interest_method}</td><td class="num">${p.annual_interest_rate}</td></tr>`).join("")
-        : `<tr><td colspan="4" class="empty">No products yet — add one below.</td></tr>`;
+        ? products.map(p => `<tr><td>${p.name}</td><td class="num">${p.savings_multiplier}</td><td>${p.interest_method}</td><td class="num">${p.annual_interest_rate}</td>
+            <td><button class="btn" style="padding:2px 8px;font-size:11px" onclick="editProduct('${p.id}')">Edit</button></td></tr>`).join("")
+        : `<tr><td colspan="5" class="empty">No products yet — add one below.</td></tr>`;
       document.getElementById("a-product").innerHTML =
         products.map(p => `<option value="${p.id}">${p.name}</option>`).join("");
       checkEligibility();
+    }
+
+    let editingProductId = null;
+
+    function editProduct(id) {
+      const p = products.find(x => x.id === id);
+      if (!p) return;
+      editingProductId = id;
+      document.getElementById("pr-name").value = p.name;
+      document.getElementById("pr-mult").value = p.savings_multiplier;
+      document.getElementById("pr-method").value = p.interest_method;
+      document.getElementById("pr-rate").value = p.annual_interest_rate;
+      document.getElementById("pr-term").value = p.max_term_months;
+      document.getElementById("pr-recv").value = p.loan_receivable_account_id;
+      document.getElementById("pr-int").value = p.interest_income_account_id;
+      document.getElementById("product-form-summary").textContent = "Editing: " + p.name;
+      document.getElementById("product-form").open = true;
+      document.getElementById("product-cancel-btn").style.display = "inline-block";
+      document.getElementById("pr-error").style.display = "none";
+    }
+
+    function cancelProductEdit() {
+      editingProductId = null;
+      ["pr-name"].forEach(id => document.getElementById(id).value = "");
+      document.getElementById("pr-mult").value = 3;
+      document.getElementById("pr-rate").value = 12;
+      document.getElementById("pr-term").value = 12;
+      document.getElementById("product-form-summary").textContent = "Add a loan product";
+      document.getElementById("product-cancel-btn").style.display = "none";
+      document.getElementById("pr-error").style.display = "none";
     }
 
     async function checkEligibility() {
@@ -646,8 +678,12 @@
         interest_income_account_id: document.getElementById("pr-int").value,
       };
       if (!payload.name) { showError(errorEl, "Name is required."); return; }
-      const { error } = await supabaseClient.from("loan_products").insert(payload);
+
+      const { error } = editingProductId
+        ? await supabaseClient.from("loan_products").update(payload).eq("id", editingProductId)
+        : await supabaseClient.from("loan_products").insert(payload);
       if (error) { showError(errorEl, error.message); return; }
+      cancelProductEdit();
       loadProducts();
     }
 
