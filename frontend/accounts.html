@@ -6,7 +6,6 @@
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-  .coa-cat-label { font-size:14px; font-weight:600; padding:14px 16px 6px; color:var(--color-ink, #222); }
   .coa-row { display:grid; grid-template-columns:90px 1fr 90px 90px 150px; gap:8px; align-items:center; padding:7px 16px; border-bottom:1px solid var(--color-line); font-size:13px; }
   .coa-row:last-child { border-bottom:none; }
   .coa-row:hover { background:var(--color-bg); }
@@ -147,15 +146,16 @@
           : `<div class="coa-row"><div style="color:var(--color-muted);grid-column:1/-1;padding-left:20px">No sub-accounts yet.</div></div>`;
 
         return `
-          <div class="coa-cat-label">${cat.code} &nbsp;${cat.label}
-            <span style="font-weight:400;color:var(--color-muted);font-size:12px">(${children.length} account${children.length!==1?'s':''})</span>
+          <div class="coa-row" style="background:var(--color-bg, #F7F6F3)">
+            <div style="font-family:var(--font-mono);font-size:12px;font-weight:700">${cat.code}</div>
+            <div style="font-weight:700">${cat.label}
+              <span style="font-weight:400;color:var(--color-muted);font-size:12px">(${children.length} account${children.length!==1?'s':''})</span>
+            </div>
+            <div style="font-size:12px;color:var(--color-muted)">${cat.type}</div>
+            <div></div>
+            <div><button class="btn" style="padding:2px 8px;font-size:11px" onclick="openDrawer(null,'${catAcct.id}')">+ Add sub-account</button></div>
           </div>
-          ${rows}
-          <div style="padding:6px 0 6px 20px">
-            <button class="btn" style="font-size:12px" onclick="openDrawer(null,'${catAcct.id}')">
-              + Add sub-account
-            </button>
-          </div>`;
+          ${rows}`;
       }).join('');
 
       container.innerHTML = `
