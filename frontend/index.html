@@ -286,21 +286,23 @@
           `<div class="stat"><div class="stat-label">Run migration 022 to enable</div></div>`;
       }
 
-      // Income & Expenditure — this calendar month, for every organisation type
+      // Income & Expenditure — this calendar month, using the same
+      // fn_income_expenditure RPC that powers the actual I&E statement,
+      // so the dashboard figure always matches the real report.
       try {
         const now = new Date();
         const monthStart = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-01`;
+        const today = now.toISOString().slice(0,10);
 
-        const { data: incomeRows } = await supabaseClient.from("payments")
-          .select("amount").eq("organisation_id", orgId).eq("status", "posted")
-          .gte("transaction_date", monthStart);
-        const totalIncome = (incomeRows || []).reduce((s,r) => s + Number(r.amount), 0);
+        const { data: ieRows, error: ieErr } = await supabaseClient.rpc("fn_income_expenditure", {
+          p_organisation_id: orgId, p_from: monthStart, p_to: today,
+        });
+        if (ieErr) throw ieErr;
 
-        const { data: expRows } = await supabaseClient.from("bill_payments")
-          .select("amount, bills!inner(organisation_id)")
-          .eq("bills.organisation_id", orgId)
-          .gte("payment_date", monthStart);
-        const totalExpenditure = (expRows || []).reduce((s,r) => s + Number(r.amount), 0);
+        const totalIncome = (ieRows || []).filter(r => r.account_type === "income")
+          .reduce((s,r) => s + Number(r.amount), 0);
+        const totalExpenditure = (ieRows || []).filter(r => r.account_type === "expense")
+          .reduce((s,r) => s + Number(r.amount), 0);
 
         document.getElementById("k-income-month").textContent = money(totalIncome);
         document.getElementById("k-expenditure-month").textContent = money(totalExpenditure);
