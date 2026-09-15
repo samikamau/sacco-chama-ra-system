@@ -63,6 +63,19 @@
               </label>
             </div>
           </div>
+
+          <div class="field" style="position:relative;min-width:200px">
+            <label>Loan status</label>
+            <button type="button" class="btn" style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center" onclick="toggleLoanStatusMenu()">
+              <span id="loan-status-summary">All statuses ▾</span>
+            </button>
+            <div id="loan-status-menu" style="display:none;position:absolute;z-index:15;top:100%;left:0;right:0;background:#fff;border:1px solid var(--color-line);border-radius:6px;box-shadow:0 6px 16px rgba(0,0,0,0.1);margin-top:4px;padding:10px 12px">
+              <div class="component-check" id="loan-status-checks"></div>
+              <label style="font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px;text-align:left;margin-top:6px;border-top:1px solid var(--color-line);padding-top:8px">
+                <input type="checkbox" id="chk-loan-status-all" checked onchange="toggleAllLoanStatuses()" style="width:16px;flex-shrink:0;accent-color:var(--color-primary)"> Select all
+              </label>
+            </div>
+          </div>
         </div>
 
         <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
@@ -160,6 +173,7 @@
         <label><input type="checkbox" class="comp-check" value="${c.key}" checked onchange="updateComponentsSummary()"> ${c.label}</label>`).join("");
       document.getElementById("chk-all").checked = true;
       updateComponentsSummary();
+      buildLoanStatusChecks();
     }
 
     function toggleComponentsMenu() {
@@ -183,6 +197,62 @@
 
     function selectedComponents() {
       return [...document.querySelectorAll(".comp-check:checked")].map(c => c.value);
+    }
+
+    // -------------------------------------------------------------------------
+    // LOAN STATUS FILTER
+    // -------------------------------------------------------------------------
+    const LOAN_STATUS_GROUPS = [
+      { key: "pending",  label: "Pending Approval",     statuses: ["draft", "pending_approval"] },
+      { key: "approved", label: "Awaiting Disbursement", statuses: ["approved"] },
+      { key: "active",   label: "Active",                statuses: ["active", "disbursed"] },
+      { key: "closed",   label: "Closed",                statuses: ["closed"] },
+      { key: "rejected", label: "Declined",              statuses: ["rejected"] },
+    ];
+
+    function buildLoanStatusChecks() {
+      document.getElementById("loan-status-checks").innerHTML = LOAN_STATUS_GROUPS.map(g => `
+        <label><input type="checkbox" class="loan-status-check" value="${g.key}" checked onchange="updateLoanStatusSummary()"> ${g.label}</label>`).join("");
+      document.getElementById("chk-loan-status-all").checked = true;
+      updateLoanStatusSummary();
+    }
+
+    function toggleLoanStatusMenu() {
+      const menu = document.getElementById("loan-status-menu");
+      menu.style.display = menu.style.display === "none" ? "block" : "none";
+    }
+    document.addEventListener("click", (e) => {
+      const menu = document.getElementById("loan-status-menu");
+      const btn = e.target.closest("button");
+      if (!menu) return;
+      if (menu.style.display === "block" && !menu.contains(e.target) && !(btn && btn.getAttribute("onclick") === "toggleLoanStatusMenu()")) {
+        menu.style.display = "none";
+      }
+    });
+
+    function toggleAllLoanStatuses() {
+      const checked = document.getElementById("chk-loan-status-all").checked;
+      document.querySelectorAll(".loan-status-check").forEach(c => c.checked = checked);
+      updateLoanStatusSummary();
+    }
+
+    function updateLoanStatusSummary() {
+      const groupKeys = selectedLoanStatusGroups();
+      const total = LOAN_STATUS_GROUPS.length;
+      document.getElementById("loan-status-summary").textContent =
+        groupKeys.length === 0 ? "No statuses ▾" :
+        groupKeys.length === total ? "All statuses ▾" :
+        `${groupKeys.length} status${groupKeys.length !== 1 ? "es" : ""} ▾`;
+    }
+
+    // Returns the flat list of raw loan.status values to include, based on
+    // which status groups are checked.
+    function selectedLoanStatusGroups() {
+      return [...document.querySelectorAll(".loan-status-check:checked")].map(c => c.value);
+    }
+    function selectedLoanStatuses() {
+      const keys = selectedLoanStatusGroups();
+      return LOAN_STATUS_GROUPS.filter(g => keys.includes(g.key)).flatMap(g => g.statuses);
     }
 
     // -------------------------------------------------------------------------
@@ -218,12 +288,13 @@
       );
     }
 
-    async function fetchLoans(memberId, from, to) {
+    async function fetchLoans(memberId, from, to, statuses) {
       const { data: lns } = await supabaseClient.from("loans")
         .select("id, principal, term_months, status, application_date, loan_products(name)")
         .eq("member_id", memberId).order("application_date");
       const result = [];
       for (const l of (lns || [])) {
+        if (statuses && statuses.length && !statuses.includes(l.status)) continue;
         if (from && l.application_date < from) continue;
         if (to && l.application_date > to) continue;
         const { data: reps } = await supabaseClient.from("loan_repayments")
@@ -315,7 +386,7 @@
           sectionsHTML += sectionHTML(ft.name, txns, nature);
           lastStatement.sections.push({ title: ft.name, rows: buildLedgerRows(txns, nature) });
         } else if (comp === "loans") {
-          const lns = await fetchLoans(memberId, from, to);
+          const lns = await fetchLoans(memberId, from, to, selectedLoanStatuses());
           let loanHTML = `<div class="stmt-section"><div class="stmt-section-title">Loans</div>`;
           lastStatement.sections.push({ title: "Loans", loans: lns });
           if (!lns.length) {

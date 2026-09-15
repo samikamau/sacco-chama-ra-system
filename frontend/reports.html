@@ -169,14 +169,12 @@
       let totalDr=0, totalCr=0;
       const rows = data.map(r => {
         totalDr+=Number(r.total_debit); totalCr+=Number(r.total_credit);
-        return `<tr><td>${r.account_code}</td><td>${r.account_name}</td><td style="color:var(--color-muted);font-size:12px">${r.account_type}</td><td class="num">${r.total_debit>0?money(r.total_debit):""}</td><td class="num">${r.total_credit>0?money(r.total_credit):""}</td></tr>`;
+        return `<tr><td>${r.account_code}</td><td>${r.account_name}</td><td class="num">${r.total_debit>0?money(r.total_debit):""}</td><td class="num">${r.total_credit>0?money(r.total_credit):""}</td></tr>`;
       }).join("");
-      const balanced = Math.abs(totalDr-totalCr)<0.005;
-      return `<table><thead><tr><th>Code</th><th>Account</th><th>Type</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead>
+      return `<table><thead><tr><th>Code</th><th>Account</th><th class="num" style="text-align:right">Debit</th><th class="num" style="text-align:right">Credit</th></tr></thead>
         <tbody>${rows}</tbody>
-        <tfoot><tr class="total-row"><td colspan="3">TOTALS</td><td class="num">${money(totalDr)}</td><td class="num">${money(totalCr)}</td></tr></tfoot>
-      </table>
-      <p class="${balanced?'balance-ok':'balance-bad'}">${balanced?'✓ In balance — total debits equal total credits.':'⚠ Out of balance by KES '+money(Math.abs(totalDr-totalCr))+' — investigate.'}</p>`;
+        <tfoot><tr class="total-row"><td colspan="2">TOTALS</td><td class="num">${money(totalDr)}</td><td class="num">${money(totalCr)}</td></tr></tfoot>
+      </table>`;
     }
 
     function renderIEHTML(data) {
@@ -225,8 +223,7 @@
       return groupedSection('Assets',assets,totA) +
         groupedSection('Liabilities',liab,totL) +
         groupedSection('Equity',eq,totE) +
-        `<div class="grand-total"><span>Total Liabilities and Equity</span><span>${money(totLE)}</span></div>
-         <p class="${balanced?'balance-ok':'balance-bad'}">${balanced?'✓ Balanced.':'⚠ Does not balance by KES '+money(Math.abs(totA-totLE))+' — investigate.'}</p>`;
+        `<div class="grand-total"><span>Total Liabilities and Equity</span><span>${money(totLE)}</span></div>`;
     }
 
     function renderCFHTML(data) {
