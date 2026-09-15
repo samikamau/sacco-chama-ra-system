@@ -25,11 +25,47 @@
     </main>
   </div>
 
+  <div class="drawer-backdrop" id="edit-backdrop" onclick="closeEditDrawer()"></div>
+  <div class="drawer" id="edit-drawer">
+    <h2>Edit member</h2>
+    <div class="field"><label>Phone</label><input id="e-phone" placeholder="2547XXXXXXXX"></div>
+    <div class="field"><label>Email</label><input id="e-email" type="email"></div>
+    <div class="field"><label>Membership category</label><input id="e-category" placeholder="e.g. A"></div>
+    <div class="field"><label>Monthly contribution (expected shares, KES)</label><input id="e-amount" type="number"></div>
+    <div class="field"><label>Occupation</label><input id="e-occupation"></div>
+
+    <div style="margin-top:16px;font-weight:600;font-size:14px;border-top:1px solid var(--color-line);padding-top:12px">KYC</div>
+    <div class="field"><label>ID type</label>
+      <select id="e-id-type">
+        <option value="national_id">National ID</option>
+        <option value="passport">Passport</option>
+        <option value="alien_id">Alien ID</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="field"><label>ID number</label><input id="e-id-number"></div>
+    <div class="field"><label>KYC status</label>
+      <select id="e-kyc-status">
+        <option value="pending">Pending</option>
+        <option value="verified">Verified</option>
+        <option value="rejected">Rejected</option>
+      </select>
+    </div>
+    <div class="field"><label>KYC notes</label><input id="e-kyc-notes"></div>
+
+    <p id="edit-error" class="error" style="display:none"></p>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn accent" onclick="saveEdit()">Save</button>
+      <button class="btn" style="background:var(--color-muted)" onclick="closeEditDrawer()">Cancel</button>
+    </div>
+  </div>
+
   <script src="js/config.js"></script>
   <script src="js/nav.js"></script>
   <script src="js/auth.js"></script>
   <script>
     let orgId;
+    let currentMember = null; // { m, kyc } from the most recent load()
 
     function getMemberId() {
       return new URLSearchParams(window.location.search).get("id");
@@ -48,6 +84,7 @@
       if (error || !m) { content.innerHTML = `<p class="error">${error ? error.message : "Member not found."}</p>`; return; }
 
       const kyc = m.member_kyc && m.member_kyc.length ? m.member_kyc[0] : {};
+      currentMember = { m, kyc };
 
       // Contributions (expected vs paid across all periods)
       const { data: contribs } = await supabaseClient
@@ -88,6 +125,7 @@
             <div style="text-align:right">
               <span class="status ${m.status === 'active' ? 'paid' : 'unpaid'}">${m.status}</span>
               <span class="status ${kycClass}" style="margin-left:6px">KYC: ${kyc.kyc_status || 'pending'}</span>
+              <div style="margin-top:8px"><button class="btn" onclick="openEditDrawer()">Edit member</button></div>
             </div>
           </div>
           <div class="kv" style="margin-top:16px">
@@ -164,6 +202,70 @@
           </table>
         </div>
       `;
+    }
+
+    function openEditDrawer() {
+      if (!currentMember) return;
+      const { m, kyc } = currentMember;
+      document.getElementById("e-phone").value = m.phone || "";
+      document.getElementById("e-email").value = m.email || "";
+      document.getElementById("e-category").value = m.membership_category || "";
+      document.getElementById("e-amount").value = m.monthly_contribution || "";
+      document.getElementById("e-occupation").value = m.occupation || "";
+      document.getElementById("e-id-type").value = kyc.id_type || "national_id";
+      document.getElementById("e-id-number").value = kyc.id_number || "";
+      document.getElementById("e-kyc-status").value = kyc.kyc_status || "pending";
+      document.getElementById("e-kyc-notes").value = kyc.kyc_notes || "";
+      document.getElementById("edit-error").style.display = "none";
+      document.getElementById("edit-backdrop").classList.add("open");
+      document.getElementById("edit-drawer").classList.add("open");
+    }
+
+    function closeEditDrawer() {
+      document.getElementById("edit-backdrop").classList.remove("open");
+      document.getElementById("edit-drawer").classList.remove("open");
+    }
+
+    async function saveEdit() {
+      const errorEl = document.getElementById("edit-error");
+      errorEl.style.display = "none";
+      const memberId = getMemberId();
+
+      const memberPayload = {
+        phone: document.getElementById("e-phone").value.trim() || null,
+        email: document.getElementById("e-email").value.trim() || null,
+        membership_category: document.getElementById("e-category").value.trim() || null,
+        monthly_contribution: document.getElementById("e-amount").value || null,
+        occupation: document.getElementById("e-occupation").value.trim() || null,
+      };
+      const { error: mErr } = await supabaseClient.from("members")
+        .update(memberPayload).eq("id", memberId).eq("organisation_id", orgId);
+      if (mErr) { showError(errorEl, mErr.message); return; }
+
+      const kycStatus = document.getElementById("e-kyc-status").value;
+      const wasVerified = currentMember.kyc.kyc_status === "verified";
+      const kycPayload = {
+        id_type: document.getElementById("e-id-type").value,
+        id_number: document.getElementById("e-id-number").value.trim() || null,
+        kyc_status: kycStatus,
+        kyc_notes: document.getElementById("e-kyc-notes").value.trim() || null,
+        verification_date: kycStatus === "verified"
+          ? (wasVerified ? currentMember.kyc.verification_date : new Date().toISOString().slice(0,10))
+          : null,
+      };
+
+      let kErr;
+      if (currentMember.m.member_kyc && currentMember.m.member_kyc.length) {
+        ({ error: kErr } = await supabaseClient.from("member_kyc")
+          .update(kycPayload).eq("member_id", memberId));
+      } else {
+        ({ error: kErr } = await supabaseClient.from("member_kyc")
+          .insert({ member_id: memberId, organisation_id: orgId, ...kycPayload }));
+      }
+      if (kErr) { showError(errorEl, kErr.message); return; }
+
+      closeEditDrawer();
+      load();
     }
 
     (async () => {
