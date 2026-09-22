@@ -45,22 +45,35 @@
     <div class="card">
       <h2>Organisation type</h2>
       <p style="color:var(--color-muted);font-size:13px">
-        The organisation type controls which modules are visible and how members are identified.
-        Changing this affects all users immediately.
+        Your primary sector is set at signup and can only be changed by a Finlens platform administrator.
+        Additional sectors can be activated by contacting support.
       </p>
 
-      <div class="field" style="max-width:300px">
-        <label>Organisation type</label>
-        <select id="s-org-type">
-          <option value="sacco">SACCO</option>
-          <option value="chama">Chama / Investment Group</option>
-          <option value="residents_association">Residents Association</option>
-          <option value="investment_group">Investment Club</option>
-          <option value="welfare_group">Welfare Group</option>
-        </select>
+      <!-- Primary sector — read only -->
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+        <div>
+          <div style="font-size:13px;color:var(--color-muted);margin-bottom:4px">Primary sector</div>
+          <div id="primary-sector-display"
+            style="font-size:15px;font-weight:600;padding:8px 16px;background:var(--color-primary);
+                   color:#fff;border-radius:4px;display:inline-block">—</div>
+        </div>
+        <div id="type-description" style="flex:1;min-width:200px;font-size:13px;color:var(--color-muted);
+          padding:10px 14px;background:var(--color-bg);border-radius:4px"></div>
       </div>
 
-      <div style="margin-top:16px;padding:12px;background:var(--color-bg);border-radius:4px;font-size:13px" id="type-description"></div>
+      <!-- Additional active sectors -->
+      <div id="active-sectors-wrap" style="display:none">
+        <div style="font-size:13px;color:var(--color-muted);margin-bottom:6px">Additional active sectors</div>
+        <div id="active-sectors-list" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+      </div>
+
+      <!-- Hidden input to carry org_type value for save -->
+      <input type="hidden" id="s-org-type" value="sacco">
+
+      <p style="font-size:12px;color:var(--color-muted);margin-top:16px">
+        Need to activate a different sector? Contact
+        <a href="mailto:support@finlens.co.ke" style="color:var(--color-accent)">support@finlens.co.ke</a>
+      </p>
     </div>
 
     <div class="card">
@@ -193,9 +206,16 @@
     document.getElementById('type-description').textContent = ORG_DESCRIPTIONS[this.value] || '';
   });
 
+  const SECTOR_LABELS = {
+    sacco: 'SACCO', chama: 'Chama / Investment Group',
+    residents_association: 'Residents Association',
+    investment_group: 'Investment Club', welfare_group: 'Welfare Group',
+  };
+
   async function loadSettings() {
     const settings = await getOrgSettings(orgId);
-    document.getElementById('s-org-type').value           = settings.org_type || 'sacco';
+    const orgType = settings.org_type || 'sacco';
+    document.getElementById('s-org-type').value           = orgType;
     document.getElementById('s-show-loans').checked       = settings.show_loans !== false;
     document.getElementById('s-show-investments').checked = !!settings.show_investments;
     document.getElementById('s-show-assets').checked      = !!settings.show_assets;
@@ -203,7 +223,22 @@
     document.getElementById('s-member-prefix').value      = settings.member_id_prefix || 'SC';
     document.getElementById('s-contrib-label').value      = settings.contribution_label || 'Contributions';
     document.getElementById('s-fund-label').value         = settings.fund_label || 'Member Funds';
-    document.getElementById('type-description').textContent = ORG_DESCRIPTIONS[settings.org_type] || '';
+    document.getElementById('type-description').textContent = ORG_DESCRIPTIONS[orgType] || '';
+    document.getElementById('primary-sector-display').textContent = SECTOR_LABELS[orgType] || orgType;
+
+    // Load active sectors
+    const { data: sectors } = await supabaseClient.rpc('fn_org_sectors', {
+      p_organisation_id: orgId
+    });
+    const additional = (sectors||[]).filter(s => !s.is_primary);
+    if (additional.length) {
+      document.getElementById('active-sectors-wrap').style.display = 'block';
+      document.getElementById('active-sectors-list').innerHTML = additional.map(s => `
+        <span style="padding:4px 12px;border:1px solid var(--color-line);border-radius:999px;
+                     font-size:13px;background:var(--color-bg)">
+          ${SECTOR_LABELS[s.sector]||s.sector}
+        </span>`).join('');
+    }
   }
 
   async function saveSettings() {

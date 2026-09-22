@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Platform Admin — Finlens</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .badge-sector { display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;background:var(--color-primary);color:#fff;margin:2px }
+  .badge-primary { background:var(--color-accent) }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <nav class="nav">
+    <div class="brand">Finlens Admin</div>
+    <a href="platform-admin.html" class="active">Organisations</a>
+    <a href="index.html">My Dashboard</a>
+    <a href="#" onclick="signOut()" class="nav-signout">Sign out</a>
+  </nav>
+
+  <main class="main">
+    <h1>Platform Administration</h1>
+    <p style="color:var(--color-muted);font-size:13px;margin-bottom:20px">
+      Manage organisations, activate sectors, and view all registered accounts.
+    </p>
+
+    <!-- Stats -->
+    <div class="kpi-grid" style="margin-bottom:20px" id="platform-stats">
+      <div class="kpi-card" style="background:#F3EBD8">
+        <div class="kpi-num" id="stat-orgs">—</div>
+        <div class="kpi-label">Organisations</div>
+      </div>
+      <div class="kpi-card" style="background:#F3EBD8">
+        <div class="kpi-num" id="stat-users">—</div>
+        <div class="kpi-label">Users</div>
+      </div>
+      <div class="kpi-card" style="background:#F3EBD8">
+        <div class="kpi-num" id="stat-sectors">—</div>
+        <div class="kpi-label">Active sectors</div>
+      </div>
+    </div>
+
+    <!-- Organisations table -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h2 style="margin:0">Organisations</h2>
+        <input id="org-search" placeholder="Search name…" oninput="filterOrgs()" style="width:220px">
+      </div>
+      <table id="orgs-table">
+        <thead><tr>
+          <th>Organisation</th>
+          <th>Primary sector</th>
+          <th>Active sectors</th>
+          <th>Users</th>
+          <th>Signed up</th>
+          <th>Actions</th>
+        </tr></thead>
+        <tbody id="orgs-body"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+
+    <!-- Activate sector modal -->
+    <div id="sector-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:50;align-items:center;justify-content:center">
+      <div class="card" style="width:420px;max-width:94vw;padding:24px">
+        <h2 style="margin-bottom:4px">Activate sector</h2>
+        <p id="modal-org-name" style="color:var(--color-muted);font-size:13px;margin-bottom:16px"></p>
+        <div class="field">
+          <label>Sector to activate</label>
+          <select id="modal-sector">
+            <option value="sacco">SACCO</option>
+            <option value="chama">Chama / Investment Group</option>
+            <option value="residents_association">Residents Association</option>
+            <option value="investment_group">Investment Club</option>
+            <option value="welfare_group">Welfare Group</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Notes (reason for activation)</label>
+          <input id="modal-notes" placeholder="e.g. Requested via email 2026-09-22">
+        </div>
+        <p id="modal-error" class="error" style="display:none"></p>
+        <div style="display:flex;gap:8px;margin-top:16px">
+          <button class="btn accent" onclick="confirmActivate()">Activate sector</button>
+          <button class="btn" style="background:var(--color-muted)" onclick="closeModal()">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  let allOrgs = [], currentOrgId = null;
+
+  const SECTOR_LABELS = {
+    sacco:'SACCO', chama:'Chama', residents_association:'Residents Assoc.',
+    investment_group:'Investment Club', welfare_group:'Welfare Group',
+  };
+
+  async function checkAdmin() {
+    const { data, error } = await supabaseClient.from('platform_admins')
+      .select('user_id').limit(1);
+    if (error || !data?.length) {
+      document.querySelector('main').innerHTML =
+        '<div class="card" style="text-align:center;padding:40px"><h2>Access denied</h2><p>You do not have platform admin access.</p></div>';
+      return false;
+    }
+    return true;
+  }
+
+  async function loadOrgs() {
+    // Load organisations with their sectors and user counts
+    const [{ data: orgs }, { data: sectors }, { data: orgUsers }] = await Promise.all([
+      supabaseClient.from('organisations').select('id,name,org_type,created_at').order('created_at', {ascending:false}),
+      supabaseClient.from('organisation_sectors').select('organisation_id,sector,is_primary,activated_at'),
+      supabaseClient.from('organisation_users').select('organisation_id,user_id').eq('status','active'),
+    ]);
+
+    allOrgs = (orgs||[]).map(o => ({
+      ...o,
+      sectors: (sectors||[]).filter(s => s.organisation_id === o.id),
+      userCount: (orgUsers||[]).filter(u => u.organisation_id === o.id).length,
+    }));
+
+    // Stats
+    document.getElementById('stat-orgs').textContent = allOrgs.length;
+    document.getElementById('stat-users').textContent = (orgUsers||[]).length;
+    document.getElementById('stat-sectors').textContent = (sectors||[]).length;
+
+    renderOrgs(allOrgs);
+  }
+
+  function renderOrgs(orgs) {
+    const tbody = document.getElementById('orgs-body');
+    if (!orgs.length) { tbody.innerHTML='<tr><td colspan="6" class="empty">No organisations.</td></tr>'; return; }
+    tbody.innerHTML = orgs.map(o => {
+      const primary = o.sectors.find(s=>s.is_primary);
+      const additional = o.sectors.filter(s=>!s.is_primary);
+      return `<tr>
+        <td><strong>${o.name}</strong><br><span style="font-size:11px;color:var(--color-muted)">${o.id.slice(0,8)}…</span></td>
+        <td><span class="badge-sector badge-primary">${SECTOR_LABELS[primary?.sector||o.org_type]||o.org_type}</span></td>
+        <td>${additional.map(s=>`<span class="badge-sector">${SECTOR_LABELS[s.sector]||s.sector}</span>`).join('') || '<span style="color:var(--color-muted);font-size:12px">None</span>'}</td>
+        <td>${o.userCount}</td>
+        <td style="font-size:12px;color:var(--color-muted)">${o.created_at?.slice(0,10)||'—'}</td>
+        <td><button class="btn" style="font-size:12px;padding:3px 10px" onclick="openModal('${o.id}','${o.name.replace(/'/g,"\\'")}')">+ Sector</button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  function filterOrgs() {
+    const q = document.getElementById('org-search').value.toLowerCase();
+    renderOrgs(q ? allOrgs.filter(o=>o.name.toLowerCase().includes(q)) : allOrgs);
+  }
+
+  function openModal(orgId, orgName) {
+    currentOrgId = orgId;
+    document.getElementById('modal-org-name').textContent = orgName;
+    document.getElementById('modal-error').style.display = 'none';
+    document.getElementById('modal-notes').value = '';
+    const modal = document.getElementById('sector-modal');
+    modal.style.display = 'flex';
+  }
+
+  function closeModal() {
+    document.getElementById('sector-modal').style.display = 'none';
+    currentOrgId = null;
+  }
+
+  async function confirmActivate() {
+    const errorEl = document.getElementById('modal-error');
+    errorEl.style.display = 'none';
+    const sector = document.getElementById('modal-sector').value;
+    const notes  = document.getElementById('modal-notes').value.trim() || null;
+
+    const { error } = await supabaseClient.rpc('fn_activate_sector', {
+      p_organisation_id: currentOrgId,
+      p_sector:          sector,
+      p_notes:           notes,
+    });
+
+    if (error) { showError(errorEl, error.message); return; }
+    closeModal();
+    loadOrgs();
+  }
+
+  async function deactivateSector(orgId, sector, orgName) {
+    if (!confirm(`Remove "${SECTOR_LABELS[sector]||sector}" sector from ${orgName}? This cannot be undone.`)) return;
+    const { error } = await supabaseClient.rpc('fn_deactivate_sector', {
+      p_organisation_id: orgId,
+      p_sector:          sector,
+    });
+    if (error) { alert('Error: ' + error.message); return; }
+    loadOrgs();
+  }
+
+  // Close modal on backdrop click
+  document.getElementById('sector-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+  });
+
+  (async () => {
+    const session = await requireSession(); if (!session) return;
+    if (!await checkAdmin()) return;
+    loadOrgs();
+  })();
+</script>
+<script>
+function toggleNav(h){h.parentElement.classList.toggle('nav-open');}
+</script>
+</body>
+</html>

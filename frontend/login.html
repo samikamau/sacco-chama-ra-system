@@ -217,6 +217,8 @@
         receive_comms: comms,
         org_type_pref: orgType,
       });
+      // Note: primary sector is seeded server-side when the org is created.
+      // org_type_pref is stored here for reference during org setup.
     }
 
     successEl.innerHTML = `
