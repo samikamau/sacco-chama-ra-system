@@ -127,14 +127,16 @@
           <option value="welfare_group">Welfare Group</option>
         </select>
       </div>
-      <label class="check-label">
-        <input type="checkbox" id="su-comms">
-        <span>I would like to receive product updates, tips, and occasional communications from Finlens.</span>
-      </label>
-      <label class="check-label" style="margin-top:10px">
-        <input type="checkbox" id="su-terms">
-        <span>I agree to the <a href="#" style="color:var(--color-accent)">Terms of Service</a> and <a href="#" style="color:var(--color-accent)">Privacy Policy</a> *</span>
-      </label>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:var(--color-muted);line-height:1.5">
+          <input type="checkbox" id="su-comms" style="margin-top:2px;flex-shrink:0;width:15px;height:15px">
+          <span>I would like to receive product updates, tips, and occasional communications from Finlens.</span>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:var(--color-muted);line-height:1.5">
+          <input type="checkbox" id="su-terms" style="margin-top:2px;flex-shrink:0;width:15px;height:15px">
+          <span>I agree to the <a href="#" style="color:var(--color-accent)">Terms of Service</a> and <a href="#" style="color:var(--color-accent)">Privacy Policy</a> <span style="color:var(--color-alert)">*</span></span>
+        </label>
+      </div>
       <button class="btn accent" style="width:100%;margin-top:16px" onclick="signUp()">Create account</button>
       <p id="su-error" class="error" style="display:none"></p>
       <p id="su-success" style="display:none;color:var(--color-success);font-size:13px;text-align:center;margin-top:12px"></p>
