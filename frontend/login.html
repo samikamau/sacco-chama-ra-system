@@ -101,24 +101,20 @@
 
     <!-- SIGN UP -->
     <div id="pane-signup" style="display:none">
-      <div style="display:flex;gap:10px">
-        <div class="field" style="flex:1"><label>Full name *</label>
-          <input id="su-name" placeholder="Jane Doe"></div>
-      </div>
+      <div class="field"><label>Full name *</label>
+        <input id="su-name" placeholder="Jane Doe"></div>
       <div class="field"><label>Email address *</label>
         <input id="su-email" type="email" placeholder="you@example.com"></div>
-      <div class="field"><label>Company / Organisation name</label>
-        <input id="su-company" placeholder="e.g. Jua Kali SACCO, Pamoja Chama"></div>
       <div class="field"><label>Telephone number</label>
         <input id="su-tel" type="tel" placeholder="e.g. 0722 000 000"></div>
       <hr class="divider">
-      <div class="field"><label>Password *</label>
-        <input id="su-password" type="password" autocomplete="new-password" placeholder="Min. 8 characters"></div>
-      <div class="field"><label>Confirm password *</label>
-        <input id="su-confirm" type="password" autocomplete="new-password"></div>
-      <hr class="divider">
       <div class="field">
-        <label>Organisation type</label>
+        <label>Organisation name *</label>
+        <input id="su-company" placeholder="e.g. Jua Kali SACCO, Pamoja Chama, Greenfields Estate">
+        <p style="font-size:12px;color:var(--color-muted);margin-top:4px">This becomes your organisation's display name in the system.</p>
+      </div>
+      <div class="field">
+        <label>Organisation type *</label>
         <select id="su-org-type">
           <option value="sacco">SACCO</option>
           <option value="chama">Chama / Investment Group</option>
@@ -126,7 +122,13 @@
           <option value="investment_group">Investment Club</option>
           <option value="welfare_group">Welfare Group</option>
         </select>
+        <p style="font-size:12px;color:var(--color-muted);margin-top:4px">You can only select one type. Additional sectors require admin approval.</p>
       </div>
+      <hr class="divider">
+      <div class="field"><label>Password *</label>
+        <input id="su-password" type="password" autocomplete="new-password" placeholder="Min. 8 characters"></div>
+      <div class="field"><label>Confirm password *</label>
+        <input id="su-confirm" type="password" autocomplete="new-password"></div>
       <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
         <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:var(--color-muted);line-height:1.5">
           <input type="checkbox" id="su-comms" style="margin-top:2px;flex-shrink:0;width:15px;height:15px">
@@ -185,8 +187,9 @@
     const terms    = document.getElementById('su-terms').checked;
 
     // Validation
-    if (!name)  { showError(errorEl,'Full name is required.'); return; }
-    if (!email) { showError(errorEl,'Email address is required.'); return; }
+    if (!name)    { showError(errorEl,'Full name is required.'); return; }
+    if (!email)   { showError(errorEl,'Email address is required.'); return; }
+    if (!company) { showError(errorEl,'Organisation name is required.'); return; }
     if (!password || password.length < 8) { showError(errorEl,'Password must be at least 8 characters.'); return; }
     if (password !== confirm) { showError(errorEl,'Passwords do not match.'); return; }
     if (!terms) { showError(errorEl,'Please accept the Terms of Service to continue.'); return; }
@@ -223,6 +226,7 @@
 
     successEl.innerHTML = `
       <strong>Account created!</strong><br>
+      Your organisation <strong>${company}</strong> has been set up.<br>
       Check your email (<strong>${email}</strong>) for a confirmation link,
       then sign in to get started.`;
     successEl.style.display = 'block';
