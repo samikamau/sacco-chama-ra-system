@@ -103,6 +103,19 @@ async function signOut() {
   window.location.href = "login.html";
 }
 
+// Draw text with the Edhafu logo (red "e" + "dhafu") inside a PDF line.
+// before/after are plain text either side of the logo. Returns end x.
+function pdfLogoText(doc, x, y, before, after, baseColor) {
+  const base = baseColor ?? 0;
+  const setBase = () => Array.isArray(base) ? doc.setTextColor(...base) : doc.setTextColor(base);
+  setBase();
+  if (before) { doc.text(before, x, y); x += doc.getTextWidth(before); }
+  doc.setTextColor(230, 57, 70); doc.text("e", x, y); x += doc.getTextWidth("e");
+  setBase(); doc.text("dhafu", x, y); x += doc.getTextWidth("dhafu");
+  if (after) { doc.text(after, x, y); x += doc.getTextWidth(after); }
+  return x;
+}
+
 function showError(el, message) {
   el.textContent = message; el.style.display = "block";
 }
