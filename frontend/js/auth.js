@@ -103,15 +103,34 @@ async function signOut() {
   window.location.href = "login.html";
 }
 
-// Draw text with the Edhafu logo (red "e" + "dhafu") inside a PDF line.
-// before/after are plain text either side of the logo. Returns end x.
-function pdfLogoText(doc, x, y, before, after, baseColor) {
+// Edhafu logo for PDFs: loaded once as a data URL so jsPDF can embed it.
+let EDHAFU_PDF_LOGO = null;
+const EDHAFU_LOGO_RATIO = 640 / 174;   // width / height of the logo image
+window.addEventListener('load', async () => {
+  try {
+    const blob = await (await fetch('images/edhafu-logo-dark.png')).blob();
+    EDHAFU_PDF_LOGO = await new Promise(res => {
+      const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob);
+    });
+  } catch (e) { /* falls back to text logo */ }
+});
+
+// Draw a PDF line with the Edhafu logo between before/after text.
+// Uses the logo image when loaded, otherwise the text version. Returns end x.
+function pdfLogoText(doc, x, y, before, after, baseColor, logoHeight) {
   const base = baseColor ?? 0;
   const setBase = () => Array.isArray(base) ? doc.setTextColor(...base) : doc.setTextColor(base);
   setBase();
   if (before) { doc.text(before, x, y); x += doc.getTextWidth(before); }
-  doc.setTextColor(230, 57, 70); doc.text("e", x, y); x += doc.getTextWidth("e");
-  setBase(); doc.text("dhafu", x, y); x += doc.getTextWidth("dhafu");
+  if (EDHAFU_PDF_LOGO) {
+    const h = logoHeight || doc.getFontSize() * 0.45;   // roughly matches text height in mm
+    const w = h * EDHAFU_LOGO_RATIO;
+    doc.addImage(EDHAFU_PDF_LOGO, 'PNG', x + 0.5, y - h * 0.78, w, h);
+    x += w + 1;
+  } else {
+    doc.setTextColor(230, 57, 70); doc.text("e", x, y); x += doc.getTextWidth("e");
+    setBase(); doc.text("dhafu", x, y); x += doc.getTextWidth("dhafu");
+  }
   if (after) { doc.text(after, x, y); x += doc.getTextWidth(after); }
   return x;
 }

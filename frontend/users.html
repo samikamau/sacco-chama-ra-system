@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <title>Users — Financial Operating System</title>
+<link rel="icon" type="image/png" sizes="32x32" href="images/edhafu-icon-32.png">
+<link rel="apple-touch-icon" href="images/edhafu-icon-180.png">
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -138,15 +140,14 @@
       });
       if (error) { showError(errEl, error.message); return; }
 
-      const signupUrl = window.location.origin + "/login.html";
+      const signupUrl = window.location.origin + "/login.html?invite=" + encodeURIComponent(data.email);
       okEl.style.display = "block";
       okEl.innerHTML = `
         <p style="color:var(--color-success)">Invitation created for <strong>${data.email}</strong> as <strong>${data.role}</strong>.</p>
-        <p style="font-size:13px;margin-top:8px"><strong>What happens next:</strong> this person needs an account before they can accept.
-        Ask an administrator to create their login in Supabase (Authentication &rarr; Users &rarr; Add user) using
-        <strong>${data.email}</strong>, then send them this link:</p>
-        <div class="invite-link">${signupUrl}</div>
-        <p style="font-size:13px;margin-top:8px">When they sign in, the invitation will appear at the top of this Users page for them to accept.</p>`;
+        <p style="font-size:13px;margin-top:8px">Send this link to <strong>${data.email}</strong>.
+        When they create their account with that email address, they join your organisation automatically.
+        If they already have an account, they can sign in and accept the invitation on the Users page.</p>
+        <div class="invite-link">${signupUrl}</div>`;
       document.getElementById("i-email").value = "";
       loadInvites();
     }

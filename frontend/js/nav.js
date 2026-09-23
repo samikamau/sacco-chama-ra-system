@@ -129,7 +129,7 @@ async function renderNav() {
   }).join('');
 
   mount.innerHTML = `
-    <div class="brand"><span class="edhafu-logo"><span class="e">e</span>dhafu</span></div>
+    <div class="brand"><img class="edhafu-logo" src="images/edhafu-logo-white.png" alt="Edhafu"></div>
     <div style="position:relative;margin-bottom:12px">
       <button type="button" onclick="toggleOrgSwitcher(event)"
         style="width:100%;text-align:left;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#fff;padding:8px 10px;border-radius:6px;font-size:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:6px">

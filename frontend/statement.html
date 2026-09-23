@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <title>Member Statements — Financial Operating System</title>
+<link rel="icon" type="image/png" sizes="32x32" href="images/edhafu-icon-32.png">
+<link rel="apple-touch-icon" href="images/edhafu-icon-180.png">
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -450,7 +452,7 @@
       // Header
       doc.setFontSize(18); doc.setFont(undefined, "bold");
       if (lastStatement.orgName) doc.text(lastStatement.orgName, 14, y);
-      else pdfLogoText(doc, 14, y, "", "", 0);
+      else pdfLogoText(doc, 14, y, "", "", 0, 9);
       y += 8;
       doc.setFontSize(11); doc.setFont(undefined, "normal");
       doc.text("Member Statement", 14, y); y += 6;

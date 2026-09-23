@@ -316,16 +316,11 @@ label { display: block; font-size: 13px; color: var(--color-muted); margin-botto
   margin: var(--space-4) 0 var(--space-2);
 }
 
-/* Edhafu logo: same design everywhere. Red "e"; "dhafu" follows the
-   background: white on dark (sidebar), green on light (cards, pages). */
-.edhafu-logo {
-  font-family: var(--font-display);
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1.15;
-  color: var(--color-primary);
-  white-space: nowrap;
-}
-.edhafu-logo .e { color: #E63946; }
-.nav .edhafu-logo, .edhafu-logo.on-dark { color: #FFFFFF; }
-.edhafu-logo.inline { font-size: inherit; line-height: inherit; }
+/* Edhafu logo image. White version on dark backgrounds (sidebar),
+   dark version on light backgrounds (sign-in cards). */
+img.edhafu-logo { display: block; height: 40px; width: auto; max-width: 100%; }
+.auth-brand img.edhafu-logo { height: 56px; margin: 0 auto; }
+
+/* Brand name written inside a sentence (too small for the image) */
+.edhafu-name { font-weight: 700; white-space: nowrap; }
+.edhafu-name .e { color: #E63946; }
