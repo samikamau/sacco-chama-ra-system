@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Banking — Financial Operating System</title>
+<link rel="icon" type="image/png" sizes="32x32" href="images/edhafu-icon-32.png">
+<link rel="apple-touch-icon" href="images/edhafu-icon-180.png">
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .tabs { display:flex; gap:4px; border-bottom:2px solid var(--color-line); margin-bottom:20px; flex-wrap:wrap; }
+  .tab { padding:8px 16px; cursor:pointer; border-bottom:3px solid transparent; font-size:14px; }
+  .tab.active { border-bottom-color:var(--color-accent); font-weight:600; }
+  .ob-row { display:grid; grid-template-columns:90px 1fr 140px 140px; gap:8px; align-items:center; padding:6px 0; border-bottom:1px solid var(--color-line); font-size:13px; }
+  .ob-row input { width:100%; box-sizing:border-box; }
+  .balance-bar { padding:10px 14px; border-radius:var(--radius); font-family:var(--font-mono); margin-top:8px; font-size:13px; }
+  .balance-bar.ok { background:#E4EEE6; color:var(--color-success); }
+  .balance-bar.bad { background:#F3E4E0; color:var(--color-alert); }
+  .split-row { display:grid; grid-template-columns:1fr 160px; gap:8px; align-items:center; padding:6px 0; border-bottom:1px solid var(--color-line); }
+  .split-row:last-child { border-bottom:none; }
+  .split-row input { width:100%; box-sizing:border-box; }
+  .split-total { display:flex; justify-content:space-between; font-weight:700; padding:8px 0; border-top:2px solid var(--color-ink); font-family:var(--font-mono); }
+  .loan-row { background:#F3EBD8; border-radius:3px; padding:8px 12px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center; font-size:13px; }
+  .loan-row input { width:140px; }
+  .bal-strip { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px,1fr)); gap:8px; margin:4px 0 16px; }
+  .bal-card { background:#F3EBD8; border-radius:4px; padding:8px 10px; }
+  .bal-card .lbl { font-size:11px; color:var(--color-muted); }
+  .bal-card .val { font-family:var(--font-mono); font-weight:700; font-size:14px; }
+  .bal-card.neg .val, .bal-note .neg { color:#B3261E; }
+  .bal-note { font-size:12px; color:var(--color-muted); margin-top:4px; font-family:var(--font-mono); }
+</style>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav" id="nav-mount"></nav>
+    <main class="main">
+      <h1>Banking</h1>
+
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab(0)">Bank Transfer</div>
+        <div class="tab" onclick="switchTab(1)">Account Balances</div>
+        <div class="tab" onclick="switchTab(2)">Record Payment</div>
+        <div class="tab" onclick="switchTab(3)">Payment History</div>
+      </div>
+
+      <!-- BANK TRANSFER -->
+      <div id="pane-0">
+        <div class="card">
+          <h2>Bank transfer</h2>
+          <p style="color:var(--color-muted);font-size:13px">Transfer money between bank, cash, and M-Pesa accounts. Posts Dr receiving account / Cr sending account.</p>
+          <div id="t-balances" class="bal-strip"></div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div class="field" style="flex:1;min-width:180px"><label>From account (source) *</label>
+              <select id="t-from" onchange="showTransferBalances()"></select>
+              <div class="bal-note" id="t-from-bal"></div></div>
+            <div class="field" style="flex:1;min-width:180px"><label>To account (destination) *</label>
+              <select id="t-to" onchange="showTransferBalances()"></select>
+              <div class="bal-note" id="t-to-bal"></div></div>
+          </div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div class="field" style="flex:1;min-width:140px"><label>Amount (KES) *</label><input id="t-amount" type="number" step="0.01" oninput="showTransferBalances()"></div>
+            <div class="field" style="flex:1;min-width:140px"><label>Date *</label><input id="t-date" type="date" onchange="loadTransferBalances()"></div>
+            <div class="field" style="flex:1;min-width:160px"><label>Reference</label><input id="t-ref" placeholder="e.g. TRF-001"></div>
+          </div>
+          <div class="field"><label>Description (optional)</label><input id="t-desc"></div>
+          <button class="btn accent" onclick="postTransfer()">Post transfer</button>
+          <p id="t-error" class="error" style="display:none"></p>
+          <p id="t-success" style="display:none;color:var(--color-success)"></p>
+        </div>
+
+        <div class="card">
+          <h2>Recent transfers</h2>
+          <table>
+            <thead><tr><th>Journal No.</th><th>Date</th><th>Description</th><th class="num">Amount</th></tr></thead>
+            <tbody id="t-history"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ACCOUNT BALANCES -->
+      <div id="pane-1" style="display:none">
+        <div class="card">
+          <h2>Bank account balances</h2>
+          <table>
+            <thead><tr><th>Code</th><th>Account</th><th>Type</th><th class="num">Balance (KES)</th></tr></thead>
+            <tbody id="bal-rows"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- RECORD PAYMENT -->
+      <div id="pane-2" style="display:none">
+        <div class="card">
+          <h2>Payment details</h2>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div class="field" style="flex:2;min-width:200px;position:relative">
+              <label>Member *</label>
+              <input id="f-member-search" type="text" placeholder="Search name or number…" autocomplete="off">
+              <input type="hidden" id="f-member">
+              <div id="f-member-list"></div>
+            </div>
+            <div class="field" style="flex:1;min-width:140px">
+              <label>Date *</label>
+              <input id="f-date" type="date">
+            </div>
+          </div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <div class="field" style="flex:1;min-width:160px">
+              <label>Received into *</label>
+              <select id="f-cash-account"></select>
+            </div>
+            <div class="field" style="flex:1;min-width:140px">
+              <label>Channel *</label>
+              <select id="f-channel">
+                <option value="mpesa">M-Pesa</option>
+                <option value="bank">Bank transfer</option>
+                <option value="cash">Cash</option>
+                <option value="cheque">Cheque</option>
+              </select>
+            </div>
+            <div class="field" style="flex:1;min-width:160px">
+              <label>Reference</label>
+              <input id="f-reference" placeholder="e.g. QAB123XY">
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Fund contributions</h2>
+          <p style="font-size:13px;color:var(--color-muted)">Enter amounts for each fund. Leave blank to skip.</p>
+          <div id="fund-splits"></div>
+          <div class="split-total">
+            <span>Total contributions</span>
+            <span id="contributions-total">KES 0.00</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Loan repayments</h2>
+          <div id="loan-repayment-section">
+            <p class="empty" style="font-size:13px">Select a member to see their active loans.</p>
+          </div>
+          <div id="loan-repay-total" style="display:none" class="split-total">
+            <span>Total loan repayments</span>
+            <span id="loans-total">KES 0.00</span>
+          </div>
+        </div>
+
+        <div class="card" style="background:var(--color-primary);color:#fff">
+          <div class="split-total" style="border-color:rgba(255,255,255,0.3);color:#fff;font-size:16px">
+            <span>Total payment received</span>
+            <span id="grand-total">KES 0.00</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <button class="btn accent" style="font-size:15px;padding:12px 28px" onclick="postPayment()">Post payment</button>
+          <p id="pay-error" class="error" style="display:none"></p>
+          <p id="pay-success" style="display:none;color:var(--color-success)"></p>
+        </div>
+      </div>
+
+      <!-- PAYMENT HISTORY -->
+      <div id="pane-3" style="display:none">
+        <div class="card">
+          <h2>Payment history</h2>
+          <table>
+            <thead><tr><th>Date</th><th>Member</th><th>Channel</th><th>Reference</th><th class="num">Amount</th><th>Status</th></tr></thead>
+            <tbody id="payment-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/member-search.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let orgId, paymentAccounts = [], fundTypes = [], activeLoans = [];
+
+    function switchTab(i) {
+      [0,1,2,3].forEach(n => document.getElementById('pane-'+n).style.display = n===i?'block':'none');
+      document.querySelectorAll('.tab').forEach((el,n) => el.classList.toggle('active', n===i));
+      if (i===0) loadTransferHistory();
+      if (i===1) loadBalances();
+      if (i===3) loadPaymentHistory();
+    }
+
+    async function loadRefData() {
+      const { data: pa } = await supabaseClient.rpc('fn_payment_accounts', { p_organisation_id: orgId });
+      paymentAccounts = pa || [];
+
+      // Payment account selectors for transfer and for recording payments
+      const opts = paymentAccounts.map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join('');
+      document.getElementById('t-from').innerHTML = opts;
+      document.getElementById('t-to').innerHTML = opts;
+      document.getElementById('t-date').value = new Date().toISOString().slice(0,10);
+      if (paymentAccounts.length > 1) document.getElementById('t-to').value = paymentAccounts[1].id;
+      loadTransferBalances();
+      document.getElementById('f-cash-account').innerHTML = opts;
+      document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
+
+      // Members, for the Record Payment tab
+      const { data: paymentMembers } = await supabaseClient.from('members')
+        .select('id, member_number, full_name').eq('organisation_id', orgId)
+        .eq('status','active').order('full_name');
+      setupMemberSearch('f-member-search', 'f-member', 'f-member-list', paymentMembers || [], loadMemberLoans);
+
+      // Fund types, for the Record Payment tab
+      const { data: ft } = await supabaseClient.from('contribution_types')
+        .select('id,name,category').eq('organisation_id', orgId).eq('active',true).order('name');
+      fundTypes = ft || [];
+      buildFundSplits();
+
+      loadMemberLoans();
+    }
+
+    let acctBalances = {};
+
+    async function loadTransferBalances() {
+      const asAt = document.getElementById('t-date').value || new Date().toISOString().slice(0,10);
+      const { data, error } = await supabaseClient.rpc('fn_payment_account_balances',
+        { p_organisation_id: orgId, p_as_at: asAt });
+      if (error) { document.getElementById('t-balances').innerHTML = `<p class="error">${error.message}</p>`; return; }
+      acctBalances = {};
+      (data || []).forEach(b => acctBalances[b.account_id] = Number(b.balance));
+      document.getElementById('t-balances').innerHTML = (data || []).map(b => `
+        <div class="bal-card ${Number(b.balance) < 0 ? 'neg' : ''}">
+          <div class="lbl">${b.code} ${b.name}</div>
+          <div class="val">KES ${money(b.balance)}</div>
+        </div>`).join('') +
+        `<div style="grid-column:1/-1;font-size:11px;color:var(--color-muted)">Balances as at ${asAt}</div>`;
+      showTransferBalances();
+    }
+
+    function showTransferBalances() {
+      const from = document.getElementById('t-from').value;
+      const to   = document.getElementById('t-to').value;
+      const amt  = Number(document.getElementById('t-amount').value || 0);
+      const fmt  = n => `<span class="${n < 0 ? 'neg' : ''}">KES ${money(n)}</span>`;
+      const fb = acctBalances[from] ?? 0, tb = acctBalances[to] ?? 0;
+      document.getElementById('t-from-bal').innerHTML =
+        `Balance ${fmt(fb)}` + (amt ? ` &rarr; after ${fmt(fb - amt)}` : '') +
+        (amt > fb ? ` <span class="neg">(more than available)</span>` : '');
+      document.getElementById('t-to-bal').innerHTML =
+        `Balance ${fmt(tb)}` + (amt ? ` &rarr; after ${fmt(tb + amt)}` : '');
+    }
+
+    async function postTransfer() {
+      const errorEl = document.getElementById('t-error');
+      const successEl = document.getElementById('t-success');
+      errorEl.style.display = 'none'; successEl.style.display = 'none';
+      const from = document.getElementById('t-from').value;
+      const to   = document.getElementById('t-to').value;
+      const amt  = document.getElementById('t-amount').value;
+      const date = document.getElementById('t-date').value;
+      if (!from || !to || !amt || !date) { showError(errorEl, 'All fields except description are required.'); return; }
+      if (from === to) { showError(errorEl, 'Source and destination must be different accounts.'); return; }
+      const avail = acctBalances[from] ?? 0;
+      if (Number(amt) > avail && !confirm(`The source account only has KES ${money(avail)}. This transfer will leave it at KES ${money(avail - Number(amt))}. Post anyway?`)) return;
+      const { error } = await supabaseClient.rpc('fn_bank_transfer', {
+        p_organisation_id: orgId,
+        p_from_account_id: from,
+        p_to_account_id: to,
+        p_amount: amt,
+        p_transfer_date: date,
+        p_reference: document.getElementById('t-ref').value || null,
+        p_description: document.getElementById('t-desc').value || null,
+      });
+      if (error) { showError(errorEl, error.message); return; }
+      successEl.textContent = 'Transfer posted successfully.';
+      successEl.style.display = 'block';
+      document.getElementById('t-amount').value = '';
+      document.getElementById('t-ref').value = '';
+      document.getElementById('t-desc').value = '';
+      loadTransferHistory();
+      loadTransferBalances();
+    }
+
+    async function loadTransferHistory() {
+      const { data } = await supabaseClient.from('journal_entries')
+        .select('journal_number, entry_date, description, journal_lines(debit)')
+        .eq('organisation_id', orgId).eq('source_type', 'bank_transfer')
+        .order('entry_date', { ascending: false }).limit(20);
+      const tbody = document.getElementById('t-history');
+      if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="4" class="empty">No transfers yet.</td></tr>`; return; }
+      tbody.innerHTML = data.map(j => {
+        const total = (j.journal_lines||[]).reduce((s,l)=>s+Number(l.debit),0);
+        return `<tr><td><code>${j.journal_number||'—'}</code></td><td>${j.entry_date}</td><td>${j.description}</td><td class="num">${money(total)}</td></tr>`;
+      }).join('');
+    }
+
+    async function loadBalances() {
+      const { data } = await supabaseClient.rpc('fn_payment_accounts', { p_organisation_id: orgId });
+      const tbody = document.getElementById('bal-rows');
+      if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="4" class="empty">No bank accounts configured.</td></tr>`; return; }
+      const rows = await Promise.all((data||[]).map(async a => {
+        const { data: bal } = await supabaseClient.rpc('fn_book_balance', { p_account_id: a.id, p_as_at: null });
+        return `<tr><td><code>${a.code}</code></td><td>${a.name}</td><td style="color:var(--color-muted)">${a.subtype}</td><td class="num" style="font-family:var(--font-mono)">${money(bal||0)}</td></tr>`;
+      }));
+      tbody.innerHTML = rows.join('');
+    }
+
+    function buildFundSplits() {
+      document.getElementById('fund-splits').innerHTML = fundTypes.map(ft => `
+        <div class="split-row">
+          <div>
+            <div style="font-weight:500">${ft.name}</div>
+            <div style="font-size:12px;color:var(--color-muted)">${ft.category.replace(/_/g,' ')}</div>
+          </div>
+          <input type="number" step="0.01" class="fund-amount" data-id="${ft.id}"
+            placeholder="0.00" oninput="updateTotals()">
+        </div>`).join('');
+    }
+
+    async function loadMemberLoans() {
+      const memberId = document.getElementById('f-member').value;
+      const section = document.getElementById('loan-repayment-section');
+      const totalRow = document.getElementById('loan-repay-total');
+
+      if (!memberId) {
+        section.innerHTML = `<p class="empty" style="font-size:13px">Select a member to see their active loans.</p>`;
+        totalRow.style.display = 'none';
+        activeLoans = [];
+        return;
+      }
+
+      const { data: loans } = await supabaseClient.from('loans')
+        .select('id, principal, status, term_months, loan_products(name), loan_repayments(principal_portion)')
+        .eq('member_id', memberId)
+        .in('status', ['active','disbursed','approved','pending_approval']);
+
+      activeLoans = loans || [];
+
+      if (!activeLoans.length) {
+        section.innerHTML = `<p class="empty" style="font-size:13px">No active loans for this member.</p>`;
+        totalRow.style.display = 'none';
+        return;
+      }
+
+      totalRow.style.display = 'flex';
+      section.innerHTML = activeLoans.map(l => {
+        const repaid = (l.loan_repayments||[]).reduce((s,r)=>s+Number(r.principal_portion),0);
+        const outstanding = Number(l.principal) - repaid;
+        return `<div class="loan-row" style="display:block;margin-bottom:10px">
+          <div style="margin-bottom:6px">
+            <span style="font-weight:600">${l.loan_products.name}</span>
+            <span style="font-size:12px;color:var(--color-muted);margin-left:12px">
+              Principal: KES ${money(l.principal)} &nbsp;|&nbsp; Outstanding: KES ${money(outstanding)}
+            </span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <label style="font-size:13px;min-width:140px">Repayment amount:</label>
+            <input type="number" step="0.01" class="loan-amount" data-id="${l.id}"
+              placeholder="0.00" oninput="updateTotals()" style="width:180px">
+            <span style="font-size:12px;color:var(--color-muted)">(max KES ${money(outstanding)})</span>
+          </div>
+        </div>`;
+      }).join('');
+      updateTotals();
+    }
+
+    function updateTotals() {
+      let contribs = 0, loans = 0;
+      document.querySelectorAll('.fund-amount').forEach(i => contribs += Number(i.value||0));
+      document.querySelectorAll('.loan-amount').forEach(i => loans += Number(i.value||0));
+      document.getElementById('contributions-total').textContent = 'KES ' + money(contribs);
+      document.getElementById('loans-total').textContent = 'KES ' + money(loans);
+      document.getElementById('grand-total').textContent = 'KES ' + money(contribs + loans);
+    }
+
+    async function postPayment() {
+      const errorEl = document.getElementById('pay-error');
+      const successEl = document.getElementById('pay-success');
+      errorEl.style.display = 'none'; successEl.style.display = 'none';
+
+      const memberId = document.getElementById('f-member').value;
+      const date     = document.getElementById('f-date').value;
+      const cashAcct = document.getElementById('f-cash-account').value;
+      const channel  = document.getElementById('f-channel').value;
+      const ref      = document.getElementById('f-reference').value || null;
+
+      if (!memberId || !date || !cashAcct) {
+        showError(errorEl, 'Member, date and account are required.'); return;
+      }
+
+      const allocations = [];
+      document.querySelectorAll('.fund-amount').forEach(i => {
+        const amt = Number(i.value||0);
+        if (amt > 0) allocations.push({ contribution_type_id: i.dataset.id, amount: amt });
+      });
+
+      const loanRepayments = [];
+      document.querySelectorAll('.loan-amount').forEach(i => {
+        const amt = Number(i.value||0);
+        if (amt > 0) loanRepayments.push({ loan_id: i.dataset.id, amount: amt });
+      });
+
+      if (!allocations.length && !loanRepayments.length) {
+        showError(errorEl, 'Enter at least one fund contribution or loan repayment amount.'); return;
+      }
+
+      if (allocations.length) {
+        const { error } = await supabaseClient.rpc('fn_record_and_post_split_payment', {
+          p_organisation_id: orgId,
+          p_member_id: memberId,
+          p_channel: channel,
+          p_reference: ref,
+          p_description: `Payment received - ${ref||date}`,
+          p_cash_account_id: cashAcct,
+          p_allocations: allocations,
+        });
+        if (error) { showError(errorEl, 'Contributions: ' + error.message); return; }
+      }
+
+      for (const lr of loanRepayments) {
+        const { error } = await supabaseClient.rpc('fn_record_loan_repayment', {
+          p_loan_id: lr.loan_id,
+          p_amount: lr.amount,
+          p_channel: channel,
+          p_reference: ref,
+          p_cash_account_id: cashAcct,
+        });
+        if (error) { showError(errorEl, 'Loan repayment: ' + error.message); return; }
+      }
+
+      const total = allocations.reduce((s,a)=>s+a.amount,0) +
+                    loanRepayments.reduce((s,l)=>s+l.amount,0);
+      successEl.textContent = `Payment of KES ${money(total)} posted successfully.`;
+      successEl.style.display = 'block';
+
+      document.querySelectorAll('.fund-amount,.loan-amount').forEach(i => i.value = '');
+      document.getElementById('f-reference').value = '';
+      updateTotals();
+      loadMemberLoans();
+    }
+
+    async function loadPaymentHistory() {
+      const { data, error } = await supabaseClient.from('payments')
+        .select('transaction_date, channel, reference, amount, status, members(full_name)')
+        .eq('organisation_id', orgId)
+        .order('transaction_date', { ascending: false })
+        .limit(100);
+      const tbody = document.getElementById('payment-rows');
+      if (error) { tbody.innerHTML=`<tr><td colspan="6" class="error">${error.message}</td></tr>`; return; }
+      if (!data.length) { tbody.innerHTML=`<tr><td colspan="6" class="empty">No payments yet.</td></tr>`; return; }
+      tbody.innerHTML = data.map(p=>`
+        <tr>
+          <td>${p.transaction_date}</td>
+          <td>${p.members?.full_name||'—'}</td>
+          <td>${p.channel}</td>
+          <td>${p.reference||'—'}</td>
+          <td class="num">${money(p.amount)}</td>
+          <td><span class="status ${p.status==='posted'?'paid':'partial'}">${p.status}</span></td>
+        </tr>`).join('');
+    }
+
+    (async () => {
+      const session = await requireSession(); if (!session) return;
+      const org = await currentOrg(); if (!org) return;
+      orgId = org.organisation_id;
+      await loadRefData();
+    })();
+  </script>
+
+</body>
+</html>
