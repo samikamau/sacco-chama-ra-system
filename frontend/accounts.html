@@ -146,7 +146,7 @@
         '<option value="">— top level —</option>' +
         CATEGORIES.map(c => {
           const a = allAccounts.find(x => x.code === c.code);
-          return a ? `<option value="${a.id}">${c.code} — ${c.label}</option>` : '';
+          return a ? `<option value="${a.id}">${c.code} - ${c.label}</option>` : '';
         }).join('');
 
       const sections = CATEGORIES.map(cat => {

@@ -140,11 +140,11 @@
       document.getElementById("b-supplier").innerHTML =
         suppliers.map(s=>`<option value="${s.id}">${s.name}</option>`).join("");
 
-      // Expense and asset accounts that can be billed to (never control accounts)
+      // Only expense sub-accounts (under 6000 Expenses) can be billed to
       const { data: accts } = await supabaseClient.from("chart_of_accounts")
         .select("id, code, name, account_type, is_control")
         .eq("organisation_id", orgId).eq("is_active", true).order("code");
-      expenseAccounts = (accts||[]).filter(a => !a.is_control && ['expense','asset'].includes(a.account_type));
+      expenseAccounts = (accts||[]).filter(a => !a.is_control && a.account_type === 'expense');
 
       const { data: pay } = await supabaseClient.rpc("fn_payment_accounts",{p_organisation_id:orgId});
       paymentAccounts = pay || [];
@@ -160,7 +160,9 @@
       const tr = document.createElement("tr");
       tr.id = "bl-"+lineCount;
       tr.innerHTML = `
-        <td><select class="bl-acct">${expenseAccounts.map(a=>`<option value="${a.id}">${a.code} — ${a.name}</option>`).join("")}</select></td>
+        <td><select class="bl-acct">${expenseAccounts.length
+          ? '<option value="">Select expense account</option>' + expenseAccounts.map(a=>`<option value="${a.id}">${a.code} - ${a.name}</option>`).join("")
+          : '<option value="">No expense accounts: add one under 6000 Expenses</option>'}</select></td>
         <td><input class="bl-desc" placeholder="Line description"></td>
         <td><input class="bl-amt" type="number" step="0.01" oninput="updateBillTotal()"></td>
         <td><button class="btn" style="padding:2px 8px;background:var(--color-alert)" onclick="document.getElementById('bl-${lineCount}').remove();updateBillTotal()">×</button></td>`;
@@ -178,12 +180,14 @@
       const okEl = document.getElementById("bill-success");
       errEl.style.display="none"; okEl.style.display="none";
 
-      const lines = [];
+      const lines = []; let missingAcct = false;
       document.querySelectorAll("#bill-lines tr").forEach(r=>{
+        if (!r.querySelector(".bl-acct")?.value && Number(r.querySelector(".bl-amt")?.value||0) > 0) missingAcct = true;
         const acct = r.querySelector(".bl-acct")?.value;
         const amt = Number(r.querySelector(".bl-amt")?.value||0);
         if (acct && amt>0) lines.push({account_id:acct, description:r.querySelector(".bl-desc").value||null, amount:amt});
       });
+      if (missingAcct) { showError(errEl,"Select an expense account for every line with an amount."); return; }
       if (!lines.length) { showError(errEl,"Add at least one bill line with an amount."); return; }
       if (!document.getElementById("b-supplier").value) { showError(errEl,"Select a supplier. Add one on the Suppliers tab if the list is empty."); return; }
 
@@ -254,7 +258,7 @@
 
         <h3>Lines</h3>
         <table style="margin-bottom:12px"><thead><tr><th>Account</th><th>Description</th><th class="num">Amount</th></tr></thead>
-        <tbody>${(lines||[]).map(l=>`<tr><td>${l.chart_of_accounts.code} — ${l.chart_of_accounts.name}</td><td>${l.description??""}</td><td class="num">${money(l.amount)}</td></tr>`).join("")}
+        <tbody>${(lines||[]).map(l=>`<tr><td>${l.chart_of_accounts.code} - ${l.chart_of_accounts.name}</td><td>${l.description??""}</td><td class="num">${money(l.amount)}</td></tr>`).join("")}
         <tr style="font-weight:700;border-top:2px solid var(--color-ink)"><td colspan="2">Total</td><td class="num">${money(bill.total_amount)}</td></tr>
         <tr><td colspan="2">Paid</td><td class="num">${money(bill.amount_paid)}</td></tr>
         <tr style="font-weight:700"><td colspan="2">Outstanding</td><td class="num">${money(outstanding)}</td></tr>
@@ -262,7 +266,7 @@
 
         ${(pays||[]).length?`<h3>Payments</h3>
           <table style="margin-bottom:12px"><thead><tr><th>Date</th><th>Account</th><th>Channel</th><th>Reference</th><th class="num">Amount</th></tr></thead>
-          <tbody>${pays.map(p=>`<tr><td>${p.payment_date}</td><td>${p.chart_of_accounts.code} — ${p.chart_of_accounts.name}</td><td>${p.channel}</td><td>${p.reference??"—"}</td><td class="num">${money(p.amount)}</td></tr>`).join("")}</tbody></table>`:''}
+          <tbody>${pays.map(p=>`<tr><td>${p.payment_date}</td><td>${p.chart_of_accounts.code} - ${p.chart_of_accounts.name}</td><td>${p.channel}</td><td>${p.reference??"—"}</td><td class="num">${money(p.amount)}</td></tr>`).join("")}</tbody></table>`:''}
 
         ${bill.status==='draft'?`
           <button class="btn accent" onclick="approveBill('${id}')">Approve bill (posts Dr Expense / Cr Accounts Payable)</button>`:''}
@@ -271,7 +275,7 @@
           <h3>Record a payment</h3>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
             <div class="field" style="margin-bottom:0"><label>Amount</label><input id="p-amt" type="number" step="0.01" value="${outstanding.toFixed(2)}"></div>
-            <div class="field" style="margin-bottom:0"><label>Pay from</label><select id="p-acct">${paymentAccounts.map(a=>`<option value="${a.id}">${a.code} — ${a.name}</option>`).join("")}</select></div>
+            <div class="field" style="margin-bottom:0"><label>Pay from</label><select id="p-acct">${paymentAccounts.map(a=>`<option value="${a.id}">${a.code} - ${a.name}</option>`).join("")}</select></div>
             <div class="field" style="margin-bottom:0"><label>Channel</label><select id="p-chan"><option value="bank">Bank</option><option value="mpesa">M-Pesa</option><option value="cash">Cash</option><option value="cheque">Cheque</option></select></div>
             <div class="field" style="margin-bottom:0"><label>Reference</label><input id="p-ref"></div>
             <button class="btn accent" onclick="payBill('${id}')">Pay</button>

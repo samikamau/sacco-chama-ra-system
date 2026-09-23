@@ -540,7 +540,7 @@
         html += `</tbody></table>`;
       }
 
-      const cashOpts = cashAccounts.map(a=>`<option value="${a.id}">${a.code} — ${a.name}</option>`).join("");
+      const cashOpts = cashAccounts.map(a=>`<option value="${a.id}">${a.code} - ${a.name}</option>`).join("");
 
       // Actions
       if (loan.status === 'pending_approval' || loan.status === 'draft') {

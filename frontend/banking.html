@@ -200,7 +200,7 @@
       paymentAccounts = pa || [];
 
       // Payment account selectors for transfer and for recording payments
-      const opts = paymentAccounts.map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join('');
+      const opts = paymentAccounts.map(a => `<option value="${a.id}">${a.code} - ${a.name}</option>`).join('');
       document.getElementById('t-from').innerHTML = opts;
       document.getElementById('t-to').innerHTML = opts;
       document.getElementById('t-date').value = new Date().toISOString().slice(0,10);

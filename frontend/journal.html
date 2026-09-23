@@ -90,7 +90,7 @@
     }
 
     function accountOptions() {
-      return accounts.map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join("");
+      return accounts.map(a => `<option value="${a.id}">${a.code} - ${a.name}</option>`).join("");
     }
     function memberOptions() {
       return `<option value="">— none —</option>` +
@@ -243,7 +243,7 @@
       let totalDr = 0, totalCr = 0;
       const lineRows = (lines || []).map(l => {
         totalDr += Number(l.debit); totalCr += Number(l.credit);
-        return `<tr><td>${l.chart_of_accounts.code} — ${l.chart_of_accounts.name}</td>
+        return `<tr><td>${l.chart_of_accounts.code} - ${l.chart_of_accounts.name}</td>
           <td class="num">${Number(l.debit) ? money(l.debit) : ""}</td>
           <td class="num">${Number(l.credit) ? money(l.credit) : ""}</td></tr>`;
       }).join("");

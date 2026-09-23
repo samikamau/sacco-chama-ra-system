@@ -147,7 +147,7 @@
       const { data: pa } = await supabaseClient.rpc('fn_payment_accounts', { p_organisation_id: orgId });
       paymentAccounts = pa || [];
       document.getElementById('f-cash-account').innerHTML =
-        paymentAccounts.map(a=>`<option value="${a.id}">${a.code} — ${a.name}</option>`).join('');
+        paymentAccounts.map(a=>`<option value="${a.id}">${a.code} - ${a.name}</option>`).join('');
 
       // Fund types
       const { data: ft } = await supabaseClient.from('contribution_types')
