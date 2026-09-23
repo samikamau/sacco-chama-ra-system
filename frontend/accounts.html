@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Chart of Accounts — Financial Operating System</title>
+<title>Chart of Accounts - Edhafu</title>
 <link rel="icon" type="image/png" sizes="32x32" href="images/edhafu-icon-32.png">
 <link rel="apple-touch-icon" href="images/edhafu-icon-180.png">
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-  .coa-row { display:grid; grid-template-columns:90px 1fr 90px 90px 150px; gap:8px; align-items:center; padding:7px 16px; border-bottom:1px solid var(--color-line); font-size:13px; }
+  .coa-row { display:grid; grid-template-columns:80px 1fr 80px 140px 250px; gap:8px; align-items:center; padding:7px 16px; border-bottom:1px solid var(--color-line); font-size:13px; }
   .coa-row:last-child { border-bottom:none; }
   .coa-row:hover { background:var(--color-bg); }
   .coa-hdr { background:#F3EBD8; font-weight:600; font-size:12px; color:var(--color-muted); position:sticky; top:0; z-index:1; }
@@ -18,6 +18,12 @@
   .drawer-backdrop.open { display:block; }
   .drawer { position:fixed;top:0;right:0;height:100vh;width:420px;max-width:94vw;background:var(--color-surface);z-index:50;transform:translateX(100%);transition:transform 0.2s;overflow-y:auto;padding:var(--space-4);box-shadow:-2px 0 16px rgba(0,0,0,0.12); }
   .drawer.open { transform:translateX(0); }
+  .coa-bal { font-family:var(--font-mono); font-size:12px; text-align:right; padding-right:12px; }
+  .btn-xs { padding:2px 8px; font-size:11px; }
+  .btn-danger { background:#B3261E; }
+  .modal { position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--color-surface);z-index:50;width:440px;max-width:94vw;padding:var(--space-4);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.2);display:none; }
+  .modal.open { display:block; }
+  .hint { font-size:12px; color:var(--color-muted); margin-top:4px; }
 </style>
 </head>
 <body>
@@ -45,15 +51,17 @@
   <div class="drawer-backdrop" id="backdrop" onclick="closeDrawer()"></div>
   <div class="drawer" id="drawer">
     <h2 id="drawer-title">Add account</h2>
-    <div class="field"><label>Account code *</label><input id="d-code"></div>
+    <div class="field"><label>Account code</label>
+      <input id="d-code" readonly style="background:var(--color-bg, #F7F6F3)">
+      <div class="hint" id="d-code-hint">Assigned automatically from the main head.</div></div>
     <div class="field"><label>Account name *</label><input id="d-name"></div>
-    <div class="field"><label>Category (parent) *</label>
+    <div class="field"><label>Main head *</label>
       <select id="d-parent" onchange="autoSetType()">
         <option value="">— top level —</option>
       </select>
     </div>
     <div class="field"><label>Account type</label>
-      <select id="d-type">
+      <select id="d-type" disabled>
         <option value="asset">Asset</option>
         <option value="liability">Liability</option>
         <option value="equity">Equity</option>
@@ -62,8 +70,9 @@
       </select>
     </div>
     <div class="field"><label>Normal balance</label>
-      <select id="d-normal"><option value="debit">Debit</option><option value="credit">Credit</option></select>
+      <select id="d-normal" disabled><option value="debit">Debit</option><option value="credit">Credit</option></select>
     </div>
+    <p class="hint" style="margin:-4px 0 12px">Type and normal balance follow the main head.</p>
     <div class="field"><label>Description (optional)</label><input id="d-desc"></div>
     <div class="field" id="d-active-wrap" style="display:none">
       <label><input type="checkbox" id="d-active" checked> Active</label>
@@ -75,11 +84,31 @@
     </div>
   </div>
 
+  <!-- MERGE MODAL -->
+  <div class="drawer-backdrop" id="m-backdrop" onclick="closeMerge()"></div>
+  <div class="modal" id="merge-modal">
+    <h2 style="margin-top:0">Merge account</h2>
+    <p style="font-size:13px">Merging <strong id="m-source"></strong></p>
+    <p style="font-size:13px">Current balance: <strong id="m-balance"></strong></p>
+    <div class="field"><label>Merge into *</label><select id="m-target"></select></div>
+    <div class="field"><label>Merge date *</label><input id="m-date" type="date"></div>
+    <div class="hint" style="margin-bottom:12px">
+      The balance moves to the selected account through a posted journal on the merge date.
+      Past transactions stay unchanged for the audit trail. Fund types, loan products and other
+      settings using this account switch to the selected account, and this account is deactivated.
+    </div>
+    <p id="m-error" class="error" style="display:none"></p>
+    <div style="display:flex;gap:8px">
+      <button class="btn accent" id="m-btn" onclick="doMerge()">Merge</button>
+      <button class="btn" style="background:var(--color-muted)" onclick="closeMerge()">Cancel</button>
+    </div>
+  </div>
+
   <script src="js/config.js"></script>
   <script src="js/nav.js"></script>
   <script src="js/auth.js"></script>
   <script>
-    let orgId, allAccounts = [], editingId = null;
+    let orgId, allAccounts = [], stats = {}, editingId = null, mergeSourceId = null;
 
     const CATEGORIES = [
       { code:'1000', label:'Bank',               type:'asset' },
@@ -101,6 +130,9 @@
         .order('code');
       if (error) { document.getElementById('coa-container').innerHTML = `<p class="error">${error.message}</p>`; return; }
       allAccounts = data || [];
+      const { data: st } = await supabaseClient.rpc('fn_coa_account_stats', { p_organisation_id: orgId });
+      stats = {};
+      (st || []).forEach(s => stats[s.account_id] = { lines: Number(s.line_count), bal: Number(s.balance) });
       renderAll();
     }
 
@@ -131,20 +163,23 @@
             !catAcct.code.includes(search) && !catAcct.name.toLowerCase().includes(search)) return '';
 
         const rows = children.length
-          ? children.map(a => `
-            <div class="coa-row ${a.is_active === false ? 'coa-inactive' : ''}">
+          ? children.map(a => {
+              const st = stats[a.id] || { lines: 0, bal: 0 };
+              const inactive = a.is_active === false;
+              const hasSiblings = allAccounts.some(x => x.parent_account_id === a.parent_account_id && x.id !== a.id && x.is_active !== false);
+              const btns = [`<button class="btn btn-xs" onclick="openDrawer('${a.id}')">Edit</button>`];
+              if (!inactive && hasSiblings) btns.push(`<button class="btn btn-xs" style="background:var(--color-accent)" onclick="openMerge('${a.id}')">Merge</button>`);
+              if (st.lines === 0) btns.push(`<button class="btn btn-xs btn-danger" onclick="deleteAccount('${a.id}')">Delete</button>`);
+              if (inactive) btns.push(`<button class="btn btn-xs" style="background:var(--color-success)" onclick="toggleActive('${a.id}',true)">Activate</button>`);
+              else if (st.lines > 0) btns.push(`<button class="btn btn-xs" style="background:var(--color-muted)" onclick="toggleActive('${a.id}',false)">Deactivate</button>`);
+              return `
+            <div class="coa-row ${inactive ? 'coa-inactive' : ''}">
               <div style="font-family:var(--font-mono);font-size:12px;color:var(--color-muted);padding-left:20px">${a.code}</div>
-              <div class="coa-name" style="padding-left:20px">${a.name}</div>
+              <div class="coa-name" style="padding-left:20px">${a.name}${a.is_payment_account ? ' <span style="font-size:11px;color:var(--color-muted)">(receives payments)</span>' : ''}</div>
               <div style="font-size:12px;color:var(--color-muted)">${a.account_type}</div>
-              <div style="font-size:12px;color:var(--color-muted)">${a.normal_balance||''}</div>
-              <div style="display:flex;gap:4px">
-                <button class="btn" style="padding:2px 8px;font-size:11px" onclick="openDrawer('${a.id}')">Edit</button>
-                <button class="btn" style="padding:2px 8px;font-size:11px;background:${a.is_active===false?'var(--color-success)':'var(--color-muted)'}"
-                  onclick="toggleActive('${a.id}',${a.is_active===false})">
-                  ${a.is_active === false ? 'Activate' : 'Deactivate'}
-                </button>
-              </div>
-            </div>`).join('')
+              <div class="coa-bal">${fmtBal(st.bal, a.normal_balance)}</div>
+              <div style="display:flex;gap:4px;flex-wrap:wrap">${btns.join('')}</div>
+            </div>`; }).join('')
           : `<div class="coa-row"><div style="color:var(--color-muted);grid-column:1/-1;padding-left:20px">No sub-accounts yet.</div></div>`;
 
         return `
@@ -154,7 +189,7 @@
               <span style="font-weight:400;color:var(--color-muted);font-size:12px">(${children.length} account${children.length!==1?'s':''})</span>
             </div>
             <div style="font-size:12px;color:var(--color-muted)">${cat.type}</div>
-            <div></div>
+            <div class="coa-bal" style="font-weight:700">${fmtBal(allAccounts.filter(a => a.parent_account_id === catAcct.id).reduce((t,a) => t + ((stats[a.id]||{}).bal||0), 0), catAcct.normal_balance)}</div>
             <div><button class="btn" style="padding:2px 8px;font-size:11px" onclick="openDrawer(null,'${catAcct.id}')">+ Add sub-account</button></div>
           </div>
           ${rows}`;
@@ -182,7 +217,14 @@
         document.getElementById('d-desc').value = a.description || '';
         document.getElementById('d-active').checked = a.is_active !== false;
         document.getElementById('d-parent').value = a.parent_account_id || '';
+        const posted = (stats[a.id] || {}).lines > 0;
+        document.getElementById('d-parent').disabled = posted;
+        document.getElementById('d-code-hint').textContent = posted
+          ? 'This account has postings, so its main head and code are fixed.'
+          : 'Changing the main head assigns a new code automatically.';
       } else {
+        document.getElementById('d-parent').disabled = false;
+        document.getElementById('d-code-hint').textContent = 'Assigned automatically from the main head.';
         ['d-code','d-name','d-desc'].forEach(i => document.getElementById(i).value = '');
         if (presetParentId) { document.getElementById('d-parent').value = presetParentId; autoSetType(); }
       }
@@ -204,55 +246,107 @@
       document.getElementById('d-type').value = p.account_type;
       document.getElementById('d-normal').value = p.normal_balance || 'debit';
 
-      // Suggest the next available code under this category, but only
-      // when creating a new account — never overwrite an existing one's code.
-      if (!editingId) {
-        document.getElementById('d-code').value = suggestNextCode(pid);
-      }
+      // Preview the code the database will assign (formula lives in the DB)
+      const a = editingId ? allAccounts.find(x => x.id === editingId) : null;
+      if (!a || a.parent_account_id !== pid) previewCode(pid);
+      else document.getElementById('d-code').value = a.code;
     }
 
-    function suggestNextCode(parentId) {
-      const parent = allAccounts.find(a => a.id === parentId);
-      if (!parent) return '';
-      const parentBase = parseInt(parent.code, 10);
-      if (isNaN(parentBase)) return '';
-
-      const siblings = allAccounts.filter(a => a.parent_account_id === parentId);
-      if (!siblings.length) return String(parentBase + 10);
-
-      const maxSiblingCode = Math.max(...siblings.map(a => parseInt(a.code, 10) || parentBase));
-      return String(maxSiblingCode + 10);
+    async function previewCode(parentId) {
+      const el = document.getElementById('d-code');
+      el.value = '...';
+      const { data, error } = await supabaseClient.rpc('fn_next_sub_account_code', { p_parent_id: parentId });
+      el.value = error ? '' : data;
     }
 
     async function saveAccount() {
       const errorEl = document.getElementById('drawer-error');
       errorEl.style.display = 'none';
-      const code = document.getElementById('d-code').value.trim();
       const name = document.getElementById('d-name').value.trim();
-      if (!code || !name) { showError(errorEl, 'Code and name are required.'); return; }
+      const parent = document.getElementById('d-parent').value || null;
+      if (!name) { showError(errorEl, 'Account name is required.'); return; }
+      if (!parent) { showError(errorEl, 'Choose a main head.'); return; }
       const payload = {
-        organisation_id: orgId, code, name,
-        account_type: document.getElementById('d-type').value,
-        normal_balance: document.getElementById('d-normal').value,
+        name,
         description: document.getElementById('d-desc').value || null,
-        parent_account_id: document.getElementById('d-parent').value || null,
-        is_active: editingId ? document.getElementById('d-active').checked : true,
-        is_control: false,
+        parent_account_id: parent,
       };
       let error;
       if (editingId) {
+        payload.is_active = document.getElementById('d-active').checked;
         ({ error } = await supabaseClient.from('chart_of_accounts').update(payload).eq('id', editingId));
       } else {
+        // code, type and normal balance are set by the database from the main head
+        Object.assign(payload, {
+          organisation_id: orgId, is_active: true, is_control: false,
+          account_type: document.getElementById('d-type').value,
+          normal_balance: document.getElementById('d-normal').value,
+        });
         ({ error } = await supabaseClient.from('chart_of_accounts').insert(payload));
       }
       if (error) { showError(errorEl, error.message); return; }
       closeDrawer(); loadAccounts();
     }
 
+    function fmtBal(bal, normal) {
+      if (!bal) return '<span style="color:var(--color-muted)">0.00</span>';
+      const side = bal > 0 ? 'Dr' : 'Cr';
+      const abnormal = (bal > 0 ? 'debit' : 'credit') !== (normal || 'debit');
+      return `<span style="${abnormal ? 'color:#B3261E' : ''}">${money(Math.abs(bal))} ${side}</span>`;
+    }
+
+    async function deleteAccount(id) {
+      const a = allAccounts.find(x => x.id === id);
+      if (!confirm(`Delete ${a.code} ${a.name}? This cannot be undone.`)) return;
+      const { error } = await supabaseClient.rpc('fn_delete_sub_account', { p_account_id: id });
+      if (error) { alert(error.message); return; }
+      loadAccounts();
+    }
+
+    function openMerge(id) {
+      mergeSourceId = id;
+      const s = allAccounts.find(x => x.id === id);
+      const st = stats[id] || { bal: 0 };
+      document.getElementById('m-source').textContent = `${s.code} ${s.name}`;
+      document.getElementById('m-balance').innerHTML = fmtBal(st.bal, s.normal_balance);
+      document.getElementById('m-target').innerHTML = allAccounts
+        .filter(x => x.parent_account_id === s.parent_account_id && x.id !== id && x.is_active !== false)
+        .map(x => `<option value="${x.id}">${x.code} ${x.name}</option>`).join('');
+      document.getElementById('m-date').value = new Date().toISOString().slice(0,10);
+      document.getElementById('m-error').style.display = 'none';
+      document.getElementById('m-backdrop').classList.add('open');
+      document.getElementById('merge-modal').classList.add('open');
+    }
+
+    function closeMerge() {
+      document.getElementById('m-backdrop').classList.remove('open');
+      document.getElementById('merge-modal').classList.remove('open');
+      mergeSourceId = null;
+    }
+
+    async function doMerge() {
+      const errorEl = document.getElementById('m-error');
+      const target = document.getElementById('m-target').value;
+      const date = document.getElementById('m-date').value;
+      if (!target || !date) { showError(errorEl, 'Choose the account to merge into and a date.'); return; }
+      const s = allAccounts.find(x => x.id === mergeSourceId);
+      const t = allAccounts.find(x => x.id === target);
+      if (!confirm(`Merge ${s.code} ${s.name} into ${t.code} ${t.name}? ${s.code} will be deactivated.`)) return;
+      const btn = document.getElementById('m-btn');
+      btn.disabled = true; btn.textContent = 'Merging...';
+      const { error } = await supabaseClient.rpc('fn_merge_accounts',
+        { p_source_id: mergeSourceId, p_target_id: target, p_merge_date: date });
+      btn.disabled = false; btn.textContent = 'Merge';
+      if (error) { showError(errorEl, error.message); return; }
+      closeMerge(); loadAccounts();
+    }
+
     async function toggleActive(id, makeActive) {
       if (!makeActive) {
         const { count } = await supabaseClient.from('journal_lines')
           .select('*', { count: 'exact', head: true }).eq('account_id', id);
+        const bal = (stats[id] || {}).bal || 0;
+        if (bal !== 0) { alert('This account still has a balance. Merge it into another account instead, so the balance is carried across.'); return; }
         if (count > 0 && !confirm(`This account has ${count} posted transaction(s). Deactivating prevents future use but preserves history. Continue?`)) return;
       }
       const { error } = await supabaseClient.from('chart_of_accounts').update({ is_active: makeActive }).eq('id', id);
