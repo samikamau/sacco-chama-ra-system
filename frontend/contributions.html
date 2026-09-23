@@ -17,8 +17,8 @@
       <div class="card">
         <h2>Fund types</h2>
         <table style="margin-bottom:16px">
-          <thead><tr><th>Name</th><th>Category</th><th>Posts to</th></tr></thead>
-          <tbody id="fund-rows"><tr><td colspan="3" class="empty">No fund types yet.</td></tr></tbody>
+          <thead><tr><th>Name</th><th>Category</th><th>Posts to</th><th></th></tr></thead>
+          <tbody id="fund-rows"><tr><td colspan="4" class="empty">No fund types yet.</td></tr></tbody>
         </table>
         <details>
           <summary style="cursor:pointer;color:var(--color-muted)">Add a fund type</summary>
@@ -115,6 +115,7 @@
   <script src="js/auth.js"></script>
   <script>
     let orgId, fundTypes = [], rules = [];
+    let postableAccounts = [];
 
     function toggleMethodFields() {
       const m = document.getElementById("v-method").value;
@@ -126,20 +127,51 @@
     async function loadAccounts() {
       const { data } = await supabaseClient.from("chart_of_accounts")
         .select("id, code, name, is_control").eq("organisation_id", orgId).eq("is_active", true).order("code");
+      postableAccounts = (data || []).filter(a => !a.is_control);
       document.getElementById("ft-account").innerHTML =
-        (data || []).filter(a => !a.is_control).map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join("");
+        postableAccounts.map(a => `<option value="${a.id}">${a.code} - ${a.name}</option>`).join("");
     }
 
     async function loadFundTypes() {
       const { data } = await supabaseClient.from("contribution_types")
-        .select("id, name, category, chart_of_accounts(code, name)")
+        .select("id, name, category, chart_account_id, chart_of_accounts(code, name, is_control, is_active)")
         .eq("organisation_id", orgId).eq("active", true).order("name");
       fundTypes = data || [];
       const tbody = document.getElementById("fund-rows");
       tbody.innerHTML = fundTypes.length
-        ? fundTypes.map(f => `<tr><td>${f.name}</td><td>${f.category}</td><td>${f.chart_of_accounts.code} — ${f.chart_of_accounts.name}</td></tr>`).join("")
-        : `<tr><td colspan="3" class="empty">No fund types yet.</td></tr>`;
+        ? fundTypes.map(f => {
+            const a = f.chart_of_accounts || {};
+            const bad = a.is_control || a.is_active === false;
+            return `<tr id="fund-${f.id}">
+              <td>${f.name}</td><td>${f.category.replace(/_/g, " ")}</td>
+              <td>${a.code} - ${a.name}${bad ? ' <span style="color:#B3261E;font-size:12px;font-weight:600">Cannot receive money: choose a sub-account</span>' : ''}</td>
+              <td><button class="btn" style="padding:2px 8px;font-size:11px" onclick="editFundAccount('${f.id}')">Change account</button></td>
+            </tr>`; }).join("")
+        : `<tr><td colspan="4" class="empty">No fund types yet.</td></tr>`;
       document.getElementById("r-fund").innerHTML = fundTypes.map(f => `<option value="${f.id}">${f.name}</option>`).join("");
+    }
+
+    function editFundAccount(id) {
+      const f = fundTypes.find(x => x.id === id);
+      const row = document.getElementById("fund-" + id);
+      row.cells[2].innerHTML = `<select id="fa-${id}" style="min-width:200px">` +
+        postableAccounts.map(a => `<option value="${a.id}" ${a.id === f.chart_account_id ? "selected" : ""}>${a.code} - ${a.name}</option>`).join("") +
+        `</select>`;
+      row.cells[3].innerHTML = `<button class="btn accent" style="padding:2px 8px;font-size:11px" onclick="saveFundAccount('${id}')">Save</button>
+        <button class="btn" style="padding:2px 8px;font-size:11px;background:var(--color-muted)" onclick="loadFundTypes()">Cancel</button>`;
+    }
+
+    async function saveFundAccount(id) {
+      const f = fundTypes.find(x => x.id === id);
+      const acct = document.getElementById("fa-" + id).value;
+      if (acct === f.chart_account_id) { loadFundTypes(); return; }
+      const a = postableAccounts.find(x => x.id === acct);
+      if (!confirm(`Future receipts for "${f.name}" will post to ${a.code} ${a.name}. Past postings are not moved (use Merge on the Chart of Accounts page for that). Continue?`)) return;
+      const { data, error } = await supabaseClient.from("contribution_types")
+        .update({ chart_account_id: acct }).eq("id", id).select("id");
+      if (error) { alert(error.message); return; }
+      if (!data || !data.length) { alert("Not saved: only an org admin or accountant can change a fund's account."); return; }
+      loadFundTypes();
     }
 
     async function createFundType() {
