@@ -28,6 +28,7 @@
   </div>
 
   <script src="js/config.js"></script>
+  <script src="js/recovery-guard.js"></script>
   <script src="js/auth.js"></script>
   <script>
     async function login() {
@@ -60,30 +61,11 @@
     }
 
     (async () => {
-      // A recovery or invite link lands here with the session token in the
-      // URL's hash fragment. This page's Supabase client auto-exchanges it
-      // for a session as soon as it initializes. That token is single-use,
-      // so we must NOT pass the hash on to another page (its own client
-      // would try to exchange the same already-used token again and fail).
-      // Instead: wait for this page's exchange to finish and persist the
-      // session, then hand off to the password page with no hash at all -
-      // it picks up the already-saved session on its own.
-      const hash = window.location.hash || "";
-      if (hash.includes("type=recovery") || hash.includes("type=invite")) {
-        // If this link was already consumed, do not let it sign anyone in.
-        try {
-          const m = hash.match(/access_token=([^&]+)/);
-          const key = "pwreset_used_" + (m ? m[1].slice(-32) : "none");
-          if (localStorage.getItem(key) === "1") {
-            await supabaseClient.auth.signOut();
-            window.location.replace("reset-password.html" + hash);
-            return;
-          }
-        } catch (e) { /* fall through to the normal handoff */ }
-        await supabaseClient.auth.getSession();
-        window.location.replace("reset-password.html");
-        return;
-      }
+      // Recovery and invite links must never sign someone straight in.
+      // handleRecoveryRedirect checks every link format Supabase uses
+      // (hash access_token, query token_hash, and PKCE code) and sends
+      // the user to the password page instead.
+      if (await handleRecoveryRedirect()) return;
 
       // Otherwise, if already signed in, skip straight to the dashboard.
       const { data: { session } } = await supabaseClient.auth.getSession();

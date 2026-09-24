@@ -29,8 +29,8 @@
         <div class="card">
           <h2>All organisations - billing</h2>
           <table>
-            <thead><tr><th>Name</th><th>Account No.</th><th>Type</th><th>Status</th><th class="num">Monthly fee</th><th>Latest invoice</th><th></th></tr></thead>
-            <tbody id="billing-rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+            <thead><tr><th>Name</th><th>Account No.</th><th>Contact</th><th>Status</th><th class="num">Monthly fee</th><th>Latest invoice</th><th></th></tr></thead>
+            <tbody id="billing-rows"><tr><td colspan="7" class="empty">Loading...</td></tr></tbody>
           </table>
         </div>
 
@@ -72,6 +72,21 @@
         <div style="display:flex;gap:8px;margin-top:16px">
           <button class="btn" style="background:var(--color-alert)" onclick="confirmReject()">Decline</button>
           <button class="btn" style="background:var(--color-muted)" onclick="closeRejectDrawer()">Cancel</button>
+        </div>
+      </div>
+
+      <!-- EDIT BILLING DRAWER -->
+      <div class="drawer-backdrop" id="edit-billing-backdrop" onclick="closeEditBillingDrawer()"></div>
+      <div class="drawer" id="edit-billing-drawer">
+        <h2>Contact and subscription</h2>
+        <p id="edit-billing-org-name" style="color:var(--color-muted)"></p>
+        <div class="field"><label>Contact person</label><input id="eb-person" placeholder="e.g. Jane Wanjiru"></div>
+        <div class="field"><label>Telephone</label><input id="eb-phone" placeholder="e.g. 0722 908232"></div>
+        <div class="field"><label>Monthly subscription (KES)</label><input id="eb-fee" type="number" min="0" step="1" placeholder="e.g. 1000"></div>
+        <p id="edit-billing-error" class="error" style="display:none"></p>
+        <div style="display:flex;gap:8px;margin-top:16px">
+          <button class="btn accent" onclick="saveEditBilling()">Save</button>
+          <button class="btn" style="background:var(--color-muted)" onclick="closeEditBillingDrawer()">Cancel</button>
         </div>
       </div>
 
@@ -127,20 +142,56 @@
         const statusLabel = o.access_status === "suspended_unpaid" ? "suspended (unpaid)" : o.status;
         const statusClass = o.access_status === "active" ? "paid"
           : o.access_status === "pending_approval" ? "partial" : "unpaid";
+        const safeName = o.name.replace(/'/g,"\\'");
+        const contact = o.contact_person || o.contact_phone
+          ? `${o.contact_person || ""}${o.contact_person && o.contact_phone ? "<br>" : ""}<span style="color:var(--color-muted);font-size:12px">${o.contact_phone || ""}</span>`
+          : `<span style="color:var(--color-muted)">Not set</span>`;
         return `
         <tr>
-          <td>${o.name}</td>
+          <td>${o.name}<br><span style="color:var(--color-muted);font-size:11px">${o.org_type}</span></td>
           <td style="font-family:var(--font-mono);font-size:12px">${o.account_number || "-"}</td>
-          <td>${o.org_type}</td>
+          <td style="font-size:13px">${contact}</td>
           <td><span class="status ${statusClass}">${statusLabel}</span></td>
           <td class="num">${o.monthly_fee != null ? money(o.monthly_fee) : "-"}</td>
           <td>${o.latest_invoice_status ? `${o.latest_invoice_status} (due ${o.latest_invoice_due})` : "No invoices"}</td>
           <td style="display:flex;gap:4px;flex-wrap:wrap">
-            <button class="btn" style="padding:2px 8px;font-size:12px" onclick="openInvoiceDrawer('${o.id}','${o.name.replace(/'/g,"\\'")}')">New invoice</button>
-            ${locked && o.status !== "pending_approval" ? `<button class="btn accent" style="padding:2px 8px;font-size:12px" onclick="reactivateOrg('${o.id}','${o.name.replace(/'/g,"\\'")}')">Activate</button>` : ""}
+            <button class="btn" style="padding:2px 8px;font-size:12px" onclick="openEditBillingDrawer('${o.id}','${safeName}','${(o.contact_person||"").replace(/'/g,"\\'")}','${(o.contact_phone||"").replace(/'/g,"\\'")}','${o.monthly_fee != null ? o.monthly_fee : ""}')">Edit</button>
+            <button class="btn" style="padding:2px 8px;font-size:12px" onclick="openInvoiceDrawer('${o.id}','${safeName}')">New invoice</button>
+            ${locked && o.status !== "pending_approval" ? `<button class="btn accent" style="padding:2px 8px;font-size:12px" onclick="reactivateOrg('${o.id}','${safeName}')">Activate</button>` : ""}
           </td>
         </tr>`;
       }).join("");
+    }
+
+    let editBillingOrgId = null;
+
+    function openEditBillingDrawer(id, name, person, phone, fee) {
+      editBillingOrgId = id;
+      document.getElementById("edit-billing-org-name").textContent = name;
+      document.getElementById("eb-person").value = person || "";
+      document.getElementById("eb-phone").value = phone || "";
+      document.getElementById("eb-fee").value = fee || "";
+      document.getElementById("edit-billing-error").style.display = "none";
+      document.getElementById("edit-billing-backdrop").classList.add("open");
+      document.getElementById("edit-billing-drawer").classList.add("open");
+    }
+    function closeEditBillingDrawer() {
+      document.getElementById("edit-billing-backdrop").classList.remove("open");
+      document.getElementById("edit-billing-drawer").classList.remove("open");
+    }
+    async function saveEditBilling() {
+      const errorEl = document.getElementById("edit-billing-error");
+      errorEl.style.display = "none";
+      const fee = document.getElementById("eb-fee").value;
+      const { error } = await supabaseClient.rpc("fn_update_org_billing", {
+        p_org_id: editBillingOrgId,
+        p_contact_person: document.getElementById("eb-person").value.trim(),
+        p_contact_phone: document.getElementById("eb-phone").value.trim(),
+        p_monthly_fee: fee === "" ? null : fee,
+      });
+      if (error) { showError(errorEl, error.message); return; }
+      closeEditBillingDrawer();
+      loadBilling();
     }
 
     async function reactivateOrg(orgId, name) {

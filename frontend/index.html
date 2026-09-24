@@ -185,6 +185,7 @@
   </div>
 
   <script src="js/config.js"></script>
+  <script src="js/recovery-guard.js"></script>
   <script src="js/nav.js"></script>
   <script src="js/pay-subscription.js"></script>
   <script src="js/auth.js"></script>
@@ -210,21 +211,7 @@
     }
 
     (async () => {
-      const hash = window.location.hash || "";
-      if (hash.includes("type=recovery") || hash.includes("type=invite")) {
-        try {
-          const m = hash.match(/access_token=([^&]+)/);
-          const key = "pwreset_used_" + (m ? m[1].slice(-32) : "none");
-          if (localStorage.getItem(key) === "1") {
-            await supabaseClient.auth.signOut();
-            window.location.replace("reset-password.html" + hash);
-            return;
-          }
-        } catch (e) { /* fall through to the normal handoff */ }
-        await supabaseClient.auth.getSession();
-        window.location.replace("reset-password.html");
-        return;
-      }
+      if (await handleRecoveryRedirect()) return;
       document.body.style.visibility = "visible";
 
       const session = await requireSession();
