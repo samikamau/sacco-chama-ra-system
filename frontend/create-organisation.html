@@ -20,6 +20,8 @@
 
       <div class="card" id="create-form-card" style="max-width:480px">
         <div class="field"><label>Organisation name *</label><input id="c-name" placeholder="e.g. Amani Chama Group"></div>
+        <div class="field"><label>Contact person *</label><input id="c-contact-person" placeholder="e.g. Jane Wanjiru"></div>
+        <div class="field"><label>Contact telephone *</label><input id="c-contact-phone" type="tel" placeholder="e.g. 0722 908232"></div>
         <div class="field"><label>Organisation type *</label>
           <select id="c-type" onchange="applyTypeDefaults()">
             <option value="sacco">SACCO</option>
@@ -86,9 +88,13 @@
       const errorEl = document.getElementById("create-error");
       errorEl.style.display = "none";
       const name = document.getElementById("c-name").value.trim();
+      const contactPerson = document.getElementById("c-contact-person").value.trim();
+      const contactPhone = document.getElementById("c-contact-phone").value.trim();
       const orgType = document.getElementById("c-type").value;
       const currency = document.getElementById("c-currency").value;
       if (!name) { showError(errorEl, "Organisation name is required."); return; }
+      if (!contactPerson) { showError(errorEl, "Contact person is required."); return; }
+      if (!contactPhone) { showError(errorEl, "Contact telephone is required."); return; }
 
       const enabledModules = {
         loans: document.getElementById("m-loans").checked,
@@ -99,6 +105,7 @@
       const { data: newOrgId, error } = await supabaseClient.rpc("fn_create_organisation", {
         p_name: name, p_org_type: orgType, p_currency: currency,
         p_enabled_modules: enabledModules,
+        p_contact_person: contactPerson, p_contact_phone: contactPhone,
       });
       if (error) { showError(errorEl, error.message); return; }
 

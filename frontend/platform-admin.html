@@ -20,8 +20,8 @@
         <div class="card">
           <h2>Pending organisations</h2>
           <table>
-            <thead><tr><th>Name</th><th>Type</th><th>Requested</th><th></th></tr></thead>
-            <tbody id="pending-rows"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+            <thead><tr><th>Name</th><th>Contact</th><th>Type</th><th>Requested</th><th></th></tr></thead>
+            <tbody id="pending-rows"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
           </table>
         </div>
 
@@ -118,11 +118,12 @@
     async function loadPending() {
       const { data, error } = await supabaseClient.rpc("fn_list_pending_organisations");
       const tbody = document.getElementById("pending-rows");
-      if (error) { tbody.innerHTML = `<tr><td colspan="4" class="error">${error.message}</td></tr>`; return; }
-      if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="4" class="empty">No pending organisations.</td></tr>`; return; }
+      if (error) { tbody.innerHTML = `<tr><td colspan="5" class="error">${error.message}</td></tr>`; return; }
+      if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="5" class="empty">No pending organisations.</td></tr>`; return; }
       tbody.innerHTML = data.map(o => `
         <tr>
           <td>${o.name}</td>
+          <td style="font-size:13px">${o.contact_person || "-"}<br><span style="color:var(--color-muted);font-size:12px">${o.contact_phone || ""}</span></td>
           <td>${o.org_type}</td>
           <td>${new Date(o.created_at).toLocaleDateString()}</td>
           <td style="display:flex;gap:4px">
