@@ -168,7 +168,7 @@ async function renderNav() {
       </button>
       <div id="org-switcher-menu" style="display:none;position:absolute;z-index:30;top:100%;left:0;right:0;background:#fff;border-radius:6px;box-shadow:0 8px 20px rgba(0,0,0,0.25);margin-top:4px;overflow:hidden">
         ${switcherItems}
-        <a href="create-organisation.html" style="display:block;padding:8px 12px;font-size:13px;color:var(--color-primary, #1B6E45);text-decoration:none;border-top:1px solid var(--color-line, #ddd)">+ New organisation</a>
+        ${isPlatformAdmin ? `<a href="create-organisation.html" style="display:block;padding:8px 12px;font-size:13px;color:var(--color-primary, #1B6E45);text-decoration:none;border-top:1px solid var(--color-line, #ddd)">+ New organisation</a>` : ''}
       </div>
     </div>
     ${topLinks}

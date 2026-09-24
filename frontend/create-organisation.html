@@ -18,6 +18,10 @@
         from the sidebar.
       </p>
 
+      <div class="card" id="not-allowed" style="max-width:480px;display:none">
+        <p class="error">Only platform admins can create organisations. If you need a new organisation set up, please get in touch.</p>
+      </div>
+
       <div class="card" id="create-form-card" style="max-width:480px">
         <div class="field"><label>Organisation name *</label><input id="c-name" placeholder="e.g. Amani Chama Group"></div>
         <div class="field"><label>Contact person *</label><input id="c-contact-person" placeholder="e.g. Jane Wanjiru"></div>
@@ -122,6 +126,16 @@
     (async () => {
       const session = await requireSession();
       if (!session) return;
+
+      // Creating organisations is a platform admin action. Hiding the
+      // sidebar link is not enough on its own, so the page itself checks.
+      const { data: isAdmin } = await supabaseClient.rpc("fn_is_platform_admin");
+      if (!isAdmin) {
+        document.getElementById("create-form-card").style.display = "none";
+        document.getElementById("not-allowed").style.display = "block";
+        return;
+      }
+
       applyTypeDefaults();
     })();
   </script>
