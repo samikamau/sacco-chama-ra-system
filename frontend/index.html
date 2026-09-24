@@ -3,8 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <title>Dashboard — Financial Operating System</title>
-<link rel="icon" type="image/png" sizes="32x32" href="images/edhafu-icon-32.png">
-<link rel="apple-touch-icon" href="images/edhafu-icon-180.png">
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -176,6 +174,12 @@
   <script src="js/auth.js"></script>
   <script>
     (async () => {
+      const hash = window.location.hash || "";
+      if (hash.includes("type=recovery") || hash.includes("type=invite")) {
+        window.location.replace("reset-password.html" + hash);
+        return;
+      }
+
       const session = await requireSession();
       if (!session) return;
       const org = await currentOrg();

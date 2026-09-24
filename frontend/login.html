@@ -2,292 +2,81 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Edhafu - Sign in</title>
-<link rel="icon" type="image/png" sizes="32x32" href="images/edhafu-icon-32.png">
-<link rel="apple-touch-icon" href="images/edhafu-icon-180.png">
+<title>Sign in — Financial Operating System</title>
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<style>
-  body { background: var(--color-bg); }
-  .auth-shell {
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-  }
-  .auth-card {
-    background: var(--color-surface);
-    border: 1px solid var(--color-line);
-    border-radius: var(--radius);
-    padding: 40px;
-    width: 100%;
-    max-width: 480px;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.07);
-  }
-  .auth-brand {
-    color: var(--color-primary);
-    margin-bottom: 4px;
-    text-align: center;
-  }
-  .auth-tagline {
-    font-size: 13px;
-    color: var(--color-muted);
-    text-align: center;
-    margin-bottom: 28px;
-  }
-  .auth-tabs {
-    display: flex;
-    border-bottom: 2px solid var(--color-line);
-    margin-bottom: 24px;
-  }
-  .auth-tab {
-    flex: 1;
-    text-align: center;
-    padding: 10px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--color-muted);
-    border-bottom: 3px solid transparent;
-    margin-bottom: -2px;
-    transition: color 0.15s;
-  }
-  .auth-tab.active {
-    color: var(--color-ink);
-    border-bottom-color: var(--color-accent);
-    font-weight: 700;
-  }
-  .check-label {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    font-size: 13px;
-    color: var(--color-muted);
-    cursor: pointer;
-    margin-top: 4px;
-  }
-  .check-label input { margin-top: 2px; flex-shrink: 0; }
-  .divider { border:none; border-top:1px solid var(--color-line); margin: 16px 0; }
-</style>
 </head>
 <body>
-<div class="auth-shell">
-  <div class="auth-card">
-    <div class="auth-brand"><img class="edhafu-logo" src="images/edhafu-logo-dark.png" alt="Edhafu"></div>
-    <div class="auth-tagline">Financial Operating System for Member-Based Organisations</div>
-
-    <div class="auth-tabs">
-      <div class="auth-tab active" id="tab-signin" onclick="showTab('signin')">Sign in</div>
-      <div class="auth-tab"        id="tab-signup" onclick="showTab('signup')">Create account</div>
-    </div>
-
-    <!-- SIGN IN -->
-    <div id="pane-signin">
+  <div class="login-shell">
+    <div class="card login-card">
+      <h1>Sign in</h1>
       <div class="field">
-        <label>Email address</label>
-        <input id="si-email" type="email" autocomplete="username" placeholder="you@example.com">
+        <label for="email">Email</label>
+        <input id="email" type="email" autocomplete="username">
       </div>
       <div class="field">
-        <label>Password</label>
-        <input id="si-password" type="password" autocomplete="current-password">
-        <div style="text-align:right;margin-top:6px">
-          <a href="#" onclick="showTab('reset');return false;" style="font-size:13px;color:var(--color-accent)">Forgot password?</a>
-        </div>
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="current-password">
       </div>
-      <button class="btn accent" style="width:100%;margin-top:4px" onclick="signIn()">Sign in</button>
-      <p id="si-error" class="error" style="display:none"></p>
-      <p style="text-align:center;margin-top:16px;font-size:13px;color:var(--color-muted)">
-        No account? <a href="#" onclick="showTab('signup')" style="color:var(--color-accent)">Create one free</a>
+      <button class="btn" style="width:100%" onclick="login()">Sign in</button>
+      <p style="text-align:center;margin-top:10px">
+        <a href="#" onclick="forgotPassword(event)" style="font-size:13px;color:var(--color-muted)">Forgot password?</a>
       </p>
-    </div>
-
-    <!-- RESET PASSWORD -->
-    <div id="pane-reset" style="display:none">
-      <p style="font-size:14px;margin-bottom:12px">Enter the email address you use to sign in. We will send you a link to set a new password.</p>
-      <div class="field">
-        <label>Email address</label>
-        <input id="rp-email" type="email" autocomplete="username" placeholder="you@example.com">
-      </div>
-      <button class="btn accent" style="width:100%;margin-top:4px" onclick="sendResetLink()">Send reset link</button>
-      <p id="rp-error" class="error" style="display:none"></p>
-      <p id="rp-success" style="display:none;color:var(--color-success);font-size:13px;text-align:center;margin-top:12px"></p>
-      <p style="text-align:center;margin-top:16px;font-size:13px;color:var(--color-muted)">
-        <a href="#" onclick="showTab('signin');return false;" style="color:var(--color-accent)">Back to sign in</a>
-      </p>
-    </div>
-
-    <!-- SIGN UP -->
-    <div id="pane-signup" style="display:none">
-      <div class="field"><label>Full name *</label>
-        <input id="su-name" placeholder="Jane Doe"></div>
-      <div class="field"><label>Email address *</label>
-        <input id="su-email" type="email" placeholder="you@example.com"></div>
-      <div class="field"><label>Telephone number</label>
-        <input id="su-tel" type="tel" placeholder="e.g. 0722 000 000"></div>
-      <hr class="divider">
-      <div id="su-org-block">
-      <div class="field">
-        <label>Organisation name *</label>
-        <input id="su-company" placeholder="e.g. Jua Kali SACCO, Pamoja Chama, Greenfields Estate">
-        <p style="font-size:12px;color:var(--color-muted);margin-top:4px">This becomes your organisation's display name in the system.</p>
-      </div>
-      <div class="field">
-        <label>Organisation type *</label>
-        <select id="su-org-type">
-          <option value="sacco">SACCO</option>
-          <option value="chama">Chama / Investment Group</option>
-          <option value="residents_association">Residents Association</option>
-          <option value="investment_group">Investment Club</option>
-          <option value="welfare_group">Welfare Group</option>
-        </select>
-        <p style="font-size:12px;color:var(--color-muted);margin-top:4px">You can only select one type. Additional sectors require admin approval.</p>
-      </div>
-      </div>
-      <div id="su-invite-note" style="display:none;font-size:13px;background:var(--color-bg, #F7F6F3);padding:10px 12px;border-radius:6px;margin-bottom:12px">
-        You have been invited to join an organisation. Create your account with the invited email address and you will be added automatically.
-      </div>
-      <hr class="divider">
-      <div class="field"><label>Password *</label>
-        <input id="su-password" type="password" autocomplete="new-password" placeholder="Min. 8 characters"></div>
-      <div class="field"><label>Confirm password *</label>
-        <input id="su-confirm" type="password" autocomplete="new-password"></div>
-      <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
-        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:var(--color-muted);line-height:1.5">
-          <input type="checkbox" id="su-comms" style="margin-top:2px;flex-shrink:0;width:15px;height:15px">
-          <span>I would like to receive product updates, tips, and occasional communications from <span class="edhafu-name"><span class="e">e</span>dhafu</span>.</span>
-        </label>
-        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:var(--color-muted);line-height:1.5">
-          <input type="checkbox" id="su-terms" style="margin-top:2px;flex-shrink:0;width:15px;height:15px">
-          <span>I agree to the <a href="#" style="color:var(--color-accent)">Terms of Service</a> and <a href="#" style="color:var(--color-accent)">Privacy Policy</a> <span style="color:var(--color-alert)">*</span></span>
-        </label>
-      </div>
-      <button class="btn accent" style="width:100%;margin-top:16px" onclick="signUp()">Create account</button>
-      <p id="su-error" class="error" style="display:none"></p>
-      <p id="su-success" style="display:none;color:var(--color-success);font-size:13px;text-align:center;margin-top:12px"></p>
-      <p style="text-align:center;margin-top:16px;font-size:13px;color:var(--color-muted)">
-        Already have an account? <a href="#" onclick="showTab('signin')" style="color:var(--color-accent)">Sign in</a>
-      </p>
+      <p id="error" class="error" style="display:none"></p>
+      <p id="info" style="display:none;color:var(--color-success);font-size:13px"></p>
     </div>
   </div>
-</div>
 
-<script src="js/config.js"></script>
-<script src="js/auth.js"></script>
-<script>
-  function showTab(name) {
-    ['signin','signup','reset'].forEach(t => {
-      document.getElementById('pane-'+t).style.display = t===name ? 'block' : 'none';
-      const tab = document.getElementById('tab-'+t);
-      if (tab) tab.classList.toggle('active', t===name);
-    });
-    if (name === 'reset') {
-      const e = document.getElementById('si-email').value.trim();
-      if (e) document.getElementById('rp-email').value = e;
-    }
-  }
-
-  async function sendResetLink() {
-    const errorEl   = document.getElementById('rp-error');
-    const successEl = document.getElementById('rp-success');
-    errorEl.style.display = 'none'; successEl.style.display = 'none';
-    const email = document.getElementById('rp-email').value.trim();
-    if (!email) { showError(errorEl, 'Enter your email address.'); return; }
-    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + '/reset-password.html'
-    });
-    if (error) { showError(errorEl, error.message); return; }
-    successEl.innerHTML = 'If an account exists for <strong>' + email + '</strong>, a reset link is on its way. Check your inbox and spam folder.';
-    successEl.style.display = 'block';
-  }
-
-  async function signIn() {
-    const errorEl = document.getElementById('si-error');
-    errorEl.style.display = 'none';
-    const email    = document.getElementById('si-email').value.trim();
-    const password = document.getElementById('si-password').value;
-    if (!email || !password) { showError(errorEl,'Enter your email and password.'); return; }
-    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-    if (error) { showError(errorEl, error.message); return; }
-    window.location.href = 'index.html';
-  }
-
-  async function signUp() {
-    const errorEl   = document.getElementById('su-error');
-    const successEl = document.getElementById('su-success');
-    errorEl.style.display = 'none';
-    successEl.style.display = 'none';
-
-    const name     = document.getElementById('su-name').value.trim();
-    const email    = document.getElementById('su-email').value.trim();
-    const company  = document.getElementById('su-company').value.trim();
-    const tel      = document.getElementById('su-tel').value.trim();
-    const password = document.getElementById('su-password').value;
-    const confirm  = document.getElementById('su-confirm').value;
-    const orgType  = document.getElementById('su-org-type').value;
-    const comms    = document.getElementById('su-comms').checked;
-    const terms    = document.getElementById('su-terms').checked;
-
-    // Validation
-    if (!name)    { showError(errorEl,'Full name is required.'); return; }
-    if (!email)   { showError(errorEl,'Email address is required.'); return; }
-    if (!IS_INVITE && !company) { showError(errorEl,'Organisation name is required.'); return; }
-    if (!password || password.length < 8) { showError(errorEl,'Password must be at least 8 characters.'); return; }
-    if (password !== confirm) { showError(errorEl,'Passwords do not match.'); return; }
-    if (!terms) { showError(errorEl,'Please accept the Terms of Service to continue.'); return; }
-
-    // Create auth account
-    const { data, error } = await supabaseClient.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name:    name,
-          company:      IS_INVITE ? null : (company || null),
-          telephone:    tel || null,
-          org_type:     IS_INVITE ? null : orgType,
-          receive_comms: comms,
-        }
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    async function login() {
+      const email = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+      const errorEl = document.getElementById("error");
+      const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if (error) {
+        showError(errorEl, error.message);
+        return;
       }
-    });
-    if (error) { showError(errorEl, error.message); return; }
-
-    successEl.innerHTML = `
-      <strong>Account created!</strong><br>
-      ${IS_INVITE ? 'You will be added to the organisation that invited you.' : 'Your organisation <strong>' + company + '</strong> has been set up.'}<br>
-      Check your email (<strong>${email}</strong>) for a confirmation link,
-      then sign in to get started.`;
-    successEl.style.display = 'block';
-
-    // Clear form
-    ['su-name','su-email','su-company','su-tel','su-password','su-confirm']
-      .forEach(id => document.getElementById(id).value = '');
-  }
-
-  // Invite mode: login.html?invite=email hides org fields
-  const INVITE_EMAIL = new URLSearchParams(window.location.search).get('invite');
-  const IS_INVITE = !!INVITE_EMAIL;
-  if (IS_INVITE) {
-    document.getElementById('su-org-block').style.display = 'none';
-    document.getElementById('su-invite-note').style.display = 'block';
-    document.getElementById('su-email').value = INVITE_EMAIL;
-    showTab('signup');
-  }
-
-  // If already signed in, skip to dashboard
-  supabaseClient.auth.getSession().then(({ data: { session } }) => {
-    if (session) window.location.href = 'index.html';
-  });
-
-  // Allow Enter key on sign in
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      const active = document.querySelector('.auth-tab.active')?.id;
-      if (active === 'tab-signin') signIn();
-      else if (active === 'tab-signup') signUp();
-      if (document.getElementById('pane-reset').style.display === 'block') sendResetLink();
+      window.location.href = "index.html";
     }
-  });
-</script>
+
+    async function forgotPassword(e) {
+      e.preventDefault();
+      const errorEl = document.getElementById("error");
+      const infoEl = document.getElementById("info");
+      errorEl.style.display = "none"; infoEl.style.display = "none";
+
+      const email = document.getElementById("email").value.trim();
+      if (!email) { showError(errorEl, "Enter your email address above first."); return; }
+
+      const redirectTo = window.location.origin + window.location.pathname.replace(/login\.html$/, "reset-password.html");
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
+      if (error) { showError(errorEl, error.message); return; }
+
+      infoEl.textContent = "Check your email for a link to reset your password.";
+      infoEl.style.display = "block";
+    }
+
+    (async () => {
+      // A recovery or invite link lands here with the session token in the
+      // URL's hash fragment. supabase-js auto-establishes a session from
+      // it, which would otherwise trigger the "already signed in" redirect
+      // below and drop the user straight into the app — without ever
+      // letting them set a password. Catch that case first and send them
+      // to the dedicated password-setting page instead, carrying the hash
+      // along so supabase-js there also picks up the same token.
+      const hash = window.location.hash || "";
+      if (hash.includes("type=recovery") || hash.includes("type=invite")) {
+        window.location.replace("reset-password.html" + hash);
+        return;
+      }
+
+      // Otherwise, if already signed in, skip straight to the dashboard.
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (session) window.location.href = "index.html";
+    })();
+  </script>
 </body>
 </html>
