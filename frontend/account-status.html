@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Account Status — Financial Operating System</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav" id="nav-mount"></nav>
+    <main class="main">
+      <div class="card" style="max-width:560px;margin:40px auto;text-align:center">
+        <div id="status-icon" style="font-size:40px;margin-bottom:12px">⏳</div>
+        <h1 id="status-title" style="margin-bottom:12px">Checking your organisation…</h1>
+        <p id="status-message" style="color:var(--color-muted)">One moment.</p>
+        <p id="status-detail" style="color:var(--color-muted);font-size:13px;margin-top:12px"></p>
+        <div style="margin-top:20px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+          <button class="btn" onclick="signOut()">Sign out</button>
+          <a class="btn" id="switch-org-link" href="index.html" style="display:none">Try a different organisation</a>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    (async () => {
+      const session = await requireSession();
+      if (!session) return;
+      const org = await currentOrg();
+      if (!org) {
+        document.getElementById("status-title").textContent = "No organisation found";
+        document.getElementById("status-message").textContent =
+          "You're not a member of any organisation yet. Create one from the sidebar.";
+        return;
+      }
+
+      const { data: status } = await supabaseClient.rpc("fn_org_access_status", {
+        p_org_id: org.organisation_id,
+      });
+
+      const icon = document.getElementById("status-icon");
+      const title = document.getElementById("status-title");
+      const message = document.getElementById("status-message");
+      const detail = document.getElementById("status-detail");
+
+      if (status === "active") {
+        // Nothing wrong after all — send them on to the dashboard.
+        window.location.href = "index.html";
+        return;
+      }
+
+      if (status === "pending_approval") {
+        icon.textContent = "⏳";
+        title.textContent = "Waiting for approval";
+        message.textContent = `"${org.organisations.name}" has been created and is awaiting approval before you can start using it.`;
+        detail.textContent = "This is usually quick. You'll be able to sign in normally once it's approved.";
+      } else if (status === "rejected") {
+        icon.textContent = "✕";
+        title.textContent = "Application not approved";
+        message.textContent = `"${org.organisations.name}" was not approved.`;
+        detail.textContent = org.organisations.decision_remarks || "Contact support for more details.";
+      } else if (status === "cancelled") {
+        icon.textContent = "✕";
+        title.textContent = "Organisation cancelled";
+        message.textContent = `"${org.organisations.name}" has been cancelled and is no longer accessible.`;
+      } else if (status === "suspended_unpaid") {
+        icon.textContent = "🔒";
+        title.textContent = "Account suspended";
+        message.textContent = `"${org.organisations.name}" has an overdue invoice. Access is suspended until payment is received.`;
+        detail.textContent = "Contact support to arrange payment and restore access.";
+      } else {
+        icon.textContent = "⚠";
+        title.textContent = "Organisation not found";
+        message.textContent = "This organisation could not be found.";
+      }
+    })();
+  </script>
+
+</body>
+</html>

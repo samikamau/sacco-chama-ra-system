@@ -2,214 +2,261 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Platform Admin - Edhafu</title>
-<link rel="icon" type="image/png" sizes="32x32" href="images/edhafu-icon-32.png">
-<link rel="apple-touch-icon" href="images/edhafu-icon-180.png">
+<title>Platform Admin — Financial Operating System</title>
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<style>
-  .badge-sector { display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;background:var(--color-primary);color:#fff;margin:2px }
-  .badge-primary { background:var(--color-accent) }
-</style>
 </head>
 <body>
-<div class="app-shell">
-  <nav class="nav">
-    <div class="brand"><img class="edhafu-logo" src="images/edhafu-logo-white.png" alt="Edhafu"></div>
-    <a href="platform-admin.html" class="active">Organisations</a>
-    <a href="index.html">My Dashboard</a>
-    <a href="#" onclick="signOut()" class="nav-signout">Sign out</a>
-  </nav>
-
-  <main class="main">
-    <h1>Platform Administration</h1>
-    <p style="color:var(--color-muted);font-size:13px;margin-bottom:20px">
-      Manage organisations, activate sectors, and view all registered accounts.
-    </p>
-
-    <!-- Stats -->
-    <div class="kpi-grid" style="margin-bottom:20px" id="platform-stats">
-      <div class="kpi-card" style="background:#F3EBD8">
-        <div class="kpi-num" id="stat-orgs">—</div>
-        <div class="kpi-label">Organisations</div>
+  <div class="app-shell">
+    <nav class="nav" id="nav-mount"></nav>
+    <main class="main">
+      <h1>Platform Admin</h1>
+      <div id="not-admin" class="card" style="display:none">
+        <p class="error">You are not a platform admin. This area is restricted.</p>
       </div>
-      <div class="kpi-card" style="background:#F3EBD8">
-        <div class="kpi-num" id="stat-users">—</div>
-        <div class="kpi-label">Users</div>
-      </div>
-      <div class="kpi-card" style="background:#F3EBD8">
-        <div class="kpi-num" id="stat-sectors">—</div>
-        <div class="kpi-label">Active sectors</div>
-      </div>
-    </div>
 
-    <!-- Organisations table -->
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <h2 style="margin:0">Organisations</h2>
-        <input id="org-search" placeholder="Search name…" oninput="filterOrgs()" style="width:220px">
-      </div>
-      <table id="orgs-table">
-        <thead><tr>
-          <th>Organisation</th>
-          <th>Primary sector</th>
-          <th>Active sectors</th>
-          <th>Users</th>
-          <th>Signed up</th>
-          <th>Actions</th>
-        </tr></thead>
-        <tbody id="orgs-body"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
-      </table>
-    </div>
-
-    <!-- Activate sector modal -->
-    <div id="sector-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:50;align-items:center;justify-content:center">
-      <div class="card" style="width:420px;max-width:94vw;padding:24px">
-        <h2 style="margin-bottom:4px">Activate sector</h2>
-        <p id="modal-org-name" style="color:var(--color-muted);font-size:13px;margin-bottom:16px"></p>
-        <div class="field">
-          <label>Sector to activate</label>
-          <select id="modal-sector">
-            <option value="sacco">SACCO</option>
-            <option value="chama">Chama / Investment Group</option>
-            <option value="residents_association">Residents Association</option>
-            <option value="investment_group">Investment Club</option>
-            <option value="welfare_group">Welfare Group</option>
-          </select>
+      <div id="admin-area" style="display:none">
+        <!-- PENDING ORGANISATIONS -->
+        <div class="card">
+          <h2>Pending organisations</h2>
+          <table>
+            <thead><tr><th>Name</th><th>Type</th><th>Requested</th><th></th></tr></thead>
+            <tbody id="pending-rows"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+          </table>
         </div>
-        <div class="field">
-          <label>Notes (reason for activation)</label>
-          <input id="modal-notes" placeholder="e.g. Requested via email 2026-09-22">
+
+        <!-- ALL ORGANISATIONS / BILLING -->
+        <div class="card">
+          <h2>All organisations — billing</h2>
+          <table>
+            <thead><tr><th>Name</th><th>Type</th><th>Status</th><th class="num">Monthly fee</th><th>Latest invoice</th><th></th></tr></thead>
+            <tbody id="billing-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+          </table>
         </div>
-        <p id="modal-error" class="error" style="display:none"></p>
+
+        <!-- PLATFORM ADMINS -->
+        <div class="card">
+          <h2>Platform admins</h2>
+          <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+            <div class="field" style="margin-bottom:0"><label>Grant access by email</label><input id="grant-email" type="email" placeholder="person@example.com"></div>
+            <button class="btn accent" onclick="grantAdmin()">Grant</button>
+          </div>
+          <p id="admin-error" class="error" style="display:none"></p>
+          <table style="margin-top:12px">
+            <thead><tr><th>Email</th><th>Granted</th><th></th></tr></thead>
+            <tbody id="admin-rows"><tr><td colspan="3" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- APPROVE DRAWER -->
+      <div class="drawer-backdrop" id="approve-backdrop" onclick="closeApproveDrawer()"></div>
+      <div class="drawer" id="approve-drawer">
+        <h2>Approve organisation</h2>
+        <p id="approve-org-name" style="color:var(--color-muted)"></p>
+        <div class="field"><label>Monthly fee (KES) *</label><input id="approve-fee" type="number" min="0" step="1" placeholder="e.g. 1000"></div>
+        <p id="approve-error" class="error" style="display:none"></p>
         <div style="display:flex;gap:8px;margin-top:16px">
-          <button class="btn accent" onclick="confirmActivate()">Activate sector</button>
-          <button class="btn" style="background:var(--color-muted)" onclick="closeModal()">Cancel</button>
+          <button class="btn accent" onclick="confirmApprove()">Approve</button>
+          <button class="btn" style="background:var(--color-muted)" onclick="closeApproveDrawer()">Cancel</button>
         </div>
       </div>
-    </div>
-  </main>
-</div>
 
-<script src="js/config.js"></script>
-<script src="js/auth.js"></script>
-<script>
-  let allOrgs = [], currentOrgId = null;
+      <!-- REJECT DRAWER -->
+      <div class="drawer-backdrop" id="reject-backdrop" onclick="closeRejectDrawer()"></div>
+      <div class="drawer" id="reject-drawer">
+        <h2>Decline organisation</h2>
+        <p id="reject-org-name" style="color:var(--color-muted)"></p>
+        <div class="field"><label>Reason *</label><input id="reject-reason" placeholder="Shown to the applicant"></div>
+        <p id="reject-error" class="error" style="display:none"></p>
+        <div style="display:flex;gap:8px;margin-top:16px">
+          <button class="btn" style="background:var(--color-alert)" onclick="confirmReject()">Decline</button>
+          <button class="btn" style="background:var(--color-muted)" onclick="closeRejectDrawer()">Cancel</button>
+        </div>
+      </div>
 
-  const SECTOR_LABELS = {
-    sacco:'SACCO', chama:'Chama', residents_association:'Residents Assoc.',
-    investment_group:'Investment Club', welfare_group:'Welfare Group',
-  };
+      <!-- INVOICE DRAWER -->
+      <div class="drawer-backdrop" id="invoice-backdrop" onclick="closeInvoiceDrawer()"></div>
+      <div class="drawer" id="invoice-drawer">
+        <h2>New invoice</h2>
+        <p id="invoice-org-name" style="color:var(--color-muted)"></p>
+        <div class="field"><label>Period start *</label><input id="inv-start" type="date"></div>
+        <div class="field"><label>Period end *</label><input id="inv-end" type="date"></div>
+        <div class="field"><label>Amount (KES) *</label><input id="inv-amount" type="number" min="0" step="1"></div>
+        <div class="field"><label>Due date *</label><input id="inv-due" type="date"></div>
+        <p id="invoice-error" class="error" style="display:none"></p>
+        <div style="display:flex;gap:8px;margin-top:16px">
+          <button class="btn accent" onclick="confirmInvoice()">Create invoice</button>
+          <button class="btn" style="background:var(--color-muted)" onclick="closeInvoiceDrawer()">Cancel</button>
+        </div>
+      </div>
+    </main>
+  </div>
 
-  async function checkAdmin() {
-    const { data, error } = await supabaseClient.from('platform_admins')
-      .select('user_id').limit(1);
-    if (error || !data?.length) {
-      document.querySelector('main').innerHTML =
-        '<div class="card" style="text-align:center;padding:40px"><h2>Access denied</h2><p>You do not have platform admin access.</p></div>';
-      return false;
+  <script src="js/config.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let pendingOrgId = null;
+    let invoiceOrgId = null;
+
+    async function loadPending() {
+      const { data, error } = await supabaseClient.rpc("fn_list_pending_organisations");
+      const tbody = document.getElementById("pending-rows");
+      if (error) { tbody.innerHTML = `<tr><td colspan="4" class="error">${error.message}</td></tr>`; return; }
+      if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="4" class="empty">No pending organisations.</td></tr>`; return; }
+      tbody.innerHTML = data.map(o => `
+        <tr>
+          <td>${o.name}</td>
+          <td>${o.org_type}</td>
+          <td>${new Date(o.created_at).toLocaleDateString()}</td>
+          <td style="display:flex;gap:4px">
+            <button class="btn accent" style="padding:2px 8px;font-size:12px" onclick="openApproveDrawer('${o.id}','${o.name.replace(/'/g,"\\'")}')">Approve</button>
+            <button class="btn" style="padding:2px 8px;font-size:12px;background:var(--color-alert)" onclick="openRejectDrawer('${o.id}','${o.name.replace(/'/g,"\\'")}')">Decline</button>
+          </td>
+        </tr>`).join("");
     }
-    return true;
-  }
 
-  async function loadOrgs() {
-    // Load organisations with their sectors and user counts
-    const [{ data: orgs }, { data: sectors }, { data: orgUsers }] = await Promise.all([
-      supabaseClient.from('organisations').select('id,name,org_type,created_at').order('created_at', {ascending:false}),
-      supabaseClient.from('organisation_sectors').select('organisation_id,sector,is_primary,activated_at'),
-      supabaseClient.from('organisation_users').select('organisation_id,user_id').eq('status','active'),
-    ]);
+    async function loadBilling() {
+      const { data, error } = await supabaseClient.rpc("fn_list_all_organisations_billing");
+      const tbody = document.getElementById("billing-rows");
+      if (error) { tbody.innerHTML = `<tr><td colspan="6" class="error">${error.message}</td></tr>`; return; }
+      if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty">No organisations yet.</td></tr>`; return; }
+      tbody.innerHTML = data.map(o => `
+        <tr>
+          <td>${o.name}</td>
+          <td>${o.org_type}</td>
+          <td><span class="status ${o.status==='active'?'paid':o.status==='pending_approval'?'partial':'unpaid'}">${o.status}</span></td>
+          <td class="num">${o.monthly_fee != null ? money(o.monthly_fee) : "—"}</td>
+          <td>${o.latest_invoice_status ? `${o.latest_invoice_status} (due ${o.latest_invoice_due})` : "No invoices"}</td>
+          <td><button class="btn" style="padding:2px 8px;font-size:12px" onclick="openInvoiceDrawer('${o.id}','${o.name.replace(/'/g,"\\'")}')">New invoice</button></td>
+        </tr>`).join("");
+    }
 
-    allOrgs = (orgs||[]).map(o => ({
-      ...o,
-      sectors: (sectors||[]).filter(s => s.organisation_id === o.id),
-      userCount: (orgUsers||[]).filter(u => u.organisation_id === o.id).length,
-    }));
+    async function loadAdmins() {
+      const { data, error } = await supabaseClient.rpc("fn_list_platform_admins");
+      const tbody = document.getElementById("admin-rows");
+      if (error) { tbody.innerHTML = `<tr><td colspan="3" class="error">${error.message}</td></tr>`; return; }
+      tbody.innerHTML = (data||[]).map(a => `
+        <tr>
+          <td>${a.email}</td>
+          <td>${new Date(a.granted_at).toLocaleDateString()}</td>
+          <td><button class="btn" style="padding:2px 8px;font-size:12px;background:var(--color-alert)" onclick="revokeAdmin('${a.user_id}')">Revoke</button></td>
+        </tr>`).join("");
+    }
 
-    // Stats
-    document.getElementById('stat-orgs').textContent = allOrgs.length;
-    document.getElementById('stat-users').textContent = (orgUsers||[]).length;
-    document.getElementById('stat-sectors').textContent = (sectors||[]).length;
+    async function grantAdmin() {
+      const errorEl = document.getElementById("admin-error");
+      errorEl.style.display = "none";
+      const email = document.getElementById("grant-email").value.trim();
+      if (!email) { showError(errorEl, "Enter an email address."); return; }
+      const { error } = await supabaseClient.rpc("fn_grant_platform_admin", { p_email: email });
+      if (error) { showError(errorEl, error.message); return; }
+      document.getElementById("grant-email").value = "";
+      loadAdmins();
+    }
 
-    renderOrgs(allOrgs);
-  }
+    async function revokeAdmin(userId) {
+      if (!confirm("Revoke platform admin access for this user?")) return;
+      const { error } = await supabaseClient.rpc("fn_revoke_platform_admin", { p_user_id: userId });
+      if (error) { alert(error.message); return; }
+      loadAdmins();
+    }
 
-  function renderOrgs(orgs) {
-    const tbody = document.getElementById('orgs-body');
-    if (!orgs.length) { tbody.innerHTML='<tr><td colspan="6" class="empty">No organisations.</td></tr>'; return; }
-    tbody.innerHTML = orgs.map(o => {
-      const primary = o.sectors.find(s=>s.is_primary);
-      const additional = o.sectors.filter(s=>!s.is_primary);
-      return `<tr>
-        <td><strong>${o.name}</strong><br><span style="font-size:11px;color:var(--color-muted)">${o.id.slice(0,8)}…</span></td>
-        <td><span class="badge-sector badge-primary">${SECTOR_LABELS[primary?.sector||o.org_type]||o.org_type}</span></td>
-        <td>${additional.map(s=>`<span class="badge-sector">${SECTOR_LABELS[s.sector]||s.sector}</span>`).join('') || '<span style="color:var(--color-muted);font-size:12px">None</span>'}</td>
-        <td>${o.userCount}</td>
-        <td style="font-size:12px;color:var(--color-muted)">${o.created_at?.slice(0,10)||'—'}</td>
-        <td><button class="btn" style="font-size:12px;padding:3px 10px" onclick="openModal('${o.id}','${o.name.replace(/'/g,"\\'")}')">+ Sector</button></td>
-      </tr>`;
-    }).join('');
-  }
+    function openApproveDrawer(id, name) {
+      pendingOrgId = id;
+      document.getElementById("approve-org-name").textContent = name;
+      document.getElementById("approve-fee").value = "";
+      document.getElementById("approve-error").style.display = "none";
+      document.getElementById("approve-backdrop").classList.add("open");
+      document.getElementById("approve-drawer").classList.add("open");
+    }
+    function closeApproveDrawer() {
+      document.getElementById("approve-backdrop").classList.remove("open");
+      document.getElementById("approve-drawer").classList.remove("open");
+    }
+    async function confirmApprove() {
+      const errorEl = document.getElementById("approve-error");
+      const fee = document.getElementById("approve-fee").value;
+      if (!fee || Number(fee) < 0) { showError(errorEl, "Enter a valid monthly fee."); return; }
+      const { error } = await supabaseClient.rpc("fn_approve_organisation", {
+        p_org_id: pendingOrgId, p_monthly_fee: fee,
+      });
+      if (error) { showError(errorEl, error.message); return; }
+      closeApproveDrawer();
+      loadPending(); loadBilling();
+    }
 
-  function filterOrgs() {
-    const q = document.getElementById('org-search').value.toLowerCase();
-    renderOrgs(q ? allOrgs.filter(o=>o.name.toLowerCase().includes(q)) : allOrgs);
-  }
+    function openRejectDrawer(id, name) {
+      pendingOrgId = id;
+      document.getElementById("reject-org-name").textContent = name;
+      document.getElementById("reject-reason").value = "";
+      document.getElementById("reject-error").style.display = "none";
+      document.getElementById("reject-backdrop").classList.add("open");
+      document.getElementById("reject-drawer").classList.add("open");
+    }
+    function closeRejectDrawer() {
+      document.getElementById("reject-backdrop").classList.remove("open");
+      document.getElementById("reject-drawer").classList.remove("open");
+    }
+    async function confirmReject() {
+      const errorEl = document.getElementById("reject-error");
+      const reason = document.getElementById("reject-reason").value.trim();
+      if (!reason) { showError(errorEl, "A reason is required."); return; }
+      const { error } = await supabaseClient.rpc("fn_reject_organisation", {
+        p_org_id: pendingOrgId, p_reason: reason,
+      });
+      if (error) { showError(errorEl, error.message); return; }
+      closeRejectDrawer();
+      loadPending(); loadBilling();
+    }
 
-  function openModal(orgId, orgName) {
-    currentOrgId = orgId;
-    document.getElementById('modal-org-name').textContent = orgName;
-    document.getElementById('modal-error').style.display = 'none';
-    document.getElementById('modal-notes').value = '';
-    const modal = document.getElementById('sector-modal');
-    modal.style.display = 'flex';
-  }
+    function openInvoiceDrawer(id, name) {
+      invoiceOrgId = id;
+      document.getElementById("invoice-org-name").textContent = name;
+      document.getElementById("inv-start").value = "";
+      document.getElementById("inv-end").value = "";
+      document.getElementById("inv-amount").value = "";
+      document.getElementById("inv-due").value = "";
+      document.getElementById("invoice-error").style.display = "none";
+      document.getElementById("invoice-backdrop").classList.add("open");
+      document.getElementById("invoice-drawer").classList.add("open");
+    }
+    function closeInvoiceDrawer() {
+      document.getElementById("invoice-backdrop").classList.remove("open");
+      document.getElementById("invoice-drawer").classList.remove("open");
+    }
+    async function confirmInvoice() {
+      const errorEl = document.getElementById("invoice-error");
+      const start = document.getElementById("inv-start").value;
+      const end = document.getElementById("inv-end").value;
+      const amount = document.getElementById("inv-amount").value;
+      const due = document.getElementById("inv-due").value;
+      if (!start || !end || !amount || !due) { showError(errorEl, "All fields are required."); return; }
+      const { error } = await supabaseClient.rpc("fn_create_invoice", {
+        p_org_id: invoiceOrgId, p_period_start: start, p_period_end: end,
+        p_amount: amount, p_due_date: due,
+      });
+      if (error) { showError(errorEl, error.message); return; }
+      closeInvoiceDrawer();
+      loadBilling();
+    }
 
-  function closeModal() {
-    document.getElementById('sector-modal').style.display = 'none';
-    currentOrgId = null;
-  }
+    (async () => {
+      const session = await requireSession();
+      if (!session) return;
 
-  async function confirmActivate() {
-    const errorEl = document.getElementById('modal-error');
-    errorEl.style.display = 'none';
-    const sector = document.getElementById('modal-sector').value;
-    const notes  = document.getElementById('modal-notes').value.trim() || null;
+      const { data: isAdmin } = await supabaseClient.rpc("fn_is_platform_admin");
+      if (!isAdmin) {
+        document.getElementById("not-admin").style.display = "block";
+        return;
+      }
+      document.getElementById("admin-area").style.display = "block";
+      loadPending();
+      loadBilling();
+      loadAdmins();
+    })();
+  </script>
 
-    const { error } = await supabaseClient.rpc('fn_activate_sector', {
-      p_organisation_id: currentOrgId,
-      p_sector:          sector,
-      p_notes:           notes,
-    });
-
-    if (error) { showError(errorEl, error.message); return; }
-    closeModal();
-    loadOrgs();
-  }
-
-  async function deactivateSector(orgId, sector, orgName) {
-    if (!confirm(`Remove "${SECTOR_LABELS[sector]||sector}" sector from ${orgName}? This cannot be undone.`)) return;
-    const { error } = await supabaseClient.rpc('fn_deactivate_sector', {
-      p_organisation_id: orgId,
-      p_sector:          sector,
-    });
-    if (error) { alert('Error: ' + error.message); return; }
-    loadOrgs();
-  }
-
-  // Close modal on backdrop click
-  document.getElementById('sector-modal').addEventListener('click', function(e) {
-    if (e.target === this) closeModal();
-  });
-
-  (async () => {
-    const session = await requireSession(); if (!session) return;
-    if (!await checkAdmin()) return;
-    loadOrgs();
-  })();
-</script>
-<script>
-function toggleNav(h){h.parentElement.classList.toggle('nav-open');}
-</script>
 </body>
 </html>

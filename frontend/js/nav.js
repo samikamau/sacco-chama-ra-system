@@ -87,11 +87,37 @@ async function renderNav() {
   const mount = document.getElementById('nav-mount');
   if (!mount) return;
 
-  const { terms, modules, orgType } = await getOrgContext();
-  const { myOrgs, activeOrgId } = await getOrgSwitcherData();
-
   let current = window.location.pathname.split('/').pop() || 'index.html';
   current = NAV_ALIASES[current] || current;
+
+  // Gate access before doing anything else — skip the check on the status
+  // page itself (and login) to avoid a redirect loop.
+  if (current !== 'account-status.html' && current !== 'login.html' && current !== 'create-organisation.html' && current !== 'platform-admin.html') {
+    try {
+      if (typeof currentOrg === 'function' && typeof supabaseClient !== 'undefined') {
+        const org = await currentOrg();
+        if (org) {
+          const { data: accessStatus } = await supabaseClient.rpc('fn_org_access_status', {
+            p_org_id: org.organisation_id,
+          });
+          if (accessStatus && accessStatus !== 'active') {
+            window.location.href = 'account-status.html';
+            return;
+          }
+        }
+      }
+    } catch (e) { /* if the access check itself fails, don't block the whole app */ }
+  }
+
+  const { terms, modules, orgType } = await getOrgContext();
+  const { myOrgs, activeOrgId } = await getOrgSwitcherData();
+  let isPlatformAdmin = false;
+  try {
+    if (typeof supabaseClient !== 'undefined') {
+      const { data } = await supabaseClient.rpc('fn_is_platform_admin');
+      isPlatformAdmin = !!data;
+    }
+  } catch (e) { /* not critical — link just won't show */ }
 
   const accountantHrefs = ACCOUNTANT_ITEMS.map(i => i.href);
   const isAccountantActive = accountantHrefs.includes(current);
@@ -129,7 +155,10 @@ async function renderNav() {
   }).join('');
 
   mount.innerHTML = `
-    <div class="brand"><img class="edhafu-logo" src="images/edhafu-logo-white.png" alt="Edhafu"></div>
+    <div class="brand" style="line-height:1.15">
+      <span style="font-size:28px;font-weight:700;color:#E63946">e</span><span style="font-size:28px;font-weight:700;color:#FFFFFF">dhafu</span>
+      <div style="font-size:12px;font-weight:400;letter-spacing:0.06em;color:rgba(255,255,255,0.65);margin-top:2px">Finance Simplified</div>
+    </div>
     <div style="position:relative;margin-bottom:12px">
       <button type="button" onclick="toggleOrgSwitcher(event)"
         style="width:100%;text-align:left;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#fff;padding:8px 10px;border-radius:6px;font-size:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:6px">
@@ -138,6 +167,7 @@ async function renderNav() {
       </button>
       <div id="org-switcher-menu" style="display:none;position:absolute;z-index:30;top:100%;left:0;right:0;background:#fff;border-radius:6px;box-shadow:0 8px 20px rgba(0,0,0,0.25);margin-top:4px;overflow:hidden">
         ${switcherItems}
+        <a href="create-organisation.html" style="display:block;padding:8px 12px;font-size:13px;color:var(--color-primary, #1B6E45);text-decoration:none;border-top:1px solid var(--color-line, #ddd)">+ New organisation</a>
       </div>
     </div>
     ${topLinks}
@@ -147,6 +177,10 @@ async function renderNav() {
     <a href="users.html" class="${current === 'users.html' ? 'active' : ''}" style="display:flex;align-items:center;gap:6px">
       ${NAV_ICONS.key}Users
     </a>
+    ${isPlatformAdmin ? `
+    <a href="platform-admin.html" class="${current === 'platform-admin.html' ? 'active' : ''}" style="display:flex;align-items:center;gap:6px">
+      ${NAV_ICONS.calculator}Platform Admin
+    </a>` : ''}
     <a href="#" onclick="signOut()" style="display:flex;align-items:center;gap:6px">
       ${NAV_ICONS.logout}Sign out
     </a>`;
