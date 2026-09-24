@@ -18,6 +18,15 @@
         from the sidebar.
       </p>
 
+      <div class="card" id="has-pending" style="max-width:480px;display:none">
+        <div style="font-size:32px;margin-bottom:6px">&#8987;</div>
+        <h2>You already have an application pending</h2>
+        <p style="color:var(--color-muted);margin-top:6px">
+          "<span id="pending-name"></span>" is still awaiting approval. You can create
+          another organisation once it has been approved.
+        </p>
+      </div>
+
       <div class="card" id="not-allowed" style="max-width:480px;display:none">
         <p class="error">Only platform admins can create organisations. If you need a new organisation set up, please get in touch.</p>
       </div>
@@ -135,6 +144,19 @@
         document.getElementById("not-allowed").style.display = "block";
         return;
       }
+
+      // Do not let someone start a second application while one is still
+      // awaiting approval. The database enforces this too.
+      try {
+        const myOrgs = await listMyOrganisations();
+        const pending = (myOrgs || []).find(o => o.organisations && o.organisations.status === "pending_approval");
+        if (pending) {
+          document.getElementById("pending-name").textContent = pending.organisations.name;
+          document.getElementById("create-form-card").style.display = "none";
+          document.getElementById("has-pending").style.display = "block";
+          return;
+        }
+      } catch (e) { /* if this check fails, the database still blocks it on submit */ }
 
       applyTypeDefaults();
     })();

@@ -38,7 +38,7 @@ async function currentOrg() {
 async function listMyOrganisations() {
   const { data, error } = await supabaseClient
     .from("organisation_users")
-    .select("organisation_id, role, organisations(name, org_type, account_number)")
+    .select("organisation_id, role, organisations(name, org_type, account_number, status)")
     .eq("status", "active");
   if (error) { console.error("Could not list organisations:", error.message); return []; }
   return data || [];
