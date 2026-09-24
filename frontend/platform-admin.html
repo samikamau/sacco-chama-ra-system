@@ -16,6 +16,15 @@
       </div>
 
       <div id="admin-area" style="display:none">
+        <!-- DEMO REQUESTS -->
+        <div class="card">
+          <h2>Demo requests</h2>
+          <table>
+            <thead><tr><th>Received</th><th>Name</th><th>Contact</th><th>Organisation</th><th>Members</th><th>Status</th><th></th></tr></thead>
+            <tbody id="demo-rows"><tr><td colspan="7" class="empty">Loading...</td></tr></tbody>
+          </table>
+        </div>
+
         <!-- PENDING ORGANISATIONS -->
         <div class="card">
           <h2>Pending organisations</h2>
@@ -75,6 +84,27 @@
         </div>
       </div>
 
+      <!-- DEMO REQUEST DRAWER -->
+      <div class="drawer-backdrop" id="demo-backdrop" onclick="closeDemoDrawer()"></div>
+      <div class="drawer" id="demo-drawer">
+        <h2>Demo request</h2>
+        <div id="demo-detail" style="font-size:14px;line-height:1.8"></div>
+        <div class="field" style="margin-top:12px"><label>Status</label>
+          <select id="dr-status">
+            <option value="new">New</option>
+            <option value="contacted">Contacted</option>
+            <option value="converted">Converted</option>
+            <option value="closed">Closed</option>
+          </select>
+        </div>
+        <div class="field"><label>Notes</label><input id="dr-notes" placeholder="Internal notes"></div>
+        <p id="demo-error" class="error" style="display:none"></p>
+        <div style="display:flex;gap:8px;margin-top:16px">
+          <button class="btn accent" onclick="saveDemoRequest()">Save</button>
+          <button class="btn" style="background:var(--color-muted)" onclick="closeDemoDrawer()">Cancel</button>
+        </div>
+      </div>
+
       <!-- EDIT BILLING DRAWER -->
       <div class="drawer-backdrop" id="edit-billing-backdrop" onclick="closeEditBillingDrawer()"></div>
       <div class="drawer" id="edit-billing-drawer">
@@ -114,6 +144,67 @@
   <script>
     let pendingOrgId = null;
     let invoiceOrgId = null;
+
+    let demoRequests = [];
+    let currentDemoId = null;
+
+    async function loadDemoRequests() {
+      const { data, error } = await supabaseClient.rpc("fn_list_demo_requests");
+      const tbody = document.getElementById("demo-rows");
+      if (error) { tbody.innerHTML = `<tr><td colspan="7" class="error">${error.message}</td></tr>`; return; }
+      demoRequests = data || [];
+      if (!demoRequests.length) { tbody.innerHTML = `<tr><td colspan="7" class="empty">No demo requests yet.</td></tr>`; return; }
+
+      const statusClass = { new: "unpaid", contacted: "partial", converted: "paid", closed: "" };
+      tbody.innerHTML = demoRequests.map(d => `
+        <tr>
+          <td style="font-size:12px">${new Date(d.created_at).toLocaleDateString()}</td>
+          <td>${d.full_name}<br><span style="color:var(--color-muted);font-size:11px">${d.contact_position}</span></td>
+          <td style="font-size:12px">${d.email}<br><span style="color:var(--color-muted)">${d.phone}</span></td>
+          <td>${d.organisation_name}<br><span style="color:var(--color-muted);font-size:11px">${d.org_type}</span></td>
+          <td style="font-size:13px">${d.member_range}</td>
+          <td><span class="status ${statusClass[d.status] || ""}">${d.status}</span></td>
+          <td><button class="btn" style="padding:2px 8px;font-size:12px" onclick="openDemoDrawer('${d.id}')">View</button></td>
+        </tr>`).join("");
+    }
+
+    function openDemoDrawer(id) {
+      const d = demoRequests.find(x => x.id === id);
+      if (!d) return;
+      currentDemoId = id;
+      document.getElementById("demo-detail").innerHTML = `
+        <strong>${d.full_name}</strong> (${d.contact_position})<br>
+        <a href="mailto:${d.email}">${d.email}</a><br>
+        <a href="tel:${d.phone}">${d.phone}</a><br><br>
+        <strong>${d.organisation_name}</strong><br>
+        Type: ${d.org_type}<br>
+        Members: ${d.member_range}<br>
+        Received: ${new Date(d.created_at).toLocaleString()}
+        ${d.message ? `<br><br><em>"${d.message}"</em>` : ""}`;
+      document.getElementById("dr-status").value = d.status;
+      document.getElementById("dr-notes").value = d.admin_notes || "";
+      document.getElementById("demo-error").style.display = "none";
+      document.getElementById("demo-backdrop").classList.add("open");
+      document.getElementById("demo-drawer").classList.add("open");
+    }
+
+    function closeDemoDrawer() {
+      document.getElementById("demo-backdrop").classList.remove("open");
+      document.getElementById("demo-drawer").classList.remove("open");
+    }
+
+    async function saveDemoRequest() {
+      const errorEl = document.getElementById("demo-error");
+      errorEl.style.display = "none";
+      const { error } = await supabaseClient.rpc("fn_update_demo_request", {
+        p_id: currentDemoId,
+        p_status: document.getElementById("dr-status").value,
+        p_notes: document.getElementById("dr-notes").value.trim() || null,
+      });
+      if (error) { showError(errorEl, error.message); return; }
+      closeDemoDrawer();
+      loadDemoRequests();
+    }
 
     async function loadPending() {
       const { data, error } = await supabaseClient.rpc("fn_list_pending_organisations");
@@ -321,6 +412,7 @@
         return;
       }
       document.getElementById("admin-area").style.display = "block";
+      loadDemoRequests();
       loadPending();
       loadBilling();
       loadAdmins();
