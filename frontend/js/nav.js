@@ -1,4 +1,4 @@
-// Shared site navigation. Rendered once, used by every page — edit this
+// Shared site navigation. Rendered once, used by every page - edit this
 // single file instead of the nav block on each HTML page.
 
 const NAV_ICONS = {
@@ -90,7 +90,7 @@ async function renderNav() {
   let current = window.location.pathname.split('/').pop() || 'index.html';
   current = NAV_ALIASES[current] || current;
 
-  // Gate access before doing anything else — skip the check on the status
+  // Gate access before doing anything else - skip the check on the status
   // page itself (and login) to avoid a redirect loop.
   if (current !== 'account-status.html' && current !== 'login.html' && current !== 'create-organisation.html' && current !== 'platform-admin.html') {
     try {
@@ -117,7 +117,7 @@ async function renderNav() {
       const { data } = await supabaseClient.rpc('fn_is_platform_admin');
       isPlatformAdmin = !!data;
     }
-  } catch (e) { /* not critical — link just won't show */ }
+  } catch (e) { /* not critical - link just won't show */ }
 
   const accountantHrefs = ACCOUNTANT_ITEMS.map(i => i.href);
   const isAccountantActive = accountantHrefs.includes(current);
@@ -143,14 +143,15 @@ async function renderNav() {
 
   const activeOrg = myOrgs.find(o => o.organisation_id === activeOrgId);
   const activeOrgName = activeOrg ? activeOrg.organisations.name : 'Select organisation';
-  const activeOrgTypeLabel = activeOrg ? (ORG_TYPE_LABELS[activeOrg.organisations.org_type] || '') : '';
+  const activeOrgAcct = activeOrg ? activeOrg.organisations.account_number : null;
 
   const switcherItems = myOrgs.map(o => {
     const isActive = o.organisation_id === activeOrgId;
+    const acct = o.organisations.account_number;
     return `<a href="#" onclick="switchOrg('${o.organisation_id}');return false;"
       style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;font-size:13px;color:#222;text-decoration:none;${isActive ? 'background:var(--color-bg, #F7F6F3);font-weight:600' : ''}">
       <span>${o.organisations.name}</span>
-      <span style="font-size:11px;color:var(--color-muted, #888)">${ORG_TYPE_LABELS[o.organisations.org_type] || ''}</span>
+      <span style="font-size:11px;color:var(--color-muted, #888);font-family:var(--font-mono)">${acct || ''}</span>
     </a>`;
   }).join('');
 
@@ -162,7 +163,7 @@ async function renderNav() {
     <div style="position:relative;margin-bottom:12px">
       <button type="button" onclick="toggleOrgSwitcher(event)"
         style="width:100%;text-align:left;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:#fff;padding:8px 10px;border-radius:6px;font-size:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:6px">
-        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${activeOrgName}${activeOrgTypeLabel ? ' <span style="opacity:0.65">(' + activeOrgTypeLabel + ')</span>' : ''}</span>
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${activeOrgName}${activeOrgAcct ? ' <span style="opacity:0.65">' + activeOrgAcct + '</span>' : ''}</span>
         <span>▾</span>
       </button>
       <div id="org-switcher-menu" style="display:none;position:absolute;z-index:30;top:100%;left:0;right:0;background:#fff;border-radius:6px;box-shadow:0 8px 20px rgba(0,0,0,0.25);margin-top:4px;overflow:hidden">
@@ -205,7 +206,7 @@ document.addEventListener('click', (e) => {
     menu.style.display = 'none';
   }
 });
-// Inserted as the first child of <main class="main"> on every page —
+// Inserted as the first child of <main class="main"> on every page -
 // no per-page HTML edit needed. Shows automatically when the current
 // page belongs to that group; the Accountant bar can also be toggled
 // from the sidebar's Accountant link.

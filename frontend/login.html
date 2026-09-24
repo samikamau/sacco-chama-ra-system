@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Sign in — Financial Operating System</title>
+<title>Sign in - Financial Operating System</title>
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -66,10 +66,20 @@
       // so we must NOT pass the hash on to another page (its own client
       // would try to exchange the same already-used token again and fail).
       // Instead: wait for this page's exchange to finish and persist the
-      // session, then hand off to the password page with no hash at all —
+      // session, then hand off to the password page with no hash at all -
       // it picks up the already-saved session on its own.
       const hash = window.location.hash || "";
       if (hash.includes("type=recovery") || hash.includes("type=invite")) {
+        // If this link was already consumed, do not let it sign anyone in.
+        try {
+          const m = hash.match(/access_token=([^&]+)/);
+          const key = "pwreset_used_" + (m ? m[1].slice(-32) : "none");
+          if (localStorage.getItem(key) === "1") {
+            await supabaseClient.auth.signOut();
+            window.location.replace("reset-password.html" + hash);
+            return;
+          }
+        } catch (e) { /* fall through to the normal handoff */ }
         await supabaseClient.auth.getSession();
         window.location.replace("reset-password.html");
         return;

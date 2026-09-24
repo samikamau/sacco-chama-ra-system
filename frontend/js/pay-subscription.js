@@ -47,11 +47,11 @@ function renderPayModal() {
       </div>
       <div style="display:flex;justify-content:space-between;padding:4px 0">
         <span style="color:var(--color-muted)">Account number</span>
-        <strong style="font-family:var(--font-mono)" id="pay-account">—</strong>
+        <strong style="font-family:var(--font-mono)" id="pay-account">-</strong>
       </div>
       <div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid var(--color-line);margin-top:6px;padding-top:8px">
         <span style="color:var(--color-muted)">Amount</span>
-        <strong id="pay-fee">—</strong>
+        <strong id="pay-fee">-</strong>
       </div>
     </div>
 
@@ -62,7 +62,7 @@ function renderPayModal() {
       <ol style="font-size:13px;margin:8px 0 0 18px;line-height:1.7">
         <li>Go to M-Pesa, then Lipa na M-Pesa, then Pay Bill</li>
         <li>Business number: <strong>${PAYBILL_NUMBER}</strong></li>
-        <li>Account number: <strong id="pay-account-2">—</strong></li>
+        <li>Account number: <strong id="pay-account-2">-</strong></li>
         <li>Enter the amount and confirm</li>
       </ol>
     </details>

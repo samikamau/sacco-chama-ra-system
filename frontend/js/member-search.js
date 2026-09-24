@@ -44,7 +44,7 @@ function setupMemberSearch(inputId, hiddenId, listId, members, onChange) {
     ).slice(0, 20);
 
     list.innerHTML = matches.length
-      ? matches.map(m => `<div class="member-search-item" data-id="${m.id}">${m.member_number} — ${m.full_name}</div>`).join('')
+      ? matches.map(m => `<div class="member-search-item" data-id="${m.id}">${m.member_number} - ${m.full_name}</div>`).join('')
       : `<div class="member-search-empty">No matching members</div>`;
     list.style.display = 'block';
   }
@@ -60,7 +60,7 @@ function setupMemberSearch(inputId, hiddenId, listId, members, onChange) {
     if (!item || !item.dataset.id) return;
     const m = members.find(x => x.id === item.dataset.id);
     if (!m) return;
-    input.value = `${m.member_number} — ${m.full_name}`;
+    input.value = `${m.member_number} - ${m.full_name}`;
     hidden.value = m.id;
     list.style.display = 'none';
     if (onChange) onChange(m.id);

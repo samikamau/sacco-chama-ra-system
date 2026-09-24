@@ -19,7 +19,7 @@ async function currentOrg() {
       .eq("organisation_id", preferredId)
       .limit(1).single();
     if (!error && data) return data;
-    // Preferred org no longer valid (removed, access revoked) — fall through
+    // Preferred org no longer valid (removed, access revoked) - fall through
     // to picking any active membership instead.
     localStorage.removeItem("active_org_id");
   }
@@ -34,11 +34,11 @@ async function currentOrg() {
 }
 
 // All organisations (SACCO, Chama, Residents Association, etc.) the
-// current user is an active member of — used to populate the org switcher.
+// current user is an active member of - used to populate the org switcher.
 async function listMyOrganisations() {
   const { data, error } = await supabaseClient
     .from("organisation_users")
-    .select("organisation_id, role, organisations(name, org_type)")
+    .select("organisation_id, role, organisations(name, org_type, account_number)")
     .eq("status", "active");
   if (error) { console.error("Could not list organisations:", error.message); return []; }
   return data || [];
@@ -54,7 +54,7 @@ function switchOrg(orgId) {
   window.location.href = "index.html";
 }
 
-// Load org settings (feature flags, labels) — cached in sessionStorage
+// Load org settings (feature flags, labels) - cached in sessionStorage
 async function getOrgSettings(orgId) {
   const cacheKey = 'org_settings_' + orgId;
   const cached = sessionStorage.getItem(cacheKey);
@@ -73,7 +73,7 @@ async function getOrgSettings(orgId) {
   return data;
 }
 
-// Apply org settings to nav — hide/show modules based on org type
+// Apply org settings to nav - hide/show modules based on org type
 function applyOrgNav(settings) {
   const type = settings.org_type;
 
@@ -101,38 +101,6 @@ async function signOut() {
   sessionStorage.clear();
   await supabaseClient.auth.signOut();
   window.location.href = "login.html";
-}
-
-// Edhafu logo for PDFs: loaded once as a data URL so jsPDF can embed it.
-let EDHAFU_PDF_LOGO = null;
-const EDHAFU_LOGO_RATIO = 640 / 174;   // width / height of the logo image
-window.addEventListener('load', async () => {
-  try {
-    const blob = await (await fetch('images/edhafu-logo-dark.png')).blob();
-    EDHAFU_PDF_LOGO = await new Promise(res => {
-      const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(blob);
-    });
-  } catch (e) { /* falls back to text logo */ }
-});
-
-// Draw a PDF line with the Edhafu logo between before/after text.
-// Uses the logo image when loaded, otherwise the text version. Returns end x.
-function pdfLogoText(doc, x, y, before, after, baseColor, logoHeight) {
-  const base = baseColor ?? 0;
-  const setBase = () => Array.isArray(base) ? doc.setTextColor(...base) : doc.setTextColor(base);
-  setBase();
-  if (before) { doc.text(before, x, y); x += doc.getTextWidth(before); }
-  if (EDHAFU_PDF_LOGO) {
-    const h = logoHeight || doc.getFontSize() * 0.45;   // roughly matches text height in mm
-    const w = h * EDHAFU_LOGO_RATIO;
-    doc.addImage(EDHAFU_PDF_LOGO, 'PNG', x + 0.5, y - h * 0.78, w, h);
-    x += w + 1;
-  } else {
-    doc.setTextColor(230, 57, 70); doc.text("e", x, y); x += doc.getTextWidth("e");
-    setBase(); doc.text("dhafu", x, y); x += doc.getTextWidth("dhafu");
-  }
-  if (after) { doc.text(after, x, y); x += doc.getTextWidth(after); }
-  return x;
 }
 
 function showError(el, message) {

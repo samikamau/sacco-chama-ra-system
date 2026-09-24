@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Platform Admin — Financial Operating System</title>
+<title>Platform Admin - Financial Operating System</title>
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -27,7 +27,7 @@
 
         <!-- ALL ORGANISATIONS / BILLING -->
         <div class="card">
-          <h2>All organisations — billing</h2>
+          <h2>All organisations - billing</h2>
           <table>
             <thead><tr><th>Name</th><th>Account No.</th><th>Type</th><th>Status</th><th class="num">Monthly fee</th><th>Latest invoice</th><th></th></tr></thead>
             <tbody id="billing-rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
@@ -130,10 +130,10 @@
         return `
         <tr>
           <td>${o.name}</td>
-          <td style="font-family:var(--font-mono);font-size:12px">${o.account_number || "—"}</td>
+          <td style="font-family:var(--font-mono);font-size:12px">${o.account_number || "-"}</td>
           <td>${o.org_type}</td>
           <td><span class="status ${statusClass}">${statusLabel}</span></td>
-          <td class="num">${o.monthly_fee != null ? money(o.monthly_fee) : "—"}</td>
+          <td class="num">${o.monthly_fee != null ? money(o.monthly_fee) : "-"}</td>
           <td>${o.latest_invoice_status ? `${o.latest_invoice_status} (due ${o.latest_invoice_due})` : "No invoices"}</td>
           <td style="display:flex;gap:4px;flex-wrap:wrap">
             <button class="btn" style="padding:2px 8px;font-size:12px" onclick="openInvoiceDrawer('${o.id}','${o.name.replace(/'/g,"\\'")}')">New invoice</button>
