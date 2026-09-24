@@ -176,7 +176,8 @@
     (async () => {
       const hash = window.location.hash || "";
       if (hash.includes("type=recovery") || hash.includes("type=invite")) {
-        window.location.replace("reset-password.html" + hash);
+        await supabaseClient.auth.getSession();
+        window.location.replace("reset-password.html");
         return;
       }
 

@@ -61,15 +61,17 @@
 
     (async () => {
       // A recovery or invite link lands here with the session token in the
-      // URL's hash fragment. supabase-js auto-establishes a session from
-      // it, which would otherwise trigger the "already signed in" redirect
-      // below and drop the user straight into the app — without ever
-      // letting them set a password. Catch that case first and send them
-      // to the dedicated password-setting page instead, carrying the hash
-      // along so supabase-js there also picks up the same token.
+      // URL's hash fragment. This page's Supabase client auto-exchanges it
+      // for a session as soon as it initializes. That token is single-use,
+      // so we must NOT pass the hash on to another page (its own client
+      // would try to exchange the same already-used token again and fail).
+      // Instead: wait for this page's exchange to finish and persist the
+      // session, then hand off to the password page with no hash at all —
+      // it picks up the already-saved session on its own.
       const hash = window.location.hash || "";
       if (hash.includes("type=recovery") || hash.includes("type=invite")) {
-        window.location.replace("reset-password.html" + hash);
+        await supabaseClient.auth.getSession();
+        window.location.replace("reset-password.html");
         return;
       }
 
