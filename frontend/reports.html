@@ -3,8 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <title>Reports — Financial Operating System</title>
-<link rel="icon" type="image/png" sizes="32x32" href="images/edhafu-icon-32.png">
-<link rel="apple-touch-icon" href="images/edhafu-icon-180.png">
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -236,7 +234,7 @@
       const sec = (label,rows,total) => `
         <div class="section-heading">${label}</div>
         <table><tbody>
-          ${rows.length ? rows.map(r=>`<tr><td>${r.category}</td><td class="num">${money(r.amount)}</td></tr>`).join("") : `<tr><td colspan="2" class="empty">None.</td></tr>`}
+          ${rows.length ? rows.map(r=>`<tr><td>${r.account_code ? `<span style="font-family:var(--font-mono);font-size:12px;color:var(--color-muted)">${r.account_code}</span>  ` : ""}${r.category}</td><td class="num">${money(r.amount)}</td></tr>`).join("") : `<tr><td colspan="2" class="empty">None.</td></tr>`}
           <tr class="total-row"><td>Total ${label}</td><td class="num">${money(total)}</td></tr>
         </tbody></table>`;
       return sec("Cash Inflows",inflow,sum(inflow)) + sec("Cash Outflows",outflow,sum(outflow)) +
@@ -251,7 +249,7 @@
       });
       return Object.entries(byAccount).map(([code,acct])=>{
         const closing = acct.rows.length ? Number(acct.rows[acct.rows.length-1].running_balance) : 0;
-        return `<div class="section-heading">${code} - ${acct.name} <span style="font-weight:400;color:var(--color-muted)">(${acct.type})</span></div>
+        return `<div class="section-heading">${code} — ${acct.name} <span style="font-weight:400;color:var(--color-muted)">(${acct.type})</span></div>
           <table><thead><tr><th>Date</th><th>Journal No.</th><th>Description</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
           <tbody>
             <tr style="font-style:italic;color:var(--color-muted)"><td colspan="5">Opening balance</td><td class="num">0.00</td></tr>
@@ -423,7 +421,7 @@
           byAccount[r.account_code].rows.push(r);
         });
         Object.entries(byAccount).forEach(([code,acct])=>{
-          sectionHeader(`${code} - ${acct.name} (${acct.type})`);
+          sectionHeader(`${code} — ${acct.name} (${acct.type})`);
           tableHeader(["Date","Journal No.","Description","Debit","Credit","Balance"],[22,28,70,22,22,18]);
           tableRow(["(Opening balance)","","","","","0.00"],[22,28,70,22,22,18],false,[240,240,240]);
           acct.rows.forEach(r=>tableRow([
@@ -441,7 +439,7 @@
         doc.setPage(i);
         doc.setFontSize(8); doc.setTextColor(150);
         doc.text(`Page ${i} of ${pageCount}`, 196, pageH-8, {align:"right"});
-        pdfLogoText(doc, 14, pageH-8, "", " | Confidential", 150);
+        doc.text(`Finlens Africa | Confidential`, 14, pageH-8);
         doc.setTextColor(0);
       }
 
@@ -516,7 +514,7 @@
         const byAccount={};
         data.forEach(r=>{ if(!byAccount[r.account_code]) byAccount[r.account_code]={name:r.account_name,type:r.account_type,rows:[]}; byAccount[r.account_code].rows.push(r); });
         Object.entries(byAccount).forEach(([code,acct])=>{
-          rows.push([`${code} - ${acct.name} (${acct.type})`]);
+          rows.push([`${code} — ${acct.name} (${acct.type})`]);
           rows.push(["Date","Journal No.","Description","Debit (KES)","Credit (KES)","Running Balance"]);
           rows.push(["(Opening balance)","","","","",0]);
           acct.rows.forEach(r=>rows.push([r.entry_date,r.journal_number||"—",r.description,r.debit>0?Number(r.debit):"",r.credit>0?Number(r.credit):"",Number(r.running_balance)]));
@@ -536,7 +534,7 @@
         .select("id,code,name").eq("organisation_id",orgId).eq("is_active",true).order("code");
       document.getElementById("gl-account").innerHTML =
         `<option value="">All accounts</option>` +
-        (data||[]).map(a=>`<option value="${a.id}">${a.code} - ${a.name}</option>`).join("");
+        (data||[]).map(a=>`<option value="${a.id}">${a.code} — ${a.name}</option>`).join("");
     }
 
     (async () => {
