@@ -32,7 +32,8 @@
               <option value="trial">Trial Balance</option>
               <option value="ie">Income &amp; Expenditure</option>
               <option value="bs">Balance Sheet</option>
-              <option value="cf">Cash Flow</option>
+              <option value="cf">Cash Flow (Direct)</option>
+              <option value="cfi">Cash Flow (Indirect)</option>
               <option value="gl">General Ledger</option>
             </select>
           </div>
@@ -126,6 +127,8 @@
         ({data,error} = await supabaseClient.rpc("fn_balance_sheet",{p_organisation_id:orgId,p_as_at:to}));
       } else if (kind==="cf") {
         ({data,error} = await supabaseClient.rpc("fn_cash_flow",{p_organisation_id:orgId,p_from:from,p_to:to}));
+      } else if (kind==="cfi") {
+        ({data,error} = await supabaseClient.rpc("fn_cash_flow_indirect",{p_organisation_id:orgId,p_from:from,p_to:to}));
       } else {
         const acctId = document.getElementById("gl-account").value||null;
         ({data,error} = await supabaseClient.rpc("fn_general_ledger",{p_organisation_id:orgId,p_from:from,p_to:to,p_account_id:acctId}));
@@ -160,6 +163,7 @@
       else if (kind==="ie") html += renderIEHTML(data);
       else if (kind==="bs") html += renderBSHTML(data);
       else if (kind==="cf") html += renderCFHTML(data);
+      else if (kind==="cfi") html += renderCFIHTML(data);
       else html += renderGLHTML(data);
 
       body.innerHTML = html;
@@ -239,6 +243,28 @@
         </tbody></table>`;
       return sec("Cash Inflows",inflow,sum(inflow)) + sec("Cash Outflows",outflow,sum(outflow)) +
         `<div class="grand-total" style="color:${net>=0?'var(--color-success)':'var(--color-alert)'}"><span>Net Cash Movement</span><span>${money(net)}</span></div>`;
+    }
+
+    function renderCFIHTML(data) {
+      if (!data || !data.length) return `<p class="empty">No activity in this period.</p>`;
+      const sections = [];
+      data.forEach(r => {
+        let s = sections.find(x => x.name === r.section);
+        if (!s) { s = { name: r.section, rows: [] }; sections.push(s); }
+        s.rows.push(r);
+      });
+      return sections.map(s => `
+        <div class="section-heading">${s.name}</div>
+        <table><tbody>
+          ${s.rows.map(r => {
+            const amt = Number(r.amount);
+            const shown = amt < 0 ? `(${money(Math.abs(amt))})` : money(amt);
+            return `<tr${r.is_subtotal ? ' class="total-row"' : ''}>
+              <td>${r.account_code ? `<span style="font-family:var(--font-mono);font-size:12px;color:var(--color-muted)">${r.account_code}</span>  ` : ""}${r.label}</td>
+              <td class="num">${shown}</td>
+            </tr>`;
+          }).join("")}
+        </tbody></table>`).join("");
     }
 
     function renderGLHTML(data) {
