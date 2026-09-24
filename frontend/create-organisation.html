@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Create Organisation — Financial Operating System</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav" id="nav-mount"></nav>
+    <main class="main">
+      <h1>Create a new organisation</h1>
+      <p style="color:var(--color-muted);font-size:13px;max-width:520px">
+        This creates a completely separate organisation with its own members, loans,
+        contributions, and users. Nothing from your current organisation carries over.
+        You'll be its administrator and can switch between organisations at any time
+        from the sidebar.
+      </p>
+
+      <div class="card" id="create-form-card" style="max-width:480px">
+        <div class="field"><label>Organisation name *</label><input id="c-name" placeholder="e.g. Amani Chama Group"></div>
+        <div class="field"><label>Organisation type *</label>
+          <select id="c-type" onchange="applyTypeDefaults()">
+            <option value="sacco">SACCO</option>
+            <option value="chama">Chama</option>
+            <option value="residents_association">Residents Association</option>
+          </select>
+        </div>
+        <div class="field"><label>Currency</label>
+          <select id="c-currency">
+            <option value="KES">KES — Kenyan Shilling</option>
+            <option value="USD">USD — US Dollar</option>
+            <option value="UGX">UGX — Ugandan Shilling</option>
+            <option value="TZS">TZS — Tanzanian Shilling</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Modules to enable</label>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
+            <label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer">
+              <input type="checkbox" id="m-loans" style="width:16px;flex-shrink:0"> Loans
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer">
+              <input type="checkbox" id="m-expenditure" checked style="width:16px;flex-shrink:0"> Expenditure
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer">
+              <input type="checkbox" id="m-banking" checked style="width:16px;flex-shrink:0"> Banking
+            </label>
+          </div>
+          <p style="font-size:12px;color:var(--color-muted);margin-top:4px">These pre-fill based on organisation type, but you can change any of them, and adjust them again later.</p>
+        </div>
+
+        <button class="btn accent" onclick="createOrganisation()">Create organisation</button>
+        <p id="create-error" class="error" style="display:none"></p>
+      </div>
+
+      <!-- Shown immediately after successful creation, before switching in -->
+      <div class="card" id="pending-card" style="max-width:480px;display:none;text-align:center">
+        <div style="font-size:36px;margin-bottom:8px">⏳</div>
+        <h2>Your account is being created</h2>
+        <p style="color:var(--color-muted);margin-top:8px">
+          "<span id="pending-org-name"></span>" has been submitted and is now awaiting approval.
+          You'll be able to sign in and use it as soon as it's approved.
+        </p>
+        <button class="btn accent" style="margin-top:16px" onclick="continueToOrg()">Continue</button>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let createdOrgId = null;
+
+    function applyTypeDefaults() {
+      const type = document.getElementById("c-type").value;
+      document.getElementById("m-loans").checked = (type !== "residents_association");
+      document.getElementById("m-expenditure").checked = true;
+      document.getElementById("m-banking").checked = true;
+    }
+
+    async function createOrganisation() {
+      const errorEl = document.getElementById("create-error");
+      errorEl.style.display = "none";
+      const name = document.getElementById("c-name").value.trim();
+      const orgType = document.getElementById("c-type").value;
+      const currency = document.getElementById("c-currency").value;
+      if (!name) { showError(errorEl, "Organisation name is required."); return; }
+
+      const enabledModules = {
+        loans: document.getElementById("m-loans").checked,
+        expenditure: document.getElementById("m-expenditure").checked,
+        banking: document.getElementById("m-banking").checked,
+      };
+
+      const { data: newOrgId, error } = await supabaseClient.rpc("fn_create_organisation", {
+        p_name: name, p_org_type: orgType, p_currency: currency,
+        p_enabled_modules: enabledModules,
+      });
+      if (error) { showError(errorEl, error.message); return; }
+
+      createdOrgId = newOrgId;
+      document.getElementById("pending-org-name").textContent = name;
+      document.getElementById("create-form-card").style.display = "none";
+      document.getElementById("pending-card").style.display = "block";
+    }
+
+    function continueToOrg() {
+      switchOrg(createdOrgId);
+    }
+
+    (async () => {
+      const session = await requireSession();
+      if (!session) return;
+      applyTypeDefaults();
+    })();
+  </script>
+
+</body>
+</html>

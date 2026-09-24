@@ -7,6 +7,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
+  body { visibility: hidden; }
   :root {
     --dash-green: #10B981; --dash-green-bg: #ECFDF5;
     --dash-gold: #F97316;  --dash-gold-bg: #FFF7ED;
@@ -74,6 +75,37 @@
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="11" x2="17" y2="11"/><line x1="3" y1="16" x2="21" y2="16"/><line x1="3" y1="21" x2="13" y2="21"/></svg>
         Dashboard
       </h1>
+
+      <div class="card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;padding:14px 20px">
+        <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+          <div>
+            <div style="font-size:11px;color:var(--color-muted);text-transform:uppercase;letter-spacing:0.04em">Subscription</div>
+            <div id="sub-status" style="font-weight:700;font-size:15px">—</div>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--color-muted);text-transform:uppercase;letter-spacing:0.04em">Last payment</div>
+            <div id="sub-last-payment" style="font-size:14px">—</div>
+          </div>
+        </div>
+        <button class="btn accent" onclick="openPayModal()">Pay Subscription</button>
+      </div>
+
+      <!-- PAY SUBSCRIPTION MODAL -->
+      <div class="drawer-backdrop" id="pay-backdrop" onclick="closePayModal()"></div>
+      <div class="drawer" id="pay-drawer">
+        <h2>Pay Subscription</h2>
+        <p style="color:var(--color-muted);font-size:13px;margin-bottom:8px">Monthly fee: <strong id="pay-fee">—</strong></p>
+        <p style="font-size:14px">
+          To pay your subscription, use the following details, then contact support to confirm your payment has been received:
+        </p>
+        <ul style="font-size:14px;margin:10px 0 10px 20px;color:var(--color-ink)">
+          <li>M-Pesa Paybill: <strong>[Paybill number]</strong>, Account: your organisation name</li>
+          <li>Bank transfer: <strong>[Bank details]</strong></li>
+          <li>Email: <a href="mailto:admin@edhafu.com">admin@edhafu.com</a></li>
+        </ul>
+        <p style="font-size:12px;color:var(--color-muted)">Replace the bracketed details above with your actual payment details.</p>
+        <button class="btn" style="margin-top:12px" onclick="closePayModal()">Close</button>
+      </div>
 
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
         <div class="kpi-group" style="flex:1;min-width:220px;margin-bottom:0">
@@ -173,6 +205,36 @@
   <script src="js/nav.js"></script>
   <script src="js/auth.js"></script>
   <script>
+    let currentMonthlyFee = null;
+
+    function openPayModal() {
+      document.getElementById("pay-fee").textContent = currentMonthlyFee != null ? "KES " + money(currentMonthlyFee) : "Not yet set";
+      document.getElementById("pay-backdrop").classList.add("open");
+      document.getElementById("pay-drawer").classList.add("open");
+    }
+    function closePayModal() {
+      document.getElementById("pay-backdrop").classList.remove("open");
+      document.getElementById("pay-drawer").classList.remove("open");
+    }
+
+    async function loadSubscriptionStatus(orgId) {
+      try {
+        const { data, error } = await supabaseClient.rpc("fn_my_org_billing", { p_org_id: orgId });
+        if (error || !data || !data.length) return;
+        const b = data[0];
+        currentMonthlyFee = b.monthly_fee;
+
+        const statusEl = document.getElementById("sub-status");
+        const labelMap = { active: "Active", pending_approval: "Pending Approval", rejected: "Rejected", cancelled: "Cancelled" };
+        statusEl.textContent = labelMap[b.status] || b.status;
+        statusEl.style.color = b.status === "active" ? "var(--color-success, #10B981)" : "var(--color-alert, #E11D48)";
+
+        document.getElementById("sub-last-payment").textContent = b.last_payment_date
+          ? `${new Date(b.last_payment_date).toLocaleDateString()} — KES ${money(b.last_payment_amount)}`
+          : "No payments yet";
+      } catch (e) { /* nice-to-have, don't block the rest of the dashboard */ }
+    }
+
     (async () => {
       const hash = window.location.hash || "";
       if (hash.includes("type=recovery") || hash.includes("type=invite")) {
@@ -180,12 +242,14 @@
         window.location.replace("reset-password.html");
         return;
       }
+      document.body.style.visibility = "visible";
 
       const session = await requireSession();
       if (!session) return;
       const org = await currentOrg();
       if (!org) return;
       const orgId = org.organisation_id;
+      loadSubscriptionStatus(orgId);
 
       // Hide dashboard sections for modules this organisation has turned off.
       try {
