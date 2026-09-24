@@ -2,14 +2,89 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Sign in - Financial Operating System</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in - Edhafu</title>
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .auth-wrap {
+    display: grid; grid-template-columns: 1fr 1.05fr; min-height: 100vh;
+  }
+  .auth-left {
+    display: flex; flex-direction: column; justify-content: center;
+    padding: 40px 48px; max-width: 520px; width: 100%; margin: 0 auto;
+  }
+  .auth-brand { line-height: 1.1; margin-bottom: 28px; }
+  .auth-brand .mark { font-size: 40px; font-weight: 800; letter-spacing: -0.02em; }
+  .auth-brand .mark .e { color: #E63946; }
+  .auth-brand .mark .rest { color: #123C36; }
+  .auth-brand .tag {
+    font-size: 12px; letter-spacing: 0.10em; text-transform: uppercase;
+    color: var(--color-muted, #5B6672); margin-top: 4px;
+  }
+  .auth-left h1 { font-size: 26px; margin-bottom: 4px; }
+  .auth-sub { color: var(--color-muted, #5B6672); font-size: 14px; margin-bottom: 22px; }
+
+  .demo-cta {
+    margin-top: 26px; border: 1px solid var(--color-line, #E5E7EB);
+    border-radius: 12px; padding: 18px 20px; background: #fff;
+  }
+  .demo-cta h3 { font-size: 15px; margin: 0 0 4px; }
+  .demo-cta p { font-size: 13px; color: var(--color-muted, #5B6672); margin: 0 0 12px; }
+  .demo-cta .btn { width: 100%; }
+
+  /* Right panel: a calm, static preview of the product */
+  .auth-right {
+    background: #123C36; color: #fff; padding: 48px;
+    display: flex; flex-direction: column; justify-content: center; gap: 22px;
+  }
+  .auth-right .headline { font-size: 24px; font-weight: 700; line-height: 1.25; max-width: 380px; }
+  .auth-right .sub { font-size: 14px; color: rgba(255,255,255,0.72); max-width: 380px; }
+
+  .preview {
+    background: #fff; border-radius: 14px; padding: 16px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.28); color: #17202A;
+  }
+  .preview-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 10px; border-bottom: 1px solid #E5E7EB; margin-bottom: 12px;
+  }
+  .preview-head .t { font-size: 13px; font-weight: 700; }
+  .preview-head .pill {
+    font-size: 10px; font-weight: 600; color: #10B981;
+    background: #ECFDF5; border-radius: 999px; padding: 3px 9px;
+  }
+  .preview-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+  .preview-card { background: #F8F7F3; border: 1px solid #E5E7EB; border-radius: 9px; padding: 10px; }
+  .preview-card .l { font-size: 10px; color: #5B6672; margin-bottom: 3px; }
+  .preview-card .v { font-size: 14px; font-weight: 700; }
+  .bars { display: flex; align-items: flex-end; gap: 6px; height: 74px;
+          border: 1px solid #E5E7EB; border-radius: 9px; padding: 10px; }
+  .bars div { flex: 1; border-radius: 3px 3px 0 0; background: linear-gradient(180deg, #123C36, rgba(18,60,54,0.55)); }
+
+  .points { display: flex; flex-direction: column; gap: 9px; }
+  .point { display: flex; align-items: center; gap: 9px; font-size: 13.5px; color: rgba(255,255,255,0.88); }
+  .point svg { flex-shrink: 0; color: #10B981; }
+
+  @media (max-width: 900px) {
+    .auth-wrap { grid-template-columns: 1fr; }
+    .auth-right { display: none; }
+    .auth-left { padding: 32px 24px; }
+  }
+</style>
 </head>
 <body>
-  <div class="login-shell">
-    <div class="card login-card">
+  <div class="auth-wrap">
+
+    <div class="auth-left">
+      <div class="auth-brand">
+        <div class="mark"><span class="e">e</span><span class="rest">dhafu</span></div>
+        <div class="tag">Finance Simplified</div>
+      </div>
+
       <h1>Sign in</h1>
+      <p class="auth-sub">Welcome back. Enter your details to continue.</p>
+
       <div class="field">
         <label for="email">Email</label>
         <input id="email" type="email" autocomplete="username">
@@ -18,16 +93,66 @@
         <label for="password">Password</label>
         <input id="password" type="password" autocomplete="current-password">
       </div>
-      <button class="btn" style="width:100%" onclick="login()">Sign in</button>
+      <button class="btn accent" style="width:100%" onclick="login()">Sign in</button>
       <p style="text-align:center;margin-top:10px">
         <a href="#" onclick="forgotPassword(event)" style="font-size:13px;color:var(--color-muted)">Forgot password?</a>
       </p>
-      <p style="text-align:center;margin-top:6px;font-size:13px;color:var(--color-muted)">
-        New here? <a href="request-demo.html">Request a demo</a>
-      </p>
       <p id="error" class="error" style="display:none"></p>
       <p id="info" style="display:none;color:var(--color-success);font-size:13px"></p>
+
+      <div class="demo-cta">
+        <h3>New to Edhafu?</h3>
+        <p>See how it works for your SACCO, Chama or Residents Association.</p>
+        <a class="btn accent" style="display:block;text-align:center;text-decoration:none" href="request-demo.html">Request a demo</a>
+      </div>
     </div>
+
+    <div class="auth-right">
+      <div>
+        <div class="headline">Everything your members' money touches, in one place.</div>
+        <div class="sub" style="margin-top:8px">Contributions, loans, banking and reports, kept straight without the spreadsheets.</div>
+      </div>
+
+      <div class="preview">
+        <div class="preview-head">
+          <span class="t">Dashboard</span>
+          <span class="pill">Active</span>
+        </div>
+        <div class="preview-cards">
+          <div class="preview-card"><div class="l">Cash &amp; Bank</div><div class="v">1,149,350</div></div>
+          <div class="preview-card"><div class="l">Collections</div><div class="v" style="color:#10B981">100%</div></div>
+          <div class="preview-card"><div class="l">Active Loans</div><div class="v">4</div></div>
+        </div>
+        <div class="bars">
+          <div style="height:38%"></div>
+          <div style="height:62%"></div>
+          <div style="height:48%"></div>
+          <div style="height:78%"></div>
+          <div style="height:58%"></div>
+          <div style="height:88%"></div>
+        </div>
+      </div>
+
+      <div class="points">
+        <div class="point">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Member records and statements
+        </div>
+        <div class="point">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Loans, guarantors and repayments
+        </div>
+        <div class="point">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Bank and M-Pesa reconciliation
+        </div>
+        <div class="point">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Trial balance, I&amp;E and balance sheet
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <script src="js/config.js"></script>
@@ -63,14 +188,14 @@
       infoEl.style.display = "block";
     }
 
+    // Let Enter submit the form from either field.
+    document.getElementById("password").addEventListener("keydown", e => { if (e.key === "Enter") login(); });
+    document.getElementById("email").addEventListener("keydown", e => { if (e.key === "Enter") login(); });
+
     (async () => {
       // Recovery and invite links must never sign someone straight in.
-      // handleRecoveryRedirect checks every link format Supabase uses
-      // (hash access_token, query token_hash, and PKCE code) and sends
-      // the user to the password page instead.
       if (await handleRecoveryRedirect()) return;
 
-      // Otherwise, if already signed in, skip straight to the dashboard.
       const { data: { session } } = await supabaseClient.auth.getSession();
       if (session) window.location.href = "index.html";
     })();
