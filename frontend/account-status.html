@@ -16,6 +16,7 @@
         <p id="status-message" style="color:var(--color-muted)">One moment.</p>
         <p id="status-detail" style="color:var(--color-muted);font-size:13px;margin-top:12px"></p>
         <div style="margin-top:20px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+          <button class="btn accent" id="pay-button" style="display:none" onclick="openPayModal()">Pay Subscription</button>
           <button class="btn" onclick="signOut()">Sign out</button>
           <a class="btn" id="switch-org-link" href="index.html" style="display:none">Try a different organisation</a>
         </div>
@@ -25,6 +26,7 @@
 
   <script src="js/config.js"></script>
   <script src="js/nav.js"></script>
+  <script src="js/pay-subscription.js"></script>
   <script src="js/auth.js"></script>
   <script>
     (async () => {
@@ -71,7 +73,20 @@
         icon.textContent = "🔒";
         title.textContent = "Account suspended";
         message.textContent = `"${org.organisations.name}" has an overdue invoice. Access is suspended until payment is received.`;
-        detail.textContent = "Contact support to arrange payment and restore access.";
+        detail.textContent = "Pay your subscription below to restore access immediately.";
+
+        // Load billing details and surface a Pay Subscription button.
+        try {
+          const { data: billing } = await supabaseClient.rpc("fn_my_org_billing", {
+            p_org_id: org.organisation_id,
+          });
+          if (billing && billing.length) {
+            renderPayModal();
+            setPayDetails(billing[0].monthly_fee, billing[0].account_number);
+            const payBtn = document.getElementById("pay-button");
+            payBtn.style.display = "inline-block";
+          }
+        } catch (e) { /* button just won't show if this fails */ }
       } else {
         icon.textContent = "⚠";
         title.textContent = "Organisation not found";

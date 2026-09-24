@@ -90,23 +90,6 @@
         <button class="btn accent" onclick="openPayModal()">Pay Subscription</button>
       </div>
 
-      <!-- PAY SUBSCRIPTION MODAL -->
-      <div class="drawer-backdrop" id="pay-backdrop" onclick="closePayModal()"></div>
-      <div class="drawer" id="pay-drawer">
-        <h2>Pay Subscription</h2>
-        <p style="color:var(--color-muted);font-size:13px;margin-bottom:8px">Monthly fee: <strong id="pay-fee">—</strong></p>
-        <p style="font-size:14px">
-          To pay your subscription, use the following details, then contact support to confirm your payment has been received:
-        </p>
-        <ul style="font-size:14px;margin:10px 0 10px 20px;color:var(--color-ink)">
-          <li>M-Pesa Paybill: <strong>[Paybill number]</strong>, Account: your organisation name</li>
-          <li>Bank transfer: <strong>[Bank details]</strong></li>
-          <li>Email: <a href="mailto:admin@edhafu.com">admin@edhafu.com</a></li>
-        </ul>
-        <p style="font-size:12px;color:var(--color-muted)">Replace the bracketed details above with your actual payment details.</p>
-        <button class="btn" style="margin-top:12px" onclick="closePayModal()">Close</button>
-      </div>
-
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
         <div class="kpi-group" style="flex:1;min-width:220px;margin-bottom:0">
           <h2>Membership</h2>
@@ -203,26 +186,17 @@
 
   <script src="js/config.js"></script>
   <script src="js/nav.js"></script>
+  <script src="js/pay-subscription.js"></script>
   <script src="js/auth.js"></script>
   <script>
-    let currentMonthlyFee = null;
-
-    function openPayModal() {
-      document.getElementById("pay-fee").textContent = currentMonthlyFee != null ? "KES " + money(currentMonthlyFee) : "Not yet set";
-      document.getElementById("pay-backdrop").classList.add("open");
-      document.getElementById("pay-drawer").classList.add("open");
-    }
-    function closePayModal() {
-      document.getElementById("pay-backdrop").classList.remove("open");
-      document.getElementById("pay-drawer").classList.remove("open");
-    }
-
     async function loadSubscriptionStatus(orgId) {
       try {
         const { data, error } = await supabaseClient.rpc("fn_my_org_billing", { p_org_id: orgId });
         if (error || !data || !data.length) return;
         const b = data[0];
-        currentMonthlyFee = b.monthly_fee;
+
+        renderPayModal();
+        setPayDetails(b.monthly_fee, b.account_number);
 
         const statusEl = document.getElementById("sub-status");
         const labelMap = { active: "Active", pending_approval: "Pending Approval", rejected: "Rejected", cancelled: "Cancelled" };

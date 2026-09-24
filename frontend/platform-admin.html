@@ -29,8 +29,8 @@
         <div class="card">
           <h2>All organisations — billing</h2>
           <table>
-            <thead><tr><th>Name</th><th>Type</th><th>Status</th><th class="num">Monthly fee</th><th>Latest invoice</th><th></th></tr></thead>
-            <tbody id="billing-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+            <thead><tr><th>Name</th><th>Account No.</th><th>Type</th><th>Status</th><th class="num">Monthly fee</th><th>Latest invoice</th><th></th></tr></thead>
+            <tbody id="billing-rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
           </table>
         </div>
 
@@ -120,17 +120,34 @@
     async function loadBilling() {
       const { data, error } = await supabaseClient.rpc("fn_list_all_organisations_billing");
       const tbody = document.getElementById("billing-rows");
-      if (error) { tbody.innerHTML = `<tr><td colspan="6" class="error">${error.message}</td></tr>`; return; }
-      if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty">No organisations yet.</td></tr>`; return; }
-      tbody.innerHTML = data.map(o => `
+      if (error) { tbody.innerHTML = `<tr><td colspan="7" class="error">${error.message}</td></tr>`; return; }
+      if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="7" class="empty">No organisations yet.</td></tr>`; return; }
+      tbody.innerHTML = data.map(o => {
+        const locked = o.access_status && o.access_status !== "active";
+        const statusLabel = o.access_status === "suspended_unpaid" ? "suspended (unpaid)" : o.status;
+        const statusClass = o.access_status === "active" ? "paid"
+          : o.access_status === "pending_approval" ? "partial" : "unpaid";
+        return `
         <tr>
           <td>${o.name}</td>
+          <td style="font-family:var(--font-mono);font-size:12px">${o.account_number || "—"}</td>
           <td>${o.org_type}</td>
-          <td><span class="status ${o.status==='active'?'paid':o.status==='pending_approval'?'partial':'unpaid'}">${o.status}</span></td>
+          <td><span class="status ${statusClass}">${statusLabel}</span></td>
           <td class="num">${o.monthly_fee != null ? money(o.monthly_fee) : "—"}</td>
           <td>${o.latest_invoice_status ? `${o.latest_invoice_status} (due ${o.latest_invoice_due})` : "No invoices"}</td>
-          <td><button class="btn" style="padding:2px 8px;font-size:12px" onclick="openInvoiceDrawer('${o.id}','${o.name.replace(/'/g,"\\'")}')">New invoice</button></td>
-        </tr>`).join("");
+          <td style="display:flex;gap:4px;flex-wrap:wrap">
+            <button class="btn" style="padding:2px 8px;font-size:12px" onclick="openInvoiceDrawer('${o.id}','${o.name.replace(/'/g,"\\'")}')">New invoice</button>
+            ${locked && o.status !== "pending_approval" ? `<button class="btn accent" style="padding:2px 8px;font-size:12px" onclick="reactivateOrg('${o.id}','${o.name.replace(/'/g,"\\'")}')">Activate</button>` : ""}
+          </td>
+        </tr>`;
+      }).join("");
+    }
+
+    async function reactivateOrg(orgId, name) {
+      if (!confirm(`Activate "${name}"? This marks all overdue invoices as paid and restores access immediately.`)) return;
+      const { error } = await supabaseClient.rpc("fn_reactivate_organisation", { p_org_id: orgId });
+      if (error) { alert(error.message); return; }
+      loadBilling();
     }
 
     async function loadAdmins() {
