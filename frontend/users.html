@@ -109,6 +109,22 @@
     </main>
   </div>
 
+  <div class="drawer-backdrop" id="perm-backdrop" onclick="closePermissions()"></div>
+  <div class="drawer" id="perm-drawer">
+    <h2>Permissions</h2>
+    <p style="color:var(--color-muted);font-size:13px" id="perm-user-label"></p>
+    <p style="color:var(--color-muted);font-size:12px;margin-top:10px">
+      Ticked and greyed out means the permission already comes with this user's role and cannot be removed here. Change their role instead if you need to take it away.
+    </p>
+    <div id="perm-list" style="margin-top:14px"></div>
+    <div class="drawer-actions">
+      <button class="btn accent" onclick="savePermissions()">Save permissions</button>
+      <button class="btn" onclick="closePermissions()">Cancel</button>
+    </div>
+    <p id="perm-error" class="error" style="display:none"></p>
+    <p id="perm-success" style="display:none;color:var(--color-success)"></p>
+  </div>
+
   <script src="js/config.js"></script>
   <script src="js/nav.js"></script>
   <script src="js/auth.js"></script>
@@ -284,8 +300,63 @@
           <td>${isAdmin && !u.is_me ? `
             <button class="btn" style="padding:2px 8px;font-size:12px;background:${u.status==='active'?'var(--color-muted)':'var(--color-success)'}"
               onclick="setStatus('${u.user_id}','${u.status==='active'?'disabled':'active'}')">
-              ${u.status==='active'?'Disable':'Enable'}</button>` : ''}</td>
+              ${u.status==='active'?'Disable':'Enable'}</button>
+            <button class="btn" style="padding:2px 8px;font-size:12px;margin-left:4px"
+              onclick="openPermissions('${u.user_id}','${u.email.replace(/'/g,"\\'")}')">Permissions</button>` : ''}</td>
         </tr>`).join("");
+    }
+
+    let permUserId = null;
+
+    async function openPermissions(userId, email) {
+      permUserId = userId;
+      document.getElementById("perm-user-label").textContent = email;
+      document.getElementById("perm-error").style.display = "none";
+      document.getElementById("perm-success").style.display = "none";
+      document.getElementById("perm-list").innerHTML = `<p class="empty">Loading…</p>`;
+      document.getElementById("perm-backdrop").classList.add("open");
+      document.getElementById("perm-drawer").classList.add("open");
+
+      const { data, error } = await supabaseClient.rpc("fn_user_permissions", {
+        p_organisation_id: orgId, p_user_id: userId });
+      if (error) {
+        document.getElementById("perm-list").innerHTML = `<p class="error">${error.message}</p>`;
+        return;
+      }
+      document.getElementById("perm-list").innerHTML = (data||[]).map(p=>`
+        <label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:14px;cursor:${p.from_role?'default':'pointer'}">
+          <input type="checkbox" class="perm-check" value="${p.permission}"
+            ${p.from_role || p.granted ? 'checked' : ''}
+            ${p.from_role ? 'disabled' : ''}
+            style="width:16px;flex-shrink:0">
+          <span style="${p.from_role?'color:var(--color-muted)':''}">${p.label}</span>
+          ${p.from_role ? `<span style="font-size:11px;color:var(--color-muted);margin-left:auto">from role</span>` : ''}
+        </label>`).join("");
+    }
+
+    function closePermissions() {
+      document.getElementById("perm-backdrop").classList.remove("open");
+      document.getElementById("perm-drawer").classList.remove("open");
+      permUserId = null;
+    }
+
+    async function savePermissions() {
+      if (!permUserId) return;
+      const errorEl = document.getElementById("perm-error");
+      const successEl = document.getElementById("perm-success");
+      errorEl.style.display = "none"; successEl.style.display = "none";
+
+      // Only the enabled (non role-derived) ticks are sent; role-derived
+      // ones are implied and are never stored as grants.
+      const chosen = [...document.querySelectorAll(".perm-check")]
+        .filter(c => !c.disabled && c.checked).map(c => c.value);
+
+      const { error } = await supabaseClient.rpc("fn_set_user_permissions", {
+        p_organisation_id: orgId, p_user_id: permUserId, p_permissions: chosen });
+      if (error) { showError(errorEl, error.message); return; }
+
+      successEl.textContent = "Permissions saved.";
+      successEl.style.display = "block";
     }
 
     async function changeRole(userId, role) {
