@@ -17,6 +17,29 @@
   .grand-total { font-size:15px; font-weight:700; padding:10px 0; border-top:3px solid var(--color-ink); display:flex; justify-content:space-between; }
   .balance-ok { color:var(--color-success); margin-top:8px; font-size:13px; }
   .balance-bad { color:var(--color-alert); margin-top:8px; font-size:13px; }
+
+  /* ── General Ledger: clearly separated block per account ──────────── */
+  .gl-account-block {
+    border:1px solid var(--color-line);
+    border-radius:var(--radius);
+    overflow:hidden;
+    margin-bottom:28px;
+  }
+  .gl-account-heading {
+    background:var(--color-primary);
+    color:#fff;
+    padding:9px 14px;
+    font-weight:700;
+    font-size:13px;
+    letter-spacing:0.02em;
+  }
+  .gl-account-block table { margin:0; }
+  .gl-account-block tfoot .total-row td {
+    background:#F3EBD8;
+    border-top:2px solid var(--color-ink);
+  }
+  /* Keep dates on one line so they don't wrap mid-date */
+  .gl-date { white-space:nowrap; }
 </style>
 </head>
 <body>
@@ -305,12 +328,13 @@
       });
       return Object.entries(byAccount).map(([code,acct])=>{
         const closing = acct.rows.length ? Number(acct.rows[acct.rows.length-1].running_balance) : 0;
-        return `<div class="section-heading">${code} — ${acct.name} <span style="font-weight:400;color:var(--color-muted)">(${acct.type})</span></div>
-          <table><thead><tr><th>Date</th><th>Reference</th><th>Description</th><th>Contra account</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
+        return `<div class="gl-account-block">
+          <div class="gl-account-heading">${code} — ${acct.name} <span style="font-weight:400;opacity:0.7">(${acct.type})</span></div>
+          <table><thead><tr><th class="gl-date">Date</th><th>Reference</th><th>Description</th><th>Contra account</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
           <tbody>
             <tr style="font-style:italic;color:var(--color-muted)"><td colspan="6">Opening balance</td><td class="num">0.00</td></tr>
             ${acct.rows.map(r=>`<tr>
-              <td>${r.entry_date}</td>
+              <td class="gl-date">${r.entry_date}</td>
               <td><code style="font-size:11px">${r.reference||"—"}</code></td>
               <td>${r.description}</td>
               <td>${r.contra_account||"—"}</td>
@@ -320,7 +344,8 @@
             </tr>`).join("")}
           </tbody>
           <tfoot><tr class="total-row"><td colspan="6">Closing balance</td><td class="num">${money(closing)}</td></tr></tfoot>
-          </table>`;
+          </table>
+        </div>`;
       }).join("");
     }
 
@@ -488,7 +513,7 @@
           if(!byAccount[r.account_code]) byAccount[r.account_code]={name:r.account_name,type:r.account_type,rows:[]};
           byAccount[r.account_code].rows.push(r);
         });
-        const glWidths = [18,24,48,34,20,20,18];
+        const glWidths = [22,22,46,32,20,20,20];
         Object.entries(byAccount).forEach(([code,acct])=>{
           sectionHeader(`${code} — ${acct.name} (${acct.type})`);
           tableHeader(["Date","Reference","Description","Contra account","Debit","Credit","Balance"],glWidths);
