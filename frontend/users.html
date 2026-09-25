@@ -24,25 +24,6 @@
       </div>
 
       <!-- ENABLED MODULES -->
-      <div class="card" id="modules-card" style="display:none">
-        <h2>Enabled modules</h2>
-        <p style="color:var(--color-muted);font-size:13px">Turn optional features on or off for this organisation.</p>
-        <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="mod-loans" style="width:16px;flex-shrink:0"> Loans
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="mod-expenditure" style="width:16px;flex-shrink:0"> Expenditure
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="mod-banking" style="width:16px;flex-shrink:0"> Banking
-          </label>
-        </div>
-        <button class="btn accent" style="margin-top:12px" onclick="saveModules()">Save</button>
-        <p id="modules-error" class="error" style="display:none"></p>
-        <p id="modules-success" style="display:none;color:var(--color-success)"></p>
-      </div>
-
       <div class="card" id="branding-card" style="display:none">
         <h2>Organisation branding</h2>
         <p style="color:var(--color-muted);font-size:13px">
@@ -192,32 +173,6 @@
       loadInvites();
     }
 
-    async function loadModules() {
-      const { data, error } = await supabaseClient.from("organisations")
-        .select("enabled_modules").eq("id", orgId).single();
-      if (error) return;
-      const m = data?.enabled_modules || {};
-      document.getElementById("mod-loans").checked = m.loans !== false;
-      document.getElementById("mod-expenditure").checked = m.expenditure !== false;
-      document.getElementById("mod-banking").checked = m.banking !== false;
-    }
-
-    async function saveModules() {
-      const errorEl = document.getElementById("modules-error");
-      const successEl = document.getElementById("modules-success");
-      errorEl.style.display = "none"; successEl.style.display = "none";
-      const enabledModules = {
-        loans: document.getElementById("mod-loans").checked,
-        expenditure: document.getElementById("mod-expenditure").checked,
-        banking: document.getElementById("mod-banking").checked,
-      };
-      const { error } = await supabaseClient.from("organisations")
-        .update({ enabled_modules: enabledModules }).eq("id", orgId);
-      if (error) { showError(errorEl, error.message); return; }
-      successEl.textContent = "Saved. Reload the page to see the sidebar update.";
-      successEl.style.display = "block";
-    }
-
     async function loadBranding() {
       const { data, error } = await supabaseClient.from("organisations")
         .select("brand_primary_color, brand_accent_color, logo_path").eq("id", orgId).single();
@@ -282,9 +237,8 @@
       const me = data.find(u=>u.is_me);
       myRole = me ? me.role : null;
       document.getElementById("invite-card").style.display = (myRole==='org_admin') ? 'block' : 'none';
-      document.getElementById("modules-card").style.display = (myRole==='org_admin') ? 'block' : 'none';
       document.getElementById("branding-card").style.display = (myRole==='org_admin') ? 'block' : 'none';
-      if (myRole === 'org_admin') { loadModules(); loadBranding(); }
+      if (myRole === 'org_admin') loadBranding();
 
       const isAdmin = myRole === 'org_admin';
       tbody.innerHTML = data.map(u=>`

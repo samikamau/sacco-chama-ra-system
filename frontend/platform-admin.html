@@ -113,6 +113,23 @@
         <div class="field"><label>Contact person</label><input id="eb-person" placeholder="e.g. Jane Wanjiru"></div>
         <div class="field"><label>Telephone</label><input id="eb-phone" placeholder="e.g. 0722 908232"></div>
         <div class="field"><label>Monthly subscription (KES)</label><input id="eb-fee" type="number" min="0" step="1" placeholder="e.g. 1000"></div>
+
+        <div class="section-label" style="margin-top:20px">Enabled modules</div>
+        <p style="color:var(--color-muted);font-size:12px;margin-bottom:8px">
+          Which optional features this organisation has access to. Only settable here, organisation admins cannot change their own.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
+            <input type="checkbox" id="eb-mod-loans" style="width:16px;flex-shrink:0"> Loans
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
+            <input type="checkbox" id="eb-mod-expenditure" style="width:16px;flex-shrink:0"> Expenditure
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
+            <input type="checkbox" id="eb-mod-banking" style="width:16px;flex-shrink:0"> Banking
+          </label>
+        </div>
+
         <p id="edit-billing-error" class="error" style="display:none"></p>
         <div style="display:flex;gap:8px;margin-top:16px">
           <button class="btn accent" onclick="saveEditBilling()">Save</button>
@@ -257,7 +274,7 @@
 
     let editBillingOrgId = null;
 
-    function openEditBillingDrawer(id, name, person, phone, fee) {
+    async function openEditBillingDrawer(id, name, person, phone, fee) {
       editBillingOrgId = id;
       document.getElementById("edit-billing-org-name").textContent = name;
       document.getElementById("eb-person").value = person || "";
@@ -266,6 +283,14 @@
       document.getElementById("edit-billing-error").style.display = "none";
       document.getElementById("edit-billing-backdrop").classList.add("open");
       document.getElementById("edit-billing-drawer").classList.add("open");
+
+      // Modules live on the organisation itself, so fetch them separately.
+      const { data } = await supabaseClient.from("organisations")
+        .select("enabled_modules").eq("id", id).single();
+      const m = data?.enabled_modules || {};
+      document.getElementById("eb-mod-loans").checked = m.loans !== false;
+      document.getElementById("eb-mod-expenditure").checked = m.expenditure !== false;
+      document.getElementById("eb-mod-banking").checked = m.banking !== false;
     }
     function closeEditBillingDrawer() {
       document.getElementById("edit-billing-backdrop").classList.remove("open");
@@ -282,6 +307,17 @@
         p_monthly_fee: fee === "" ? null : fee,
       });
       if (error) { showError(errorEl, error.message); return; }
+
+      const { error: modError } = await supabaseClient.rpc("fn_set_org_modules", {
+        p_org_id: editBillingOrgId,
+        p_modules: {
+          loans: document.getElementById("eb-mod-loans").checked,
+          expenditure: document.getElementById("eb-mod-expenditure").checked,
+          banking: document.getElementById("eb-mod-banking").checked,
+        },
+      });
+      if (modError) { showError(errorEl, modError.message); return; }
+
       closeEditBillingDrawer();
       loadBilling();
     }
