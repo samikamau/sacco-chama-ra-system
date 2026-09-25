@@ -306,14 +306,14 @@
       return Object.entries(byAccount).map(([code,acct])=>{
         const closing = acct.rows.length ? Number(acct.rows[acct.rows.length-1].running_balance) : 0;
         return `<div class="section-heading">${code} — ${acct.name} <span style="font-weight:400;color:var(--color-muted)">(${acct.type})</span></div>
-          <table><thead><tr><th>Date</th><th>Reference</th><th>Description</th><th>Member / Party</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
+          <table><thead><tr><th>Date</th><th>Reference</th><th>Description</th><th>Contra account</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead>
           <tbody>
             <tr style="font-style:italic;color:var(--color-muted)"><td colspan="6">Opening balance</td><td class="num">0.00</td></tr>
             ${acct.rows.map(r=>`<tr>
               <td>${r.entry_date}</td>
               <td><code style="font-size:11px">${r.reference||"—"}</code></td>
               <td>${r.description}</td>
-              <td>${r.counterparty||"—"}</td>
+              <td>${r.contra_account||"—"}</td>
               <td class="num">${r.debit>0?money(r.debit):""}</td>
               <td class="num">${r.credit>0?money(r.credit):""}</td>
               <td class="num" style="font-family:var(--font-mono)">${money(r.running_balance)}</td>
@@ -491,10 +491,10 @@
         const glWidths = [18,24,48,34,20,20,18];
         Object.entries(byAccount).forEach(([code,acct])=>{
           sectionHeader(`${code} — ${acct.name} (${acct.type})`);
-          tableHeader(["Date","Reference","Description","Member / Party","Debit","Credit","Balance"],glWidths);
+          tableHeader(["Date","Reference","Description","Contra account","Debit","Credit","Balance"],glWidths);
           tableRow(["(Opening balance)","","","","","","0.00"],glWidths,false,[240,240,240]);
           acct.rows.forEach(r=>tableRow([
-            r.entry_date, r.reference||"—", r.description, r.counterparty||"—",
+            r.entry_date, r.reference||"—", r.description, r.contra_account||"—",
             r.debit>0?money(r.debit):"", r.credit>0?money(r.credit):"", money(r.running_balance)
           ],glWidths,false));
           const closing = acct.rows.length ? Number(acct.rows[acct.rows.length-1].running_balance):0;
@@ -584,9 +584,9 @@
         data.forEach(r=>{ if(!byAccount[r.account_code]) byAccount[r.account_code]={name:r.account_name,type:r.account_type,rows:[]}; byAccount[r.account_code].rows.push(r); });
         Object.entries(byAccount).forEach(([code,acct])=>{
           rows.push([`${code} — ${acct.name} (${acct.type})`]);
-          rows.push(["Date","Reference","Description","Member / Party","Debit (KES)","Credit (KES)","Running Balance"]);
+          rows.push(["Date","Reference","Description","Contra account","Debit (KES)","Credit (KES)","Running Balance"]);
           rows.push(["(Opening balance)","","","","","",0]);
-          acct.rows.forEach(r=>rows.push([r.entry_date,r.reference||"—",r.description,r.counterparty||"",r.debit>0?Number(r.debit):"",r.credit>0?Number(r.credit):"",Number(r.running_balance)]));
+          acct.rows.forEach(r=>rows.push([r.entry_date,r.reference||"—",r.description,r.contra_account||"",r.debit>0?Number(r.debit):"",r.credit>0?Number(r.credit):"",Number(r.running_balance)]));
           const closing = acct.rows.length?Number(acct.rows[acct.rows.length-1].running_balance):0;
           rows.push(["","","Closing balance","","","",closing],[]);
         });
