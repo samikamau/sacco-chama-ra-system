@@ -11,7 +11,7 @@
   :root {
     --dash-green: #10B981; --dash-green-bg: #ECFDF5;
     --dash-gold: #F97316;  --dash-gold-bg: #FFF7ED;
-    --dash-red: #E11D48;   --dash-red-bg: #FFF1F2;
+    --dash-red: #FB0137;    --dash-red-bg: #FFF1F2;
     --dash-blue: #0EA5E9;  --dash-purple: #8B5CF6;
   }
   .main > h1 {
@@ -47,7 +47,7 @@
   .stat:first-child { padding-top: 0; }
   .stat-icon {
     flex-shrink: 0; width: 26px; height: 26px; border-radius: 7px;
-    background: var(--dash-green-bg); color: var(--dash-green);
+    background: #E6EBF2; color: #00173D;
     display: flex; align-items: center; justify-content: center;
   }
   .stat-icon svg { width: 13px; height: 13px; }
@@ -164,7 +164,7 @@
           <h2 style="text-align:center">Income &amp; Expenditure</h2>
           <div class="glance-stat"><div class="glance-value" id="k-income-month" style="color:#10B981">-</div><div class="glance-label">Income (this month)</div></div>
           <div class="glance-stat"><div class="glance-value" id="k-expenditure-month" style="color:#E11D48">-</div><div class="glance-label">Expenditure (this month)</div></div>
-          <div class="glance-stat"><div class="glance-value" id="k-net-month" style="color:#0EA5E9">-</div><div class="glance-label">Net</div></div>
+          <div class="glance-stat"><div class="glance-value" id="k-net-month" style="color:#00173D">-</div><div class="glance-label">Net</div></div>
         </div>
         <div class="card" style="flex:1;min-width:260px">
           <h2 style="text-align:center">Member Funds</h2>
@@ -256,7 +256,7 @@
           });
           const fundLabels = Object.keys(totalsByName);
           const fundValues = fundLabels.map(l => totalsByName[l]);
-          const fundPalette = ["#10B981", "#0EA5E9", "#8B5CF6", "#F97316", "#E11D48", "#6366F1", "#14B8A6", "#F59E0B"];
+          const fundPalette = ["#00173D", "#FB0137", "#0EA5E9", "#F97316", "#8B5CF6", "#10B981", "#6366F1", "#F59E0B"];
 
           if (fundLabels.length) {
             new Chart(document.getElementById("chart-funds"), {
@@ -360,8 +360,8 @@
             datasets: [{
               label: "Collections (KES)",
               data: months.map(m => totalsByMonth[m.key]),
-              borderColor: "#10B981",
-              backgroundColor: "rgba(16,185,129,0.12)",
+              borderColor: "#00173D",
+              backgroundColor: "rgba(0,23,61,0.10)",
               fill: true,
               tension: 0.3,
             }],
