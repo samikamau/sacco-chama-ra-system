@@ -5,6 +5,10 @@
 // buttons) always stays Edhafu-branded, only documents handed to an
 // organisation's own members/stakeholders use that organisation's identity.
 
+// Default brand navy, used as the PDF fallback color when an organisation
+// hasn't set its own. Keep this in sync with --color-primary in style.css.
+const DEFAULT_BRAND_RGB = [0, 23, 61];
+
 // Fetches the current organisation's saved branding. Returns nulls for
 // anything not customized, so callers can fall back to Edhafu defaults.
 async function getDocBranding() {
@@ -59,5 +63,43 @@ function applyDocBranding(branding, { scopeEl, logoEl } = {}) {
     } else {
       logoEl.innerHTML = `<img src="${branding.logoUrl}" alt="Organisation logo" style="height:48px;max-width:220px;object-fit:contain">`;
     }
+  }
+}
+
+// Converts a "#RRGGBB" string into a [r,g,b] array, the form jsPDF's
+// setFillColor/setTextColor expect. Falls back to the default brand navy
+// if given nothing or something unparseable.
+function brandHexToRgb(hex) {
+  if (!hex) return DEFAULT_BRAND_RGB;
+  try {
+    const h = hex.replace('#', '');
+    const r = parseInt(h.substring(0, 2), 16);
+    const g = parseInt(h.substring(2, 4), 16);
+    const b = parseInt(h.substring(4, 6), 16);
+    if ([r, g, b].some(Number.isNaN)) return DEFAULT_BRAND_RGB;
+    return [r, g, b];
+  } catch (e) {
+    return DEFAULT_BRAND_RGB;
+  }
+}
+
+// Fetches an image URL and returns it as a data URL, which is the form
+// jsPDF's doc.addImage() needs (it cannot load a remote URL directly).
+// Returns null on any failure, so callers can just skip the logo image
+// and fall back to text-only branding.
+async function fetchImageAsDataUrl(url) {
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    return null;
   }
 }

@@ -95,6 +95,7 @@
   <script src="js/nav.js"></script>
   <script src="js/member-search.js"></script>
   <script src="js/auth.js"></script>
+  <script src="js/doc-branding.js"></script>
   <script>
     let orgId, orgName, fundTypes = [], members = [], loans = [];
     let lastStatement = null;
@@ -424,12 +425,15 @@
       }
 
       output.innerHTML = `
-        <div style="background:white;border:1px solid var(--color-line);border-radius:var(--radius);overflow:hidden;margin-bottom:16px">
-          <div class="stmt-header">
-            <h2>${orgName}</h2>
-            <div class="sub">Member Statement &nbsp;|&nbsp; ${periodLabel}</div>
-            <div style="margin-top:8px;font-size:14px">
-              <strong>${member.full_name}</strong> &nbsp;|&nbsp; ${member.member_number}
+        <div id="statement-print-area" style="background:white;border:1px solid var(--color-line);border-radius:var(--radius);overflow:hidden;margin-bottom:16px">
+          <div class="stmt-header" style="display:flex;align-items:center;gap:14px">
+            <span id="statement-logo-slot"></span>
+            <div>
+              <h2>${orgName}</h2>
+              <div class="sub">Member Statement &nbsp;|&nbsp; ${periodLabel}</div>
+              <div style="margin-top:8px;font-size:14px">
+                <strong>${member.full_name}</strong> &nbsp;|&nbsp; ${member.member_number}
+              </div>
             </div>
           </div>
           ${sectionsHTML || `<div class="stmt-section"><p class="empty" style="padding:16px">No data found for the selected components and period.</p></div>`}
@@ -437,22 +441,39 @@
             Generated: ${new Date().toLocaleDateString("en-KE", {year:"numeric",month:"long",day:"numeric"})}
           </div>
         </div>`;
+
+      applyDocBranding(await getDocBranding(), {
+        scopeEl: document.getElementById('statement-print-area'),
+        logoEl: document.getElementById('statement-logo-slot'),
+      });
     }
 
     // -------------------------------------------------------------------------
     // PDF EXPORT
     // -------------------------------------------------------------------------
-    function downloadPdf() {
+    async function downloadPdf() {
       if (!lastStatement) { alert("Generate a statement first."); return; }
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
       const today = new Date().toLocaleDateString("en-KE", {year:"numeric",month:"long",day:"numeric"});
       let y = 14;
 
+      const branding = await getDocBranding();
+      const PRIMARY = brandHexToRgb(branding.primaryColor);
+      const logoDataUrl = await fetchImageAsDataUrl(branding.logoUrl);
+      let textX = 14;
+      if (logoDataUrl) {
+        try {
+          const fmt = logoDataUrl.includes('image/jpeg') || logoDataUrl.includes('image/jpg') ? 'JPEG' : 'PNG';
+          doc.addImage(logoDataUrl, fmt, 14, y - 2, 30, 12);
+          textX = 50;
+        } catch (e) { /* unsupported image format, skip */ }
+      }
+
       // Header
       doc.setFontSize(18); doc.setFont(undefined, "bold");
-      if (lastStatement.orgName) doc.text(lastStatement.orgName, 14, y);
-      else pdfLogoText(doc, 14, y, "", "", 0, 9);
+      if (lastStatement.orgName) doc.text(lastStatement.orgName, textX, y);
+      else pdfLogoText(doc, textX, y, "", "", 0, 9);
       y += 8;
       doc.setFontSize(11); doc.setFont(undefined, "normal");
       doc.text("Member Statement", 14, y); y += 6;
@@ -485,7 +506,7 @@
                 rows.push([r.payment_date, r.reference ?? "—", money(r.principal_portion), money(r.interest_portion), money(bal)]);
               }
               doc.autoTable({ startY: y, head:[["Date","Reference","Principal","Interest","Balance"]], body: rows,
-                styles:{fontSize:8}, headStyles:{fillColor:[27,58,52]}, margin:{left:14,right:14} });
+                styles:{fontSize:8}, headStyles:{fillColor:PRIMARY}, margin:{left:14,right:14} });
               y = doc.lastAutoTable.finalY + 8;
             }
           }
@@ -500,7 +521,7 @@
           const closing = sec.rows.length ? sec.rows[sec.rows.length-1].balance : 0;
           rows.push(["Closing balance", "", "", "", "", money(closing)]);
           doc.autoTable({ startY: y, head:[["Date","Reference","Description","Debit","Credit","Balance"]], body: rows,
-            styles:{fontSize:8}, headStyles:{fillColor:[27,58,52]}, margin:{left:14,right:14} });
+            styles:{fontSize:8}, headStyles:{fillColor:PRIMARY}, margin:{left:14,right:14} });
           y = doc.lastAutoTable.finalY + 8;
           if (y > 250) { doc.addPage(); y = 14; }
         }

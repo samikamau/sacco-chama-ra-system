@@ -71,6 +71,7 @@
   <script src="js/config.js"></script>
   <script src="js/nav.js"></script>
   <script src="js/auth.js"></script>
+  <script src="js/doc-branding.js"></script>
   <script>
     let orgId, orgName, lastReport = null, glAccounts = [];
 
@@ -136,7 +137,7 @@
 
       if (error) { body.innerHTML=`<p class="error">${error.message}</p>`; return; }
       lastReport = { kind, data:data||[], from, to };
-      renderReport(body, lastReport);
+      await renderReport(body, lastReport);
     }
 
     // ── PERIOD LABEL ──────────────────────────────────────────────────────
@@ -149,15 +150,22 @@
     }
 
     // ── RENDER TO SCREEN ─────────────────────────────────────────────────
-    function renderReport(body, rpt) {
+    async function renderReport(body, rpt) {
       const {kind, data} = rpt;
       const titles = {trial:"Trial Balance",ie:"Income & Expenditure",bs:"Balance Sheet",cf:"Cash Flow",gl:"General Ledger"};
       const title = titles[kind];
       const now = new Date().toLocaleDateString("en-KE",{year:"numeric",month:"long",day:"numeric"});
 
-      let html = `<div class="report-header"><h2>${orgName}</h2><div class="sub">${title} &nbsp;|&nbsp; ${periodLabel()} &nbsp;|&nbsp; Generated ${now}</div></div>`;
+      let html = `<div class="report-header" style="display:flex;align-items:center;gap:14px">
+        <span id="report-logo-slot"></span>
+        <div><h2>${orgName}</h2><div class="sub">${title} &nbsp;|&nbsp; ${periodLabel()} &nbsp;|&nbsp; Generated ${now}</div></div>
+      </div>`;
 
-      if (!data.length) { body.innerHTML = html + `<p class="empty">No data in this range.</p>`; return; }
+      if (!data.length) {
+        body.innerHTML = html + `<p class="empty">No data in this range.</p>`;
+        applyDocBranding(await getDocBranding(), { scopeEl: body, logoEl: document.getElementById('report-logo-slot') });
+        return;
+      }
 
       if (kind==="trial") html += renderTrialHTML(data);
       else if (kind==="ie") html += renderIEHTML(data);
@@ -167,6 +175,7 @@
       else html += renderGLHTML(data);
 
       body.innerHTML = html;
+      applyDocBranding(await getDocBranding(), { scopeEl: body, logoEl: document.getElementById('report-logo-slot') });
     }
 
     function renderTrialHTML(data) {
@@ -294,7 +303,7 @@
     }
 
     // ── PDF EXPORT ────────────────────────────────────────────────────────
-    function exportPdf() {
+    async function exportPdf() {
       if (!lastReport) { alert("Run a report first."); return; }
       const {jsPDF} = window.jspdf;
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -303,18 +312,29 @@
       const title = titles[kind];
       const period = periodLabel();
       const now = new Date().toLocaleDateString("en-KE",{year:"numeric",month:"long",day:"numeric"});
-      const PRIMARY = [27,58,52], SECTION_BG = [243,235,216], TOTAL_BG = [220,218,206];
+
+      const branding = await getDocBranding();
+      const PRIMARY = brandHexToRgb(branding.primaryColor);
+      const logoDataUrl = await fetchImageAsDataUrl(branding.logoUrl);
+      const SECTION_BG = [243,235,216], TOTAL_BG = [220,218,206];
       const W = 182; // usable width in mm
       let y = 14;
 
       // Header block
       doc.setFillColor(...PRIMARY);
       doc.rect(14, y, W, 22, "F");
+      if (logoDataUrl) {
+        try {
+          const fmt = logoDataUrl.includes('image/jpeg') || logoDataUrl.includes('image/jpg') ? 'JPEG' : 'PNG';
+          doc.addImage(logoDataUrl, fmt, 18, y+4, 32, 14);
+        } catch (e) { /* unsupported image format, skip */ }
+      }
+      const textX = logoDataUrl ? 60 : 18;
       doc.setTextColor(255,255,255);
       doc.setFontSize(14); doc.setFont(undefined,"bold");
-      doc.text(orgName||"Report", 18, y+8);
+      doc.text(orgName||"Report", textX, y+8);
       doc.setFontSize(10); doc.setFont(undefined,"normal");
-      doc.text(`${title}  |  ${period}  |  Generated ${now}`, 18, y+16);
+      doc.text(`${title}  |  ${period}  |  Generated ${now}`, textX, y+16);
       doc.setTextColor(0);
       y += 28;
 
@@ -465,7 +485,7 @@
         doc.setPage(i);
         doc.setFontSize(8); doc.setTextColor(150);
         doc.text(`Page ${i} of ${pageCount}`, 196, pageH-8, {align:"right"});
-        doc.text(`Finlens Africa | Confidential`, 14, pageH-8);
+        doc.text(`Edhafu | Confidential`, 14, pageH-8);
         doc.setTextColor(0);
       }
 
