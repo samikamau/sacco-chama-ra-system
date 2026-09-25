@@ -46,7 +46,7 @@
     <div class="field"><label>Account code *</label><input id="d-code"></div>
     <div class="field"><label>Account name *</label><input id="d-name"></div>
     <div class="field"><label>Category (parent) *</label>
-      <select id="d-parent" onchange="autoSetType()">
+      <select id="d-parent" onchange="autoSetType(); applyRentalLock(this.value || null)">
         <option value="">— top level —</option>
       </select>
     </div>
@@ -69,6 +69,9 @@
         Income and costs tagged this way are reported on their own rental schedule.
         Only the net result appears in the main income and expenditure statement.
         Changing this applies the same setting to every sub-account beneath it.
+      </div>
+      <div id="d-rental-locked" style="display:none;font-size:12px;color:var(--color-muted);margin-top:4px">
+        Set by the parent account. Untick it there to take this off the schedule.
       </div>
     </div>
     <div class="field" id="d-active-wrap" style="display:none">
@@ -220,6 +223,7 @@
         document.getElementById('d-active').checked = a.is_active !== false;
         document.getElementById('d-parent').value = a.parent_account_id || '';
         document.getElementById('d-rental').checked = a.in_rental_schedule === true;
+        applyRentalLock(a.parent_account_id);
       } else {
         ['d-code','d-name','d-desc'].forEach(i => document.getElementById(i).value = '');
         document.getElementById('d-rental').checked = false;
@@ -229,7 +233,10 @@
           const parent = allAccounts.find(a => a.id === presetParentId);
           document.getElementById('d-rental').checked = parent ? parent.in_rental_schedule === true : false;
           document.getElementById('d-parent').value = presetParentId;
+          applyRentalLock(presetParentId);
           autoSetType();
+        } else {
+          applyRentalLock(null);
         }
       }
       document.getElementById('backdrop').classList.add('open');
@@ -240,6 +247,18 @@
       document.getElementById('backdrop').classList.remove('open');
       document.getElementById('drawer').classList.remove('open');
       editingId = null;
+    }
+
+    // A tagged parent holds its sub-accounts on the rental schedule, so the
+    // tickbox is locked on rather than letting someone try and be refused.
+    function applyRentalLock(parentId) {
+      const box = document.getElementById('d-rental');
+      const note = document.getElementById('d-rental-locked');
+      const parent = parentId ? allAccounts.find(a => a.id === parentId) : null;
+      const locked = parent ? parent.in_rental_schedule === true : false;
+      box.disabled = locked;
+      if (locked) box.checked = true;
+      note.style.display = locked ? 'block' : 'none';
     }
 
     function autoSetType() {
