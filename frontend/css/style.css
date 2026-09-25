@@ -1,6 +1,6 @@
 /* =========================================================================
    DESIGN TOKENS
-   A ledger-inspired palette: deep pine for trust/structure, warm brass for
+   A ledger-inspired palette: deep navy for trust/structure, warm brass for
    action/attention, warm paper background instead of stark white or dark
    mode. Hairline rules instead of card shadows — this is a register, not
    a SaaS dashboard.
@@ -10,12 +10,12 @@
   --color-surface:   #FFFFFF;
   --color-ink:       #1A1A18;
   --color-muted:     #6B6558;
-  --color-primary:   #1B3A34;   /* deep pine - nav, headings, primary actions */
-  --color-primary-soft: #24473F;
+  --color-primary:   #00173D;   /* brand navy - nav, headings, primary actions */
+  --color-primary-soft: #0A2A52;
   --color-accent:    #C08A3E;   /* warm brass - calls to action, highlights */
   --color-line:      #DEDACE;   /* hairline borders */
   --color-success:   #3F6B4A;
-  --color-alert:     #A6432F;
+  --color-alert:     #FB0137;   /* brand red - also used for danger/destructive actions */
 
   --font-display: 'Source Serif 4', Georgia, serif;
   --font-body:    'IBM Plex Sans', -apple-system, sans-serif;
@@ -323,4 +323,4 @@ img.edhafu-logo { display: block; height: 40px; width: auto; max-width: 100%; }
 
 /* Brand name written inside a sentence (too small for the image) */
 .edhafu-name { font-weight: 700; white-space: nowrap; }
-.edhafu-name .e { color: #E63946; }
+.edhafu-name .e { color: #FB0137; }
