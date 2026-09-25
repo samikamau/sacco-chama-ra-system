@@ -53,6 +53,7 @@
       <div class="card" id="invite-card">
         <h2>Invite someone</h2>
         <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div class="field" style="flex:1;min-width:180px"><label>Full name</label><input id="i-name" type="text" placeholder="e.g. Jane Wanjiru"></div>
           <div class="field" style="flex:2;min-width:220px"><label>Email address *</label><input id="i-email" type="email" placeholder="person@example.com"></div>
           <div class="field" style="flex:1;min-width:160px"><label>Role *</label>
             <select id="i-role" onchange="showRoleDesc()">
@@ -75,8 +76,8 @@
         <h2>Current users</h2>
         <p id="users-hint" style="color:var(--color-muted);font-size:13px;display:none"></p>
         <table>
-          <thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th></th></tr></thead>
-          <tbody id="user-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th></th></tr></thead>
+          <tbody id="user-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
         </table>
       </div>
 
@@ -84,7 +85,7 @@
       <div class="card">
         <h2>Pending invitations</h2>
         <table>
-          <thead><tr><th>Email</th><th>Role</th><th>Invited</th><th>Expires</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Invited</th><th>Expires</th><th>Status</th><th></th></tr></thead>
           <tbody id="invite-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
         </table>
       </div>
@@ -96,7 +97,7 @@
     <h2>Permissions</h2>
     <p style="color:var(--color-muted);font-size:13px" id="perm-user-label"></p>
     <p style="color:var(--color-muted);font-size:12px;margin-top:10px">
-      Ticked and greyed out means the permission already comes with this user's role and cannot be removed here. Change their role instead if you need to take it away.
+      Tick or untick anything. Boxes marked "from role" match what this user's role gives by default; "added" or "removed" means you have overridden the role for this person. Change their role instead if you want the default itself to change.
     </p>
     <div id="perm-list" style="margin-top:14px"></div>
     <div class="drawer-actions">
@@ -163,6 +164,7 @@
           p_email: email,
           p_role: document.getElementById("i-role").value,
           p_note: null,
+          p_full_name: document.getElementById("i-name").value.trim() || null,
         });
         if (error) { showError(errEl, error.message); return; }
 
@@ -176,11 +178,13 @@
             },
           });
 
-        if (fnError || fnData?.error) {
+        if (fnError || fnData?.error || fnData?.ok !== true) {
           // The invitation itself was recorded, so say so rather than
           // implying nothing happened.
+          const detail = fnData?.error || fnError?.message
+            || "the invite function did not respond as expected (check it is deployed correctly)";
           showError(errEl,
-            `Invitation recorded, but the email could not be sent: ${fnData?.error || fnError.message}. ` +
+            `Invitation recorded, but the email could not be sent: ${detail}. ` +
             `They can still get in by using "Forgot password" on the sign-in page.`);
           loadInvites();
           return;
@@ -188,12 +192,13 @@
 
         okEl.style.display = "block";
         okEl.innerHTML = `
-          <p style="color:var(--color-success)">Invitation sent to <strong>${data.email}</strong> as <strong>${data.role}</strong>.</p>
+          <p style="color:var(--color-success)">Invitation sent to <strong>${data.full_name ? data.full_name + " (" + data.email + ")" : data.email}</strong> as <strong>${data.role}</strong>.</p>
           <p style="font-size:13px;margin-top:8px">${fnData.existing_account
             ? "They already had an account, so they have been emailed a link to set a new password."
             : "They have been emailed a link to set their password and sign in."}
           Once they sign in, the invitation appears at the top of this page for them to accept.</p>`;
         document.getElementById("i-email").value = "";
+        document.getElementById("i-name").value = "";
         loadInvites();
       } finally {
         if (btn) { btn.disabled = false; btn.textContent = "Send invitation"; }
@@ -257,8 +262,8 @@
     async function loadUsers() {
       const { data, error } = await supabaseClient.rpc("fn_organisation_users", { p_organisation_id: orgId });
       const tbody = document.getElementById("user-rows");
-      if (error) { tbody.innerHTML = `<tr><td colspan="5" class="error">${error.message}</td></tr>`; return; }
-      if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="5" class="empty">No users.</td></tr>`; return; }
+      if (error) { tbody.innerHTML = `<tr><td colspan="6" class="error">${error.message}</td></tr>`; return; }
+      if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty">No users.</td></tr>`; return; }
 
       // Work out my own role so we can show/hide admin controls
       const me = data.find(u=>u.is_me);
@@ -277,6 +282,7 @@
       }
       tbody.innerHTML = data.map(u=>`
         <tr>
+          <td>${u.full_name || '<span style="color:var(--color-muted)">—</span>'}</td>
           <td>${u.email}${u.is_me?'<span class="me-badge">you</span>':''}</td>
           <td>${isAdmin && !u.is_me ? `
             <select onchange="changeRole('${u.user_id}', this.value)" style="font-size:13px;padding:2px">
@@ -290,15 +296,15 @@
               onclick="setStatus('${u.user_id}','${u.status==='active'?'disabled':'active'}')">
               ${u.status==='active'?'Disable':'Enable'}</button>
             <button class="btn" style="padding:2px 8px;font-size:12px;margin-left:4px"
-              onclick="openPermissions('${u.user_id}','${u.email.replace(/'/g,"\\'")}')">Permissions</button>` : ''}</td>
+              onclick="openPermissions('${u.user_id}','${((u.full_name ? u.full_name + " (" + u.email + ")" : u.email)).replace(/'/g,"\\'")}')">Permissions</button>` : ''}</td>
         </tr>`).join("");
     }
 
     let permUserId = null;
 
-    async function openPermissions(userId, email) {
+    async function openPermissions(userId, who) {
       permUserId = userId;
-      document.getElementById("perm-user-label").textContent = email;
+      document.getElementById("perm-user-label").textContent = who;
       document.getElementById("perm-error").style.display = "none";
       document.getElementById("perm-success").style.display = "none";
       document.getElementById("perm-list").innerHTML = `<p class="empty">Loading…</p>`;
@@ -312,13 +318,16 @@
         return;
       }
       document.getElementById("perm-list").innerHTML = (data||[]).map(p=>`
-        <label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:14px;cursor:${p.from_role?'default':'pointer'}">
+        <label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:14px;cursor:pointer">
           <input type="checkbox" class="perm-check" value="${p.permission}"
-            ${p.from_role || p.granted ? 'checked' : ''}
-            ${p.from_role ? 'disabled' : ''}
+            ${p.effective ? 'checked' : ''}
             style="width:16px;flex-shrink:0">
-          <span style="${p.from_role?'color:var(--color-muted)':''}">${p.label}</span>
-          ${p.from_role ? `<span style="font-size:11px;color:var(--color-muted);margin-left:auto">from role</span>` : ''}
+          <span>${p.label}</span>
+          <span style="font-size:11px;color:var(--color-muted);margin-left:auto">
+            ${p.overridden
+              ? (p.effective ? 'added' : 'removed')
+              : (p.from_role ? 'from role' : '')}
+          </span>
         </label>`).join("");
     }
 
@@ -334,15 +343,21 @@
       const successEl = document.getElementById("perm-success");
       errorEl.style.display = "none"; successEl.style.display = "none";
 
-      // Only the enabled (non role-derived) ticks are sent; role-derived
-      // ones are implied and are never stored as grants.
+      // Every box is editable now, so send the complete tick state. The
+      // database stores only what differs from the user's role.
       const chosen = [...document.querySelectorAll(".perm-check")]
-        .filter(c => !c.disabled && c.checked).map(c => c.value);
+        .filter(c => c.checked).map(c => c.value);
 
       const { error } = await supabaseClient.rpc("fn_set_user_permissions", {
         p_organisation_id: orgId, p_user_id: permUserId, p_permissions: chosen });
       if (error) { showError(errorEl, error.message); return; }
 
+      successEl.textContent = "Permissions saved.";
+      successEl.style.display = "block";
+
+      // Reload so the "added" / "removed" markers reflect what was saved.
+      const label = document.getElementById("perm-user-label").textContent;
+      await openPermissions(permUserId, label);
       successEl.textContent = "Permissions saved.";
       successEl.style.display = "block";
     }
@@ -364,7 +379,7 @@
 
     async function loadInvites() {
       const { data, error } = await supabaseClient.from("organisation_invitations")
-        .select("id, email, role, status, invited_at, expires_at")
+        .select("id, email, full_name, role, status, invited_at, expires_at")
         .eq("organisation_id", orgId).order("invited_at", { ascending: false }).limit(50);
       const tbody = document.getElementById("invite-rows");
       if (error) { tbody.innerHTML = `<tr><td colspan="6" class="error">${error.message}</td></tr>`; return; }
@@ -372,6 +387,7 @@
       tbody.innerHTML = data.map(i=>{
         const cls = i.status==='accepted'?'paid':i.status==='pending'?'partial':'unpaid';
         return `<tr>
+          <td>${i.full_name || '<span style="color:var(--color-muted)">—</span>'}</td>
           <td>${i.email}</td>
           <td>${i.role==='org_admin'?'Administrator':i.role}</td>
           <td>${new Date(i.invited_at).toLocaleDateString()}</td>
@@ -394,7 +410,7 @@
       const org = await currentOrg();
       if (!org) {
         document.getElementById("invite-card").style.display = "none";
-        document.getElementById("user-rows").innerHTML = `<tr><td colspan="5" class="empty">You are not yet a member of any organisation. If you have an invitation above, accept it to continue.</td></tr>`;
+        document.getElementById("user-rows").innerHTML = `<tr><td colspan="6" class="empty">You are not yet a member of any organisation. If you have an invitation above, accept it to continue.</td></tr>`;
         document.getElementById("invite-rows").innerHTML = `<tr><td colspan="6" class="empty">—</td></tr>`;
         return;
       }
