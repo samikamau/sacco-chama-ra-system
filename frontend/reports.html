@@ -547,6 +547,39 @@
         tableRow(["Total Cash Outflows",money(sum(outflow))],[145,37],true,TOTAL_BG);
         grandTotal("NET CASH MOVEMENT", net, net>=0?[27,107,74]:[166,67,47]);
 
+      } else if (kind === "cfi") {
+        // Indirect cash flow arrives already grouped into sections with its
+        // own subtotal rows, so it is printed in the order given.
+        let currentSection = null;
+        data.forEach(r => {
+          if (r.section !== currentSection) {
+            currentSection = r.section;
+            sectionHeader(currentSection.toUpperCase());
+            tableHeader(["Item","Amount"],[145,37]);
+          }
+          const amt = Number(r.amount);
+          const shown = amt < 0 ? `(${money(Math.abs(amt))})` : money(amt);
+          const label = (r.account_code ? r.account_code + "  " : "") + r.label;
+          tableRow([label, shown],[145,37], r.is_subtotal === true,
+                   r.is_subtotal ? TOTAL_BG : null);
+        });
+
+      } else if (kind === "rent") {
+        const income = data.filter(r => r.section === "Income");
+        const costs  = data.filter(r => r.section === "Costs");
+        const sum = l => l.reduce((s,r) => s + Number(r.amount), 0);
+        const net = sum(income) - sum(costs);
+
+        sectionHeader("RENTAL INCOME"); tableHeader(["Code","Account","Amount"],[24,121,37]);
+        income.forEach(r => tableRow([r.account_code, r.account_name, money(r.amount)],[24,121,37],false));
+        tableRow(["","Total rental income", money(sum(income))],[24,121,37],true,TOTAL_BG);
+
+        sectionHeader("RENTAL COSTS"); tableHeader(["Code","Account","Amount"],[24,121,37]);
+        costs.forEach(r => tableRow([r.account_code, r.account_name, money(r.amount)],[24,121,37],false));
+        tableRow(["","Total rental costs", money(sum(costs))],[24,121,37],true,TOTAL_BG);
+
+        grandTotal("NET RENTAL INCOME", net, net>=0?[27,107,74]:[166,67,47]);
+
       } else { // GL
         const byAccount = {};
         data.forEach(r=>{
@@ -642,6 +675,33 @@
         rows.push(["Total Cash Inflows",sum(inf)],[],["CASH OUTFLOWS"],["Category","Amount (KES)"]);
         out.forEach(r=>rows.push([r.category,Number(r.amount)]));
         rows.push(["Total Cash Outflows",sum(out)],[],["NET CASH MOVEMENT",net]);
+
+      } else if (kind==="cfi") {
+        rows = [[orgName],[title],[period],[`Generated: ${now}`],[]];
+        let currentSection = null;
+        data.forEach(r => {
+          if (r.section !== currentSection) {
+            currentSection = r.section;
+            rows.push([], [currentSection], ["Item","Amount (KES)"]);
+          }
+          const label = (r.account_code ? r.account_code + "  " : "") + r.label;
+          rows.push([label, Number(r.amount)]);
+        });
+
+      } else if (kind==="rent") {
+        const income = data.filter(r => r.section === "Income");
+        const costs  = data.filter(r => r.section === "Costs");
+        const sum = l => l.reduce((s,r) => s + Number(r.amount), 0);
+        const net = sum(income) - sum(costs);
+        rows = [[orgName],[title],[period],[`Generated: ${now}`],[],
+                ["RENTAL INCOME"],["Code","Account","Amount (KES)"]];
+        income.forEach(r => rows.push([r.account_code, r.account_name, Number(r.amount)]));
+        rows.push(["","Total rental income", sum(income)], [],
+                  ["RENTAL COSTS"],["Code","Account","Amount (KES)"]);
+        costs.forEach(r => rows.push([r.account_code, r.account_name, Number(r.amount)]));
+        rows.push(["","Total rental costs", sum(costs)], [],
+                  ["","NET RENTAL INCOME", net], [],
+                  ["Rental income is subject to a final tax and is reported separately. Only the net figure is carried into income and expenditure."]);
 
       } else { // GL
         rows = [[orgName],[title],[period],[`Generated: ${now}`],[]];
