@@ -157,7 +157,7 @@ async function renderNav() {
 
   mount.innerHTML = `
     <div class="brand" style="line-height:1.15">
-      <span style="font-size:28px;font-weight:700;color:#E63946">e</span><span style="font-size:28px;font-weight:700;color:#FFFFFF">dhafu</span>
+      <span style="font-size:28px;font-weight:700;color:#FB0137">e</span><span style="font-size:28px;font-weight:700;color:#FFFFFF">dhafu</span>
       <div style="font-size:12px;font-weight:400;letter-spacing:0.06em;color:rgba(255,255,255,0.65);margin-top:2px">Finance Simplified</div>
     </div>
     <div style="position:relative;margin-bottom:12px">
@@ -168,7 +168,7 @@ async function renderNav() {
       </button>
       <div id="org-switcher-menu" style="display:none;position:absolute;z-index:30;top:100%;left:0;right:0;background:#fff;border-radius:6px;box-shadow:0 8px 20px rgba(0,0,0,0.25);margin-top:4px;overflow:hidden">
         ${switcherItems}
-        ${isPlatformAdmin ? `<a href="create-organisation.html" style="display:block;padding:8px 12px;font-size:13px;color:var(--color-primary, #1B6E45);text-decoration:none;border-top:1px solid var(--color-line, #ddd)">+ New organisation</a>` : ''}
+        ${isPlatformAdmin ? `<a href="create-organisation.html" style="display:block;padding:8px 12px;font-size:13px;color:var(--color-primary, #00173D);text-decoration:none;border-top:1px solid var(--color-line, #ddd)">+ New organisation</a>` : ''}
       </div>
     </div>
     ${topLinks}
@@ -222,16 +222,16 @@ function ensureGroupTabStyles() {
       transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
     }
     .nav-group-tab:hover {
-      color: var(--color-primary, #1B6E45);
+      color: var(--color-primary, #00173D);
       background: var(--color-accent-tint, rgba(27,110,69,0.08));
       border-bottom-color: rgba(27,110,69,0.35);
       transform: translateY(-1px);
     }
     .nav-group-tab:active { transform: translateY(0); }
     .nav-group-tab.active {
-      color: var(--color-primary, #1B6E45); font-weight: 600;
+      color: var(--color-primary, #00173D); font-weight: 600;
       background: var(--color-accent-tint, rgba(27,110,69,0.1));
-      border-bottom-color: var(--color-accent, #1B6E45);
+      border-bottom-color: var(--color-accent, #00173D);
     }
   `;
   document.head.appendChild(style);
