@@ -1,0 +1,45 @@
+<!-- Paste into Supabase: Authentication -> Email Templates -> Invite user -->
+<div style="font-family:-apple-system,'Segoe UI',Arial,sans-serif;background:#F7F5F0;padding:32px 16px">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #DEDACE;border-radius:4px;overflow:hidden">
+
+    <div style="background:#00173D;padding:22px 28px">
+      <div style="font-size:26px;font-weight:800;letter-spacing:-0.02em;color:#ffffff">
+        <span style="color:#FB0137">e</span>dhafu
+      </div>
+      <div style="font-size:11px;letter-spacing:0.10em;text-transform:uppercase;color:rgba(255,255,255,0.7);margin-top:3px">
+        Finance Simplified
+      </div>
+    </div>
+
+    <div style="padding:28px">
+      <h1 style="font-size:20px;margin:0 0 14px;color:#1A1A18">You have been invited</h1>
+
+      <p style="font-size:15px;line-height:1.55;color:#1A1A18;margin:0 0 14px">
+        You have been invited to join an organisation on Edhafu. Click below to set your password and sign in.
+      </p>
+
+      <p style="margin:24px 0">
+        <a href="{{ .ConfirmationURL }}"
+           style="display:inline-block;background:#C08A3E;color:#26190A;text-decoration:none;
+                  padding:12px 22px;border-radius:4px;font-size:15px;font-weight:600">
+          Set my password
+        </a>
+      </p>
+
+      <p style="font-size:13px;line-height:1.55;color:#6B6558;margin:0 0 6px">
+        If the button does not work, copy this link into your browser:
+      </p>
+      <p style="font-size:12px;line-height:1.5;color:#6B6558;word-break:break-all;margin:0 0 20px">
+        {{ .ConfirmationURL }}
+      </p>
+
+      <p style="font-size:13px;line-height:1.55;color:#6B6558;margin:0;padding-top:16px;border-top:1px solid #DEDACE">
+        If you were not expecting this invitation, you can ignore this email and no account will be created.
+      </p>
+    </div>
+
+  </div>
+  <p style="max-width:520px;margin:14px auto 0;font-size:11px;color:#6B6558;text-align:center">
+    Edhafu &middot; Finance Simplified
+  </p>
+</div>

@@ -3,8 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <title>Banking — Financial Operating System</title>
-<link rel="icon" type="image/png" sizes="32x32" href="images/edhafu-icon-32.png">
-<link rel="apple-touch-icon" href="images/edhafu-icon-180.png">
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -22,19 +20,6 @@
   .split-total { display:flex; justify-content:space-between; font-weight:700; padding:8px 0; border-top:2px solid var(--color-ink); font-family:var(--font-mono); }
   .loan-row { background:#F3EBD8; border-radius:3px; padding:8px 12px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center; font-size:13px; }
   .loan-row input { width:140px; }
-  .loan-figs { display:grid; grid-template-columns:repeat(4, minmax(110px,1fr)); gap:8px; margin:8px 0 10px; }
-  .loan-fig { background:rgba(255,255,255,0.6); border-radius:3px; padding:6px 8px; }
-  .loan-fig .lbl { font-size:11px; color:var(--color-muted); text-transform:uppercase; letter-spacing:0.03em; }
-  .loan-fig .val { font-family:var(--font-mono); font-weight:700; font-size:14px; }
-  .loan-fig.total { background:var(--color-primary); color:#fff; }
-  .loan-fig.total .lbl { color:rgba(255,255,255,0.75); }
-  .fill-link { font-size:12px; color:var(--color-accent); cursor:pointer; text-decoration:underline; }
-  .bal-strip { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px,1fr)); gap:8px; margin:4px 0 16px; }
-  .bal-card { background:#F3EBD8; border-radius:4px; padding:8px 10px; }
-  .bal-card .lbl { font-size:11px; color:var(--color-muted); }
-  .bal-card .val { font-family:var(--font-mono); font-weight:700; font-size:14px; }
-  .bal-card.neg .val, .bal-note .neg { color:#B3261E; }
-  .bal-note { font-size:12px; color:var(--color-muted); margin-top:4px; font-family:var(--font-mono); }
 </style>
 </head>
 <body>
@@ -55,19 +40,14 @@
         <div class="card">
           <h2>Bank transfer</h2>
           <p style="color:var(--color-muted);font-size:13px">Transfer money between bank, cash, and M-Pesa accounts. Posts Dr receiving account / Cr sending account.</p>
-          <div id="t-balances" class="bal-strip"></div>
           <div style="display:flex;gap:12px;flex-wrap:wrap">
-            <div class="field" style="flex:1;min-width:180px"><label>From account (source) *</label>
-              <select id="t-from" onchange="showTransferBalances()"></select>
-              <div class="bal-note" id="t-from-bal"></div></div>
-            <div class="field" style="flex:1;min-width:180px"><label>To account (destination) *</label>
-              <select id="t-to" onchange="showTransferBalances()"></select>
-              <div class="bal-note" id="t-to-bal"></div></div>
+            <div class="field" style="flex:1;min-width:180px"><label>From account (source) *</label><select id="t-from"></select></div>
+            <div class="field" style="flex:1;min-width:180px"><label>To account (destination) *</label><select id="t-to"></select></div>
           </div>
           <div style="display:flex;gap:12px;flex-wrap:wrap">
-            <div class="field" style="flex:1;min-width:140px"><label>Amount (KES) *</label><input id="t-amount" type="number" step="0.01" oninput="showTransferBalances()"></div>
-            <div class="field" style="flex:1;min-width:140px"><label>Date *</label><input id="t-date" type="date" onchange="loadTransferBalances()"></div>
-            <div class="field" style="flex:1;min-width:160px"><label>Reference</label><input id="t-ref" placeholder="e.g. TRF-001"></div>
+            <div class="field" style="flex:1;min-width:140px"><label>Amount (KES) *</label><input id="t-amount" type="number" step="0.01"></div>
+            <div class="field" style="flex:1;min-width:140px"><label>Date *</label><input id="t-date" type="date"></div>
+            <div class="field" style="flex:1;min-width:160px"><label>Reference *</label><input id="t-ref" placeholder="e.g. TRF-001"></div>
           </div>
           <div class="field"><label>Description (optional)</label><input id="t-desc"></div>
           <button class="btn accent" onclick="postTransfer()">Post transfer</button>
@@ -108,7 +88,7 @@
             </div>
             <div class="field" style="flex:1;min-width:140px">
               <label>Date *</label>
-              <input id="f-date" type="date" onchange="renderLoans()">
+              <input id="f-date" type="date">
             </div>
           </div>
           <div style="display:flex;gap:12px;flex-wrap:wrap">
@@ -126,7 +106,7 @@
               </select>
             </div>
             <div class="field" style="flex:1;min-width:160px">
-              <label>Reference</label>
+              <label>Reference *</label>
               <input id="f-reference" placeholder="e.g. QAB123XY">
             </div>
           </div>
@@ -200,12 +180,10 @@
       paymentAccounts = pa || [];
 
       // Payment account selectors for transfer and for recording payments
-      const opts = paymentAccounts.map(a => `<option value="${a.id}">${a.code} - ${a.name}</option>`).join('');
+      const opts = paymentAccounts.map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join('');
       document.getElementById('t-from').innerHTML = opts;
       document.getElementById('t-to').innerHTML = opts;
       document.getElementById('t-date').value = new Date().toISOString().slice(0,10);
-      if (paymentAccounts.length > 1) document.getElementById('t-to').value = paymentAccounts[1].id;
-      loadTransferBalances();
       document.getElementById('f-cash-account').innerHTML = opts;
       document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
 
@@ -224,37 +202,6 @@
       loadMemberLoans();
     }
 
-    let acctBalances = {};
-
-    async function loadTransferBalances() {
-      const asAt = document.getElementById('t-date').value || new Date().toISOString().slice(0,10);
-      const { data, error } = await supabaseClient.rpc('fn_payment_account_balances',
-        { p_organisation_id: orgId, p_as_at: asAt });
-      if (error) { document.getElementById('t-balances').innerHTML = `<p class="error">${error.message}</p>`; return; }
-      acctBalances = {};
-      (data || []).forEach(b => acctBalances[b.account_id] = Number(b.balance));
-      document.getElementById('t-balances').innerHTML = (data || []).map(b => `
-        <div class="bal-card ${Number(b.balance) < 0 ? 'neg' : ''}">
-          <div class="lbl">${b.code} ${b.name}</div>
-          <div class="val">KES ${money(b.balance)}</div>
-        </div>`).join('') +
-        `<div style="grid-column:1/-1;font-size:11px;color:var(--color-muted)">Balances as at ${asAt}</div>`;
-      showTransferBalances();
-    }
-
-    function showTransferBalances() {
-      const from = document.getElementById('t-from').value;
-      const to   = document.getElementById('t-to').value;
-      const amt  = Number(document.getElementById('t-amount').value || 0);
-      const fmt  = n => `<span class="${n < 0 ? 'neg' : ''}">KES ${money(n)}</span>`;
-      const fb = acctBalances[from] ?? 0, tb = acctBalances[to] ?? 0;
-      document.getElementById('t-from-bal').innerHTML =
-        `Balance ${fmt(fb)}` + (amt ? ` &rarr; after ${fmt(fb - amt)}` : '') +
-        (amt > fb ? ` <span class="neg">(more than available)</span>` : '');
-      document.getElementById('t-to-bal').innerHTML =
-        `Balance ${fmt(tb)}` + (amt ? ` &rarr; after ${fmt(tb + amt)}` : '');
-    }
-
     async function postTransfer() {
       const errorEl = document.getElementById('t-error');
       const successEl = document.getElementById('t-success');
@@ -263,17 +210,17 @@
       const to   = document.getElementById('t-to').value;
       const amt  = document.getElementById('t-amount').value;
       const date = document.getElementById('t-date').value;
+      const tref = document.getElementById('t-ref').value.trim();
       if (!from || !to || !amt || !date) { showError(errorEl, 'All fields except description are required.'); return; }
+      if (!tref) { showError(errorEl, 'A reference is required so this transfer can be traced.'); return; }
       if (from === to) { showError(errorEl, 'Source and destination must be different accounts.'); return; }
-      const avail = acctBalances[from] ?? 0;
-      if (Number(amt) > avail && !confirm(`The source account only has KES ${money(avail)}. This transfer will leave it at KES ${money(avail - Number(amt))}. Post anyway?`)) return;
       const { error } = await supabaseClient.rpc('fn_bank_transfer', {
         p_organisation_id: orgId,
         p_from_account_id: from,
         p_to_account_id: to,
         p_amount: amt,
         p_transfer_date: date,
-        p_reference: document.getElementById('t-ref').value || null,
+        p_reference: tref,
         p_description: document.getElementById('t-desc').value || null,
       });
       if (error) { showError(errorEl, error.message); return; }
@@ -283,7 +230,6 @@
       document.getElementById('t-ref').value = '';
       document.getElementById('t-desc').value = '';
       loadTransferHistory();
-      loadTransferBalances();
     }
 
     async function loadTransferHistory() {
@@ -335,7 +281,7 @@
       }
 
       const { data: loans } = await supabaseClient.from('loans')
-        .select('id, principal, status, term_months, loan_products(name), loan_schedule(installment_no, due_date, principal_due, principal_paid, interest_due, interest_paid, status)')
+        .select('id, principal, status, term_months, loan_products(name), loan_repayments(principal_portion)')
         .eq('member_id', memberId)
         .in('status', ['active','disbursed','approved','pending_approval']);
 
@@ -348,59 +294,24 @@
       }
 
       totalRow.style.display = 'flex';
-      renderLoans();
-    }
-
-    // Figures for one loan as at the payment date
-    function loanFigures(l, asAt) {
-      const open = (l.loan_schedule || []).filter(s => s.status !== 'paid');
-      const pOut = open.reduce((t,s) => t + Number(s.principal_due) - Number(s.principal_paid), 0);
-      const iDue = open.filter(s => s.due_date <= asAt)
-                       .reduce((t,s) => t + Number(s.interest_due) - Number(s.interest_paid), 0);
-      const iAll = open.reduce((t,s) => t + Number(s.interest_due) - Number(s.interest_paid), 0);
-      const r2 = n => Math.round(n * 100) / 100;
-      return { pOut: r2(pOut), iDue: r2(iDue), total: r2(pOut + iDue), payoff: r2(pOut + iAll), iFuture: r2(iAll - iDue) };
-    }
-
-    function renderLoans() {
-      if (!activeLoans.length) return;
-      const section = document.getElementById('loan-repayment-section');
-      const asAt = document.getElementById('f-date').value || new Date().toISOString().slice(0,10);
-      // keep any amounts already typed
-      const typed = {};
-      document.querySelectorAll('.loan-amount').forEach(i => typed[i.dataset.id] = i.value);
-
       section.innerHTML = activeLoans.map(l => {
-        const f = loanFigures(l, asAt);
+        const repaid = (l.loan_repayments||[]).reduce((s,r)=>s+Number(r.principal_portion),0);
+        const outstanding = Number(l.principal) - repaid;
         return `<div class="loan-row" style="display:block;margin-bottom:10px">
-          <div>
+          <div style="margin-bottom:6px">
             <span style="font-weight:600">${l.loan_products.name}</span>
-            <span style="font-size:12px;color:var(--color-muted);margin-left:12px">Loan amount: KES ${money(l.principal)}</span>
+            <span style="font-size:12px;color:var(--color-muted);margin-left:12px">
+              Principal: KES ${money(l.principal)} &nbsp;|&nbsp; Outstanding: KES ${money(outstanding)}
+            </span>
           </div>
-          <div class="loan-figs">
-            <div class="loan-fig"><div class="lbl">Principal outstanding</div><div class="val">${money(f.pOut)}</div></div>
-            <div class="loan-fig"><div class="lbl">Interest due</div><div class="val">${money(f.iDue)}</div></div>
-            <div class="loan-fig total"><div class="lbl">Total due</div><div class="val">${money(f.total)}</div></div>
-            <div class="loan-fig"><div class="lbl">To clear loan</div><div class="val">${money(f.payoff)}</div></div>
-          </div>
-          ${f.iFuture > 0 ? `<div style="font-size:12px;color:var(--color-muted);margin-bottom:8px">
-            "To clear loan" includes KES ${money(f.iFuture)} scheduled interest not yet due as at ${asAt}.</div>` : ''}
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <div style="display:flex;gap:8px;align-items:center">
             <label style="font-size:13px;min-width:140px">Repayment amount:</label>
-            <input type="number" step="0.01" max="${f.payoff}" class="loan-amount" data-id="${l.id}"
-              placeholder="0.00" value="${typed[l.id] || ''}" oninput="updateTotals()" style="width:180px">
-            <span class="fill-link" onclick="fillLoan('${l.id}', ${f.iDue})">Interest due</span>
-            <span class="fill-link" onclick="fillLoan('${l.id}', ${f.total})">Total due</span>
-            <span class="fill-link" onclick="fillLoan('${l.id}', ${f.payoff})">Clear loan</span>
+            <input type="number" step="0.01" class="loan-amount" data-id="${l.id}"
+              placeholder="0.00" oninput="updateTotals()" style="width:180px">
+            <span style="font-size:12px;color:var(--color-muted)">(max KES ${money(outstanding)})</span>
           </div>
         </div>`;
       }).join('');
-      updateTotals();
-    }
-
-    function fillLoan(id, amt) {
-      const el = document.querySelector(`.loan-amount[data-id="${id}"]`);
-      el.value = amt > 0 ? amt.toFixed(2) : '';
       updateTotals();
     }
 
@@ -422,10 +333,13 @@
       const date     = document.getElementById('f-date').value;
       const cashAcct = document.getElementById('f-cash-account').value;
       const channel  = document.getElementById('f-channel').value;
-      const ref      = document.getElementById('f-reference').value || null;
+      const ref      = document.getElementById('f-reference').value.trim();
 
       if (!memberId || !date || !cashAcct) {
         showError(errorEl, 'Member, date and account are required.'); return;
+      }
+      if (!ref) {
+        showError(errorEl, 'A reference is required (the M-Pesa code, cheque number or receipt number) so this payment can be traced.'); return;
       }
 
       const allocations = [];
@@ -439,15 +353,6 @@
         const amt = Number(i.value||0);
         if (amt > 0) loanRepayments.push({ loan_id: i.dataset.id, amount: amt });
       });
-
-      const asAt = document.getElementById('f-date').value;
-      for (const lr of loanRepayments) {
-        const l = activeLoans.find(x => x.id === lr.loan_id);
-        const f = loanFigures(l, asAt);
-        if (lr.amount > f.payoff + 0.005) {
-          showError(errorEl, `${l.loan_products.name}: repayment of KES ${money(lr.amount)} is more than the KES ${money(f.payoff)} needed to clear the loan.`); return;
-        }
-      }
 
       if (!allocations.length && !loanRepayments.length) {
         showError(errorEl, 'Enter at least one fund contribution or loan repayment amount.'); return;
