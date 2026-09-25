@@ -68,6 +68,7 @@
       <div style="font-size:12px;color:var(--color-muted);margin-top:2px">
         Income and costs tagged this way are reported on their own rental schedule.
         Only the net result appears in the main income and expenditure statement.
+        Changing this applies the same setting to every sub-account beneath it.
       </div>
     </div>
     <div class="field" id="d-active-wrap" style="display:none">
@@ -222,7 +223,8 @@
       } else {
         ['d-code','d-name','d-desc'].forEach(i => document.getElementById(i).value = '');
         document.getElementById('d-rental').checked = false;
-        // A new sub-account usually belongs wherever its parent does.
+        // Shown for clarity only: the database applies the parent's setting
+        // to any new sub-account regardless of what is ticked here.
         if (presetParentId) {
           const parent = allAccounts.find(a => a.id === presetParentId);
           document.getElementById('d-rental').checked = parent ? parent.in_rental_schedule === true : false;
