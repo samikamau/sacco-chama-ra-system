@@ -63,7 +63,7 @@
               <option value="org_admin">Administrator</option>
             </select>
           </div>
-          <button class="btn accent" onclick="sendInvite()">Send invitation</button>
+          <button class="btn accent" id="invite-btn" onclick="sendInvite()">Send invitation</button>
         </div>
         <div class="role-desc" id="role-desc"></div>
         <p id="invite-error" class="error" style="display:none"></p>
@@ -153,25 +153,51 @@
       const email = document.getElementById("i-email").value.trim();
       if (!email) { showError(errEl, "Enter an email address."); return; }
 
-      const { data, error } = await supabaseClient.rpc("fn_invite_user", {
-        p_organisation_id: orgId,
-        p_email: email,
-        p_role: document.getElementById("i-role").value,
-        p_note: null,
-      });
-      if (error) { showError(errEl, error.message); return; }
+      const btn = document.getElementById("invite-btn");
+      if (btn) { btn.disabled = true; btn.textContent = "Sending…"; }
 
-      const signupUrl = window.location.origin + "/login.html";
-      okEl.style.display = "block";
-      okEl.innerHTML = `
-        <p style="color:var(--color-success)">Invitation created for <strong>${data.email}</strong> as <strong>${data.role}</strong>.</p>
-        <p style="font-size:13px;margin-top:8px"><strong>What happens next:</strong> this person needs an account before they can accept.
-        Ask an administrator to create their login in Supabase (Authentication &rarr; Users &rarr; Add user) using
-        <strong>${data.email}</strong>, then send them this link:</p>
-        <div class="invite-link">${signupUrl}</div>
-        <p style="font-size:13px;margin-top:8px">When they sign in, the invitation will appear at the top of this Users page for them to accept.</p>`;
-      document.getElementById("i-email").value = "";
-      loadInvites();
+      try {
+        // 1. Record the invitation against the organisation.
+        const { data, error } = await supabaseClient.rpc("fn_invite_user", {
+          p_organisation_id: orgId,
+          p_email: email,
+          p_role: document.getElementById("i-role").value,
+          p_note: null,
+        });
+        if (error) { showError(errEl, error.message); return; }
+
+        // 2. Create their login and email them a link to set a password.
+        const { data: fnData, error: fnError } = await supabaseClient.functions
+          .invoke("invite-user", {
+            body: {
+              email: data.email,
+              organisation_id: orgId,
+              redirect_to: window.location.origin + "/ledgers/reset-password.html",
+            },
+          });
+
+        if (fnError || fnData?.error) {
+          // The invitation itself was recorded, so say so rather than
+          // implying nothing happened.
+          showError(errEl,
+            `Invitation recorded, but the email could not be sent: ${fnData?.error || fnError.message}. ` +
+            `They can still get in by using "Forgot password" on the sign-in page.`);
+          loadInvites();
+          return;
+        }
+
+        okEl.style.display = "block";
+        okEl.innerHTML = `
+          <p style="color:var(--color-success)">Invitation sent to <strong>${data.email}</strong> as <strong>${data.role}</strong>.</p>
+          <p style="font-size:13px;margin-top:8px">${fnData.existing_account
+            ? "They already had an account, so they have been emailed a link to set a new password."
+            : "They have been emailed a link to set their password and sign in."}
+          Once they sign in, the invitation appears at the top of this page for them to accept.</p>`;
+        document.getElementById("i-email").value = "";
+        loadInvites();
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = "Send invitation"; }
+      }
     }
 
     async function loadBranding() {
