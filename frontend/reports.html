@@ -37,7 +37,7 @@
               <option value="gl">General Ledger</option>
             </select>
           </div>
-          <div class="field" style="margin-bottom:0"><label>Period</label>
+          <div class="field" style="margin-bottom:0" id="fld-period-preset"><label>Period</label>
             <select id="rpt-preset" onchange="applyPreset()">
               <option value="all">All time</option>
               <option value="this_month">This month</option>
@@ -52,6 +52,9 @@
           </div>
           <div class="field" style="margin-bottom:0" id="fld-from" style="display:none"><label>From</label><input id="from" type="date"></div>
           <div class="field" style="margin-bottom:0" id="fld-to" style="display:none"><label>To</label><input id="to" type="date"></div>
+          <div class="field" style="margin-bottom:0" id="fld-asat" style="display:none">
+            <label>As at</label><input id="as-at-date" type="date">
+          </div>
           <div class="field" style="margin-bottom:0" id="fld-account" style="display:none">
             <label>Account (GL only)</label>
             <select id="gl-account"><option value="">All accounts</option></select>
@@ -108,41 +111,59 @@
 
     document.getElementById("report-type").addEventListener("change", function() {
       document.getElementById("fld-account").style.display = this.value==="gl" ? "block" : "none";
+      const isBS = this.value === "bs";
+      document.getElementById("fld-period-preset").style.display = isBS ? "none" : "block";
+      if (isBS) {
+        document.getElementById("fld-from").style.display = "none";
+        document.getElementById("fld-to").style.display = "none";
+      } else {
+        applyPreset();
+      }
+      document.getElementById("fld-asat").style.display = isBS ? "block" : "none";
+      if (isBS && !document.getElementById("as-at-date").value) {
+        document.getElementById("as-at-date").value = toLocalISO(new Date());
+      }
     });
 
     // ── REPORT DATA FETCHING ──────────────────────────────────────────────
     async function run() {
       const kind = document.getElementById("report-type").value;
-      const {from,to} = dates();
       const card = document.getElementById("report-card");
       const body = document.getElementById("report-body");
       card.style.display = "block";
       body.innerHTML = `<p class="empty">Loading…</p>`;
 
-      let data, error;
+      let data, error, from = null, to = null, asAt = null;
       if (kind==="trial") {
+        ({from,to} = dates());
         ({data,error} = await supabaseClient.rpc("fn_trial_balance",{p_organisation_id:orgId,p_from:from,p_to:to}));
       } else if (kind==="ie") {
+        ({from,to} = dates());
         ({data,error} = await supabaseClient.rpc("fn_income_expenditure",{p_organisation_id:orgId,p_from:from,p_to:to}));
       } else if (kind==="bs") {
-        ({data,error} = await supabaseClient.rpc("fn_balance_sheet",{p_organisation_id:orgId,p_as_at:to}));
+        asAt = document.getElementById("as-at-date").value || toLocalISO(new Date());
+        ({data,error} = await supabaseClient.rpc("fn_balance_sheet",{p_organisation_id:orgId,p_as_at:asAt}));
       } else if (kind==="cf") {
+        ({from,to} = dates());
         ({data,error} = await supabaseClient.rpc("fn_cash_flow",{p_organisation_id:orgId,p_from:from,p_to:to}));
       } else if (kind==="cfi") {
+        ({from,to} = dates());
         ({data,error} = await supabaseClient.rpc("fn_cash_flow_indirect",{p_organisation_id:orgId,p_from:from,p_to:to}));
       } else {
+        ({from,to} = dates());
         const acctId = document.getElementById("gl-account").value||null;
         ({data,error} = await supabaseClient.rpc("fn_general_ledger",{p_organisation_id:orgId,p_from:from,p_to:to,p_account_id:acctId}));
       }
 
       if (error) { body.innerHTML=`<p class="error">${error.message}</p>`; return; }
-      lastReport = { kind, data:data||[], from, to };
+      lastReport = { kind, data:data||[], from, to, asAt };
       await renderReport(body, lastReport);
     }
 
     // ── PERIOD LABEL ──────────────────────────────────────────────────────
     function periodLabel() {
       if (!lastReport) return "";
+      if (lastReport.kind === "bs") return `As at ${lastReport.asAt}`;
       const {from,to} = lastReport;
       if (!from && !to) return "All time";
       if (from && to) return `${from} to ${to}`;
@@ -536,7 +557,7 @@
         const assets=data.filter(r=>r.section==="asset"), liab=data.filter(r=>r.section==="liability"), eq=data.filter(r=>r.section==="equity");
         const sum=l=>l.reduce((s,r)=>s+Number(r.amount),0);
         const totA=sum(assets),totL=sum(liab),totE=sum(eq),totLE=totL+totE;
-        rows = [[orgName],[title],[`As at: ${lastReport.to||"today"}`],[`Generated: ${now}`],[],["ASSETS"],["Account","Amount (KES)"]];
+        rows = [[orgName],[title],[`As at: ${lastReport.asAt||"today"}`],[`Generated: ${now}`],[],["ASSETS"],["Account","Amount (KES)"]];
         assets.forEach(r=>rows.push([r.account_name,Number(r.amount)]));
         rows.push(["Total Assets",totA],[],["LIABILITIES"],["Account","Amount (KES)"]);
         liab.forEach(r=>rows.push([r.account_name,Number(r.amount)]));
