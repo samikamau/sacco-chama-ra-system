@@ -3,8 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <title>Users — Financial Operating System</title>
-<link rel="icon" type="image/png" sizes="32x32" href="images/edhafu-icon-32.png">
-<link rel="apple-touch-icon" href="images/edhafu-icon-180.png">
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -43,6 +41,31 @@
         <button class="btn accent" style="margin-top:12px" onclick="saveModules()">Save</button>
         <p id="modules-error" class="error" style="display:none"></p>
         <p id="modules-success" style="display:none;color:var(--color-success)"></p>
+      </div>
+
+      <div class="card" id="branding-card" style="display:none">
+        <h2>Organisation branding</h2>
+        <p style="color:var(--color-muted);font-size:13px">
+          Customize the colors and logo shown once you're signed in (the sign-in page itself always shows default branding, since it doesn't yet know which organisation you belong to).
+        </p>
+        <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:8px">
+          <div class="field" style="max-width:160px">
+            <label>Primary color</label>
+            <input type="color" id="brand-primary" value="#00173D" style="height:40px;padding:2px;cursor:pointer">
+          </div>
+          <div class="field" style="max-width:160px">
+            <label>Accent color</label>
+            <input type="color" id="brand-accent" value="#C08A3E" style="height:40px;padding:2px;cursor:pointer">
+          </div>
+        </div>
+        <div class="field" style="max-width:360px">
+          <label>Logo (PNG or JPG, a transparent background works best)</label>
+          <input type="file" id="brand-logo-file" accept="image/png,image/jpeg">
+        </div>
+        <div id="brand-logo-preview" style="margin:8px 0 12px"></div>
+        <button class="btn accent" onclick="saveBranding()">Save branding</button>
+        <p id="branding-error" class="error" style="display:none"></p>
+        <p id="branding-success" style="display:none;color:var(--color-success)"></p>
       </div>
 
       <!-- INVITE -->
@@ -140,14 +163,15 @@
       });
       if (error) { showError(errEl, error.message); return; }
 
-      const signupUrl = window.location.origin + "/login.html?invite=" + encodeURIComponent(data.email);
+      const signupUrl = window.location.origin + "/login.html";
       okEl.style.display = "block";
       okEl.innerHTML = `
         <p style="color:var(--color-success)">Invitation created for <strong>${data.email}</strong> as <strong>${data.role}</strong>.</p>
-        <p style="font-size:13px;margin-top:8px">Send this link to <strong>${data.email}</strong>.
-        When they create their account with that email address, they join your organisation automatically.
-        If they already have an account, they can sign in and accept the invitation on the Users page.</p>
-        <div class="invite-link">${signupUrl}</div>`;
+        <p style="font-size:13px;margin-top:8px"><strong>What happens next:</strong> this person needs an account before they can accept.
+        Ask an administrator to create their login in Supabase (Authentication &rarr; Users &rarr; Add user) using
+        <strong>${data.email}</strong>, then send them this link:</p>
+        <div class="invite-link">${signupUrl}</div>
+        <p style="font-size:13px;margin-top:8px">When they sign in, the invitation will appear at the top of this Users page for them to accept.</p>`;
       document.getElementById("i-email").value = "";
       loadInvites();
     }
@@ -178,6 +202,60 @@
       successEl.style.display = "block";
     }
 
+    async function loadBranding() {
+      const { data, error } = await supabaseClient.from("organisations")
+        .select("brand_primary_color, brand_accent_color, logo_path").eq("id", orgId).single();
+      if (error || !data) return;
+      if (data.brand_primary_color) document.getElementById("brand-primary").value = data.brand_primary_color;
+      if (data.brand_accent_color) document.getElementById("brand-accent").value = data.brand_accent_color;
+      if (data.logo_path) {
+        const { data: urlData } = supabaseClient.storage.from("org-logos").getPublicUrl(data.logo_path);
+        if (urlData && urlData.publicUrl) {
+          document.getElementById("brand-logo-preview").innerHTML =
+            `<div style="font-size:12px;color:var(--color-muted);margin-bottom:4px">Current logo:</div>` +
+            `<img src="${urlData.publicUrl}" alt="Current logo" style="height:50px;max-width:220px;object-fit:contain">`;
+        }
+      }
+    }
+
+    async function saveBranding() {
+      const errorEl = document.getElementById("branding-error");
+      const successEl = document.getElementById("branding-success");
+      errorEl.style.display = "none"; successEl.style.display = "none";
+
+      const primary = document.getElementById("brand-primary").value;
+      const accent = document.getElementById("brand-accent").value;
+      const fileInput = document.getElementById("brand-logo-file");
+      let logoPath = null;
+
+      if (fileInput.files && fileInput.files[0]) {
+        const file = fileInput.files[0];
+        if (file.size > 2 * 1024 * 1024) {
+          showError(errorEl, "Logo must be under 2MB.");
+          return;
+        }
+        const ext = (file.name.split(".").pop() || "png").toLowerCase();
+        const path = `${orgId}/logo.${ext}`;
+        const { error: uploadError } = await supabaseClient.storage
+          .from("org-logos").upload(path, file, { upsert: true });
+        if (uploadError) { showError(errorEl, uploadError.message); return; }
+        logoPath = path;
+      }
+
+      const { error } = await supabaseClient.rpc("fn_update_org_branding", {
+        p_org_id: orgId,
+        p_primary_color: primary,
+        p_accent_color: accent,
+        p_logo_path: logoPath,
+      });
+      if (error) { showError(errorEl, error.message); return; }
+
+      successEl.textContent = "Branding saved. Reload the page to see it applied.";
+      successEl.style.display = "block";
+      fileInput.value = "";
+      loadBranding();
+    }
+
     async function loadUsers() {
       const { data, error } = await supabaseClient.rpc("fn_organisation_users", { p_organisation_id: orgId });
       const tbody = document.getElementById("user-rows");
@@ -189,7 +267,8 @@
       myRole = me ? me.role : null;
       document.getElementById("invite-card").style.display = (myRole==='org_admin') ? 'block' : 'none';
       document.getElementById("modules-card").style.display = (myRole==='org_admin') ? 'block' : 'none';
-      if (myRole === 'org_admin') loadModules();
+      document.getElementById("branding-card").style.display = (myRole==='org_admin') ? 'block' : 'none';
+      if (myRole === 'org_admin') { loadModules(); loadBranding(); }
 
       const isAdmin = myRole === 'org_admin';
       tbody.innerHTML = data.map(u=>`

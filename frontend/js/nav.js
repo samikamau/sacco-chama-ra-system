@@ -38,21 +38,74 @@ const TERMINOLOGY = {
 };
 
 async function getOrgContext() {
-  const fallback = { terms: TERMINOLOGY.sacco, modules: { loans: true, expenditure: true, banking: true }, orgType: 'sacco' };
+  const fallback = {
+    terms: TERMINOLOGY.sacco, modules: { loans: true, expenditure: true, banking: true }, orgType: 'sacco',
+    brandPrimary: null, brandAccent: null, logoPath: null,
+  };
   try {
     if (typeof currentOrg !== 'function') return fallback;
     const org = await currentOrg();
     if (!org) return fallback;
     const { data } = await supabaseClient.from('organisations')
-      .select('org_type, enabled_modules').eq('id', org.organisation_id).single();
+      .select('org_type, enabled_modules, brand_primary_color, brand_accent_color, logo_path')
+      .eq('id', org.organisation_id).single();
     const orgType = data?.org_type || 'sacco';
     return {
       terms: TERMINOLOGY[orgType] || TERMINOLOGY.sacco,
       modules: data?.enabled_modules || fallback.modules,
       orgType,
+      brandPrimary: data?.brand_primary_color || null,
+      brandAccent: data?.brand_accent_color || null,
+      logoPath: data?.logo_path || null,
     };
   } catch (e) {
     return fallback;
+  }
+}
+
+// Darkens a hex color by a percentage, used to derive a hover shade from
+// an organisation's custom primary color the same way the default navy
+// has its own hover shade.
+function darkenHex(hex, amount) {
+  try {
+    const h = hex.replace('#', '');
+    const r = Math.max(0, parseInt(h.substring(0, 2), 16) * (1 - amount));
+    const g = Math.max(0, parseInt(h.substring(2, 4), 16) * (1 - amount));
+    const b = Math.max(0, parseInt(h.substring(4, 6), 16) * (1 - amount));
+    const toHex = (n) => Math.round(n).toString(16).padStart(2, '0');
+    return '#' + toHex(r) + toHex(g) + toHex(b);
+  } catch (e) {
+    return hex;
+  }
+}
+
+// Applies an organisation's custom colors as CSS variable overrides. Only
+// takes effect inside the app — pages with no org context (sign-in,
+// reset, demo) never call this, so they always show default branding.
+function applyOrgBrandColors(primary, accent) {
+  if (!primary && !accent) return;
+  const style = document.createElement('style');
+  let css = ':root {';
+  if (primary) {
+    css += `--color-primary: ${primary} !important; --color-primary-soft: ${darkenHex(primary, 0.15)} !important;`;
+  }
+  if (accent) {
+    css += `--color-accent: ${accent} !important;`;
+  }
+  css += '}';
+  style.textContent = css;
+  document.head.appendChild(style);
+}
+
+// Resolves a logo_path stored on the organisation into a public URL from
+// the org-logos storage bucket.
+function resolveOrgLogoUrl(logoPath) {
+  if (!logoPath || typeof supabaseClient === 'undefined') return null;
+  try {
+    const { data } = supabaseClient.storage.from('org-logos').getPublicUrl(logoPath);
+    return data ? data.publicUrl : null;
+  } catch (e) {
+    return null;
   }
 }
 
@@ -109,7 +162,9 @@ async function renderNav() {
     } catch (e) { /* if the access check itself fails, don't block the whole app */ }
   }
 
-  const { terms, modules, orgType } = await getOrgContext();
+  const { terms, modules, orgType, brandPrimary, brandAccent, logoPath } = await getOrgContext();
+  applyOrgBrandColors(brandPrimary, brandAccent);
+  const customLogoUrl = resolveOrgLogoUrl(logoPath);
   const { myOrgs, activeOrgId } = await getOrgSwitcherData();
   let isPlatformAdmin = false;
   try {
@@ -190,6 +245,19 @@ async function renderNav() {
   );
   renderGroupBar('members-bar', membersItemsThemed, current, isMembersActive);
   renderGroupBar('accountant-bar', ACCOUNTANT_ITEMS, current, isAccountantActive);
+
+  // Swap in the organisation's own logo after the default one has already
+  // rendered, done this way (rather than in the template above) so the
+  // large embedded default logo data never needs to be touched here.
+  if (customLogoUrl) {
+    const brandImg = mount.querySelector('.brand img');
+    if (brandImg) {
+      brandImg.src = customLogoUrl;
+      brandImg.alt = 'Organisation logo';
+      brandImg.style.maxWidth = '180px';
+      brandImg.style.objectFit = 'contain';
+    }
+  }
 }
 
 function toggleOrgSwitcher(e) {
