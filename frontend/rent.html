@@ -124,6 +124,27 @@
         </div>
         <p class="hint">Both are calculated on gross rent only. Override either amount if the agent's figure differs.</p>
 
+        <div class="section-label">Tenant deposits</div>
+        <p class="hint">
+          Deposits the agent took from incoming tenants and refunded to vacating ones, out of the same
+          collection. These are money held on the tenant's behalf, so they are recorded as a liability
+          and never as income.
+        </p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:150px">
+            <label>Deposits received</label>
+            <input id="r-dep-in" type="number" step="0.01" min="0" oninput="recalc(true)">
+          </div>
+          <div class="field" style="flex:1;min-width:150px">
+            <label>Deposits refunded</label>
+            <input id="r-dep-out" type="number" step="0.01" min="0" oninput="recalc(true)">
+          </div>
+          <div class="field" style="flex:2;min-width:200px">
+            <label>Tenant deposits account</label>
+            <select id="r-dep-acct"></select>
+          </div>
+        </div>
+
         <div class="section-label">Net received</div>
         <div class="field" style="max-width:320px">
           <label>Bank account *</label>
@@ -144,9 +165,11 @@
             <th>Period</th><th>Date</th><th>Reference</th>
             <th class="num">Rent</th><th class="num">Service</th>
             <th class="num">Tax</th><th class="num">Commission</th>
-            <th class="num">Costs</th><th class="num">Net</th>
+            <th class="num">Costs</th>
+            <th class="num">Dep. in</th><th class="num">Dep. out</th>
+            <th class="num">Net</th>
           </tr></thead>
-          <tbody id="remittance-rows"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody>
+          <tbody id="remittance-rows"><tr><td colspan="11" class="empty">Loading…</td></tr></tbody>
         </table>
       </div>
 
@@ -157,7 +180,7 @@
   <script src="js/nav.js"></script>
   <script src="js/auth.js"></script>
   <script>
-    let orgId, incomeAccounts = [], expenseAccounts = [], paymentAccounts = [];
+    let orgId, incomeAccounts = [], expenseAccounts = [], paymentAccounts = [], liabilityAccounts = [];
 
     function money(n) {
       return Number(n||0).toLocaleString('en-KE', { minimumFractionDigits:2, maximumFractionDigits:2 });
@@ -224,7 +247,9 @@
       const costs = collectLines('.x-desc', '.x-acct', '.x-amt');
       const serviceIncome = collections.reduce((s, c) => s + c.amount, 0);
       const serviceCosts = costs.reduce((s, c) => s + c.amount, 0);
-      const net = (gross + serviceIncome) - tax - comm - serviceCosts;
+      const depIn = Number(document.getElementById('r-dep-in').value || 0);
+      const depOut = Number(document.getElementById('r-dep-out').value || 0);
+      const net = (gross + serviceIncome + depIn) - tax - comm - serviceCosts - depOut;
 
       document.getElementById('calc-box').innerHTML = `
         <div class="calc-row"><span>Gross rent</span><span>${money(gross)}</span></div>
@@ -232,6 +257,8 @@
         <div class="calc-row"><span>Rental tax</span><span class="deduct">(${money(tax)})</span></div>
         <div class="calc-row"><span>Agent commission</span><span class="deduct">(${money(comm)})</span></div>
         <div class="calc-row"><span>Costs paid by agent</span><span class="deduct">(${money(serviceCosts)})</span></div>
+        ${depIn ? `<div class="calc-row"><span>Deposits received (held)</span><span>${money(depIn)}</span></div>` : ''}
+        ${depOut ? `<div class="calc-row"><span>Deposits refunded</span><span class="deduct">(${money(depOut)})</span></div>` : ''}
         <div class="calc-row total"><span>Net to bank</span>
           <span style="${net<0?'color:var(--color-alert)':''}">${money(net)}</span></div>`;
     }
@@ -264,6 +291,9 @@
         p_bank_account: document.getElementById('r-bank').value,
         p_collections: collectLines('.c-desc', '.c-acct', '.c-amt'),
         p_costs: collectLines('.x-desc', '.x-acct', '.x-amt'),
+        p_deposits_taken: Number(document.getElementById('r-dep-in').value || 0),
+        p_deposits_refunded: Number(document.getElementById('r-dep-out').value || 0),
+        p_deposit_account: document.getElementById('r-dep-acct').value || null,
       });
 
       if (error) { showError(errEl, error.message); return; }
@@ -272,6 +302,8 @@
       okEl.style.display = 'block';
       document.getElementById('r-gross').value = '';
       document.getElementById('r-ref').value = '';
+      document.getElementById('r-dep-in').value = '';
+      document.getElementById('r-dep-out').value = '';
       document.getElementById('collection-lines').innerHTML = '';
       document.getElementById('cost-lines').innerHTML = '';
       addCollectionLine(); addCostLine(); recalc();
@@ -281,8 +313,8 @@
     async function loadRemittances() {
       const { data, error } = await supabaseClient.rpc('fn_rent_remittances', { p_organisation_id: orgId });
       const tbody = document.getElementById('remittance-rows');
-      if (error) { tbody.innerHTML = `<tr><td colspan="9" class="error">${error.message}</td></tr>`; return; }
-      if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="9" class="empty">No remittances recorded yet.</td></tr>`; return; }
+      if (error) { tbody.innerHTML = `<tr><td colspan="11" class="error">${error.message}</td></tr>`; return; }
+      if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="11" class="empty">No remittances recorded yet.</td></tr>`; return; }
       tbody.innerHTML = data.map(r => `
         <tr>
           <td>${r.period_label}</td>
@@ -293,6 +325,8 @@
           <td class="num">${money(r.rental_tax)}</td>
           <td class="num">${money(r.commission)}</td>
           <td class="num">${money(r.service_costs)}</td>
+          <td class="num">${r.deposits_taken > 0 ? money(r.deposits_taken) : '—'}</td>
+          <td class="num">${r.deposits_refunded > 0 ? money(r.deposits_refunded) : '—'}</td>
           <td class="num" style="font-weight:600">${money(r.net_received)}</td>
         </tr>`).join("");
     }
@@ -309,6 +343,7 @@
       const usable = (accts || []).filter(a => !a.is_control);
       incomeAccounts = usable.filter(a => a.account_type === 'income');
       expenseAccounts = usable.filter(a => ['expense','asset'].includes(a.account_type));
+      liabilityAccounts = usable.filter(a => a.account_type === 'liability');
 
       const { data: pay } = await supabaseClient.rpc('fn_payment_accounts', { p_organisation_id: orgId });
       paymentAccounts = pay || [];
@@ -317,6 +352,8 @@
       document.getElementById('r-tax-acct').innerHTML = acctOptions(expenseAccounts);
       document.getElementById('r-comm-acct').innerHTML = acctOptions(expenseAccounts);
       document.getElementById('r-bank').innerHTML = acctOptions(paymentAccounts);
+      document.getElementById('r-dep-acct').innerHTML =
+        '<option value="">— none —</option>' + acctOptions(liabilityAccounts);
 
       document.getElementById('r-date').value = new Date().toISOString().slice(0,10);
       addCollectionLine(); addCostLine(); recalc();
