@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Users — Financial Operating System</title>
+<title>Organisation Settings — Financial Operating System</title>
 <link rel="stylesheet" href="css/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -15,7 +15,7 @@
   <div class="app-shell">
     <nav class="nav" id="nav-mount"></nav>
     <main class="main">
-      <h1>Users and access</h1>
+      <h1>Organisation Settings</h1>
 
       <!-- MY PENDING INVITATIONS -->
       <div class="card" id="my-invites-card" style="display:none">
@@ -23,7 +23,7 @@
         <div id="my-invites"></div>
       </div>
 
-      <!-- ENABLED MODULES -->
+      <!-- BRANDING -->
       <div class="card" id="branding-card" style="display:none">
         <h2>Organisation branding</h2>
         <p style="color:var(--color-muted);font-size:13px">
@@ -73,6 +73,7 @@
       <!-- CURRENT USERS -->
       <div class="card">
         <h2>Current users</h2>
+        <p id="users-hint" style="color:var(--color-muted);font-size:13px;display:none"></p>
         <table>
           <thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Joined</th><th></th></tr></thead>
           <tbody id="user-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
@@ -241,6 +242,13 @@
       if (myRole === 'org_admin') loadBranding();
 
       const isAdmin = myRole === 'org_admin';
+      const hintEl = document.getElementById("users-hint");
+      if (isAdmin) {
+        hintEl.textContent = "Use Permissions on a user's row to grant rights beyond their role. Permissions that already come with their role are shown ticked and locked.";
+        hintEl.style.display = "block";
+      } else {
+        hintEl.style.display = "none";
+      }
       tbody.innerHTML = data.map(u=>`
         <tr>
           <td>${u.email}${u.is_me?'<span class="me-badge">you</span>':''}</td>

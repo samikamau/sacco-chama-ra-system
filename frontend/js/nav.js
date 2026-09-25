@@ -175,7 +175,7 @@ async function renderNav() {
       ${NAV_ICONS.calculator}Accountant
     </a>
     <a href="users.html" class="${current === 'users.html' ? 'active' : ''}" style="display:flex;align-items:center;gap:6px">
-      ${NAV_ICONS.key}Users
+      ${NAV_ICONS.key}Organisation Settings
     </a>
     ${isPlatformAdmin ? `
     <a href="platform-admin.html" class="${current === 'platform-admin.html' ? 'active' : ''}" style="display:flex;align-items:center;gap:6px">
