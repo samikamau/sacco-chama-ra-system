@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { href: 'loans.html',       label: 'Loan Management',      icon: 'percent' },
   { href: 'expenditure.html', label: 'Expenditure',          icon: 'outbox' },
   { href: 'banking.html',     label: 'Banking',              icon: 'bank' },
+  { href: 'rent.html',        label: 'Rent',                 icon: 'bank' },
   { href: 'reports.html',     label: 'Reports',              icon: 'chart' },
 ];
 
@@ -126,10 +127,15 @@ async function renderNav() {
 
   // MODULE_MAP ties each optional nav item to its enabled_modules flag.
   // Items with no entry here are always shown.
-  const MODULE_MAP = { 'loans.html': 'loans', 'expenditure.html': 'expenditure', 'banking.html': 'banking' };
+  const MODULE_MAP = { 'loans.html': 'loans', 'expenditure.html': 'expenditure', 'banking.html': 'banking', 'rent.html': 'rent' };
+  // Modules that are off unless explicitly switched on, for features only a
+  // few organisations need. The long-standing modules stay on by default so
+  // existing organisations are unaffected.
+  const OPT_IN_MODULES = ['rent'];
   const visibleNavItems = NAV_ITEMS.filter(i => {
     const key = MODULE_MAP[i.href];
-    return !key || modules[key] !== false;
+    if (!key) return true;
+    return OPT_IN_MODULES.includes(key) ? modules[key] === true : modules[key] !== false;
   });
 
   const topLinks = visibleNavItems.map(i => {

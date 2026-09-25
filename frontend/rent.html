@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Rent — Financial Operating System</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .lines-table input, .lines-table select { width:100%; box-sizing:border-box; }
+  .lines-table td { padding:4px 6px; }
+  .calc-box {
+    background:#F8F7F3; border:1px solid var(--color-line);
+    border-radius:var(--radius); padding:14px 16px; margin-top:16px;
+  }
+  .calc-row {
+    display:flex; justify-content:space-between; font-size:14px;
+    padding:3px 0; font-variant-numeric:tabular-nums;
+  }
+  .calc-row.total {
+    border-top:2px solid var(--color-ink); margin-top:8px;
+    padding-top:8px; font-weight:700; font-size:16px;
+  }
+  .calc-row .deduct { color:var(--color-alert); }
+  .hint { color:var(--color-muted); font-size:12px; }
+</style>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav" id="nav-mount"></nav>
+    <main class="main">
+      <h1>Rent</h1>
+
+      <div class="card">
+        <h2>Record a remittance</h2>
+        <p class="hint">
+          Enter what the agent collected and what they deducted. The income is recorded gross,
+          with the agent's deductions shown as costs, so the accounts reflect the full arrangement
+          rather than only the net amount banked.
+        </p>
+
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
+          <div class="field" style="flex:1;min-width:150px">
+            <label>Period *</label>
+            <input id="r-period" placeholder="e.g. March 2026">
+          </div>
+          <div class="field" style="flex:1;min-width:150px">
+            <label>Date received *</label>
+            <input id="r-date" type="date">
+          </div>
+          <div class="field" style="flex:1;min-width:150px">
+            <label>Reference *</label>
+            <input id="r-ref" placeholder="e.g. AGT-2026-03">
+          </div>
+        </div>
+
+        <div class="section-label">Rent</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:160px">
+            <label>Gross rent collected *</label>
+            <input id="r-gross" type="number" step="0.01" min="0" oninput="recalc()">
+          </div>
+          <div class="field" style="flex:2;min-width:220px">
+            <label>Rent income account *</label>
+            <select id="r-income-acct"></select>
+          </div>
+        </div>
+
+        <div class="section-label">Service charges collected</div>
+        <p class="hint">Charges the agent collected from tenants alongside the rent.</p>
+        <table class="lines-table">
+          <thead><tr>
+            <th style="width:36%">Description</th>
+            <th style="width:40%">Income account</th>
+            <th style="width:18%">Amount</th>
+            <th style="width:6%"></th>
+          </tr></thead>
+          <tbody id="collection-lines"></tbody>
+        </table>
+        <button class="btn" style="font-size:13px;padding:4px 10px;margin-top:6px"
+          onclick="addCollectionLine()">+ Add charge</button>
+
+        <div class="section-label">Costs paid by the agent</div>
+        <p class="hint">Service charge costs the agent settled on the organisation's behalf before remitting.</p>
+        <table class="lines-table">
+          <thead><tr>
+            <th style="width:36%">Description</th>
+            <th style="width:40%">Expense account</th>
+            <th style="width:18%">Amount</th>
+            <th style="width:6%"></th>
+          </tr></thead>
+          <tbody id="cost-lines"></tbody>
+        </table>
+        <button class="btn" style="font-size:13px;padding:4px 10px;margin-top:6px"
+          onclick="addCostLine()">+ Add cost</button>
+
+        <div class="section-label">Agent deductions</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:140px">
+            <label>Rental tax rate %</label>
+            <input id="r-tax-rate" type="number" step="0.01" min="0" value="7.5" oninput="recalc()">
+          </div>
+          <div class="field" style="flex:1;min-width:140px">
+            <label>Rental tax amount</label>
+            <input id="r-tax" type="number" step="0.01" min="0" oninput="recalc(true)">
+          </div>
+          <div class="field" style="flex:2;min-width:200px">
+            <label>Rental tax account *</label>
+            <select id="r-tax-acct"></select>
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:140px">
+            <label>Commission rate %</label>
+            <input id="r-comm-rate" type="number" step="0.01" min="0" value="5" oninput="recalc()">
+          </div>
+          <div class="field" style="flex:1;min-width:140px">
+            <label>Commission amount</label>
+            <input id="r-comm" type="number" step="0.01" min="0" oninput="recalc(true)">
+          </div>
+          <div class="field" style="flex:2;min-width:200px">
+            <label>Commission account *</label>
+            <select id="r-comm-acct"></select>
+          </div>
+        </div>
+        <p class="hint">Both are calculated on gross rent only. Override either amount if the agent's figure differs.</p>
+
+        <div class="section-label">Net received</div>
+        <div class="field" style="max-width:320px">
+          <label>Bank account *</label>
+          <select id="r-bank"></select>
+        </div>
+
+        <div class="calc-box" id="calc-box"></div>
+
+        <button class="btn accent" style="margin-top:14px" onclick="saveRemittance()">Post remittance</button>
+        <p id="r-error" class="error" style="display:none"></p>
+        <p id="r-success" style="display:none;color:var(--color-success)"></p>
+      </div>
+
+      <div class="card">
+        <h2>Past remittances</h2>
+        <table>
+          <thead><tr>
+            <th>Period</th><th>Date</th><th>Reference</th>
+            <th class="num">Rent</th><th class="num">Service</th>
+            <th class="num">Tax</th><th class="num">Commission</th>
+            <th class="num">Costs</th><th class="num">Net</th>
+          </tr></thead>
+          <tbody id="remittance-rows"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let orgId, incomeAccounts = [], expenseAccounts = [], paymentAccounts = [];
+
+    function money(n) {
+      return Number(n||0).toLocaleString('en-KE', { minimumFractionDigits:2, maximumFractionDigits:2 });
+    }
+
+    function acctOptions(list, selected) {
+      return list.map(a =>
+        `<option value="${a.id}" ${a.id===selected?'selected':''}>${a.code} — ${a.name}</option>`
+      ).join("");
+    }
+
+    function addCollectionLine() {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input class="c-desc" placeholder="e.g. Water"></td>
+        <td><select class="c-acct">${acctOptions(incomeAccounts)}</select></td>
+        <td><input class="c-amt" type="number" step="0.01" min="0" oninput="recalc()"></td>
+        <td><button class="btn" style="padding:2px 8px;font-size:12px;background:var(--color-muted)"
+              onclick="this.closest('tr').remove();recalc()">&times;</button></td>`;
+      document.getElementById('collection-lines').appendChild(tr);
+    }
+
+    function addCostLine() {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input class="x-desc" placeholder="e.g. Security"></td>
+        <td><select class="x-acct">${acctOptions(expenseAccounts)}</select></td>
+        <td><input class="x-amt" type="number" step="0.01" min="0" oninput="recalc()"></td>
+        <td><button class="btn" style="padding:2px 8px;font-size:12px;background:var(--color-muted)"
+              onclick="this.closest('tr').remove();recalc()">&times;</button></td>`;
+      document.getElementById('cost-lines').appendChild(tr);
+    }
+
+    function collectLines(descSel, acctSel, amtSel) {
+      const out = [];
+      document.querySelectorAll(amtSel).forEach((input, i) => {
+        const amt = Number(input.value || 0);
+        if (amt > 0) {
+          out.push({
+            description: document.querySelectorAll(descSel)[i].value.trim(),
+            account_id: document.querySelectorAll(acctSel)[i].value,
+            amount: amt,
+          });
+        }
+      });
+      return out;
+    }
+
+    // manualOverride: true when the user typed an amount directly, so the
+    // rate-derived figure should not immediately overwrite what they typed.
+    function recalc(manualOverride) {
+      const gross = Number(document.getElementById('r-gross').value || 0);
+
+      if (!manualOverride) {
+        const taxRate = Number(document.getElementById('r-tax-rate').value || 0);
+        const commRate = Number(document.getElementById('r-comm-rate').value || 0);
+        document.getElementById('r-tax').value = (gross * taxRate / 100).toFixed(2);
+        document.getElementById('r-comm').value = (gross * commRate / 100).toFixed(2);
+      }
+
+      const tax = Number(document.getElementById('r-tax').value || 0);
+      const comm = Number(document.getElementById('r-comm').value || 0);
+      const collections = collectLines('.c-desc', '.c-acct', '.c-amt');
+      const costs = collectLines('.x-desc', '.x-acct', '.x-amt');
+      const serviceIncome = collections.reduce((s, c) => s + c.amount, 0);
+      const serviceCosts = costs.reduce((s, c) => s + c.amount, 0);
+      const net = (gross + serviceIncome) - tax - comm - serviceCosts;
+
+      document.getElementById('calc-box').innerHTML = `
+        <div class="calc-row"><span>Gross rent</span><span>${money(gross)}</span></div>
+        <div class="calc-row"><span>Service charges collected</span><span>${money(serviceIncome)}</span></div>
+        <div class="calc-row"><span>Rental tax</span><span class="deduct">(${money(tax)})</span></div>
+        <div class="calc-row"><span>Agent commission</span><span class="deduct">(${money(comm)})</span></div>
+        <div class="calc-row"><span>Costs paid by agent</span><span class="deduct">(${money(serviceCosts)})</span></div>
+        <div class="calc-row total"><span>Net to bank</span>
+          <span style="${net<0?'color:var(--color-alert)':''}">${money(net)}</span></div>`;
+    }
+
+    async function saveRemittance() {
+      const errEl = document.getElementById('r-error');
+      const okEl = document.getElementById('r-success');
+      errEl.style.display = 'none'; okEl.style.display = 'none';
+
+      const period = document.getElementById('r-period').value.trim();
+      const date = document.getElementById('r-date').value;
+      const ref = document.getElementById('r-ref').value.trim();
+      const gross = Number(document.getElementById('r-gross').value || 0);
+
+      if (!period || !date) { showError(errEl, 'Period and date are required.'); return; }
+      if (!ref) { showError(errEl, 'A reference is required so this remittance can be traced.'); return; }
+      if (gross <= 0) { showError(errEl, 'Enter the gross rent collected.'); return; }
+
+      const { error } = await supabaseClient.rpc('fn_record_rent_remittance', {
+        p_organisation_id: orgId,
+        p_period_label: period,
+        p_remittance_date: date,
+        p_reference: ref,
+        p_gross_rent: gross,
+        p_rent_income_account: document.getElementById('r-income-acct').value,
+        p_rental_tax: Number(document.getElementById('r-tax').value || 0),
+        p_rental_tax_account: document.getElementById('r-tax-acct').value,
+        p_commission: Number(document.getElementById('r-comm').value || 0),
+        p_commission_account: document.getElementById('r-comm-acct').value,
+        p_bank_account: document.getElementById('r-bank').value,
+        p_collections: collectLines('.c-desc', '.c-acct', '.c-amt'),
+        p_costs: collectLines('.x-desc', '.x-acct', '.x-amt'),
+      });
+
+      if (error) { showError(errEl, error.message); return; }
+
+      okEl.textContent = 'Remittance posted.';
+      okEl.style.display = 'block';
+      document.getElementById('r-gross').value = '';
+      document.getElementById('r-ref').value = '';
+      document.getElementById('collection-lines').innerHTML = '';
+      document.getElementById('cost-lines').innerHTML = '';
+      addCollectionLine(); addCostLine(); recalc();
+      loadRemittances();
+    }
+
+    async function loadRemittances() {
+      const { data, error } = await supabaseClient.rpc('fn_rent_remittances', { p_organisation_id: orgId });
+      const tbody = document.getElementById('remittance-rows');
+      if (error) { tbody.innerHTML = `<tr><td colspan="9" class="error">${error.message}</td></tr>`; return; }
+      if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="9" class="empty">No remittances recorded yet.</td></tr>`; return; }
+      tbody.innerHTML = data.map(r => `
+        <tr>
+          <td>${r.period_label}</td>
+          <td>${r.remittance_date}</td>
+          <td><code style="font-size:11px">${r.reference}</code></td>
+          <td class="num">${money(r.gross_rent)}</td>
+          <td class="num">${money(r.service_income)}</td>
+          <td class="num">${money(r.rental_tax)}</td>
+          <td class="num">${money(r.commission)}</td>
+          <td class="num">${money(r.service_costs)}</td>
+          <td class="num" style="font-weight:600">${money(r.net_received)}</td>
+        </tr>`).join("");
+    }
+
+    (async () => {
+      const org = await currentOrg();
+      if (!org) { window.location.href = 'login.html'; return; }
+      orgId = org.organisation_id;
+
+      const { data: accts } = await supabaseClient.from('chart_of_accounts')
+        .select('id, code, name, account_type, is_control')
+        .eq('organisation_id', orgId).eq('is_active', true).order('code');
+
+      const usable = (accts || []).filter(a => !a.is_control);
+      incomeAccounts = usable.filter(a => a.account_type === 'income');
+      expenseAccounts = usable.filter(a => ['expense','asset'].includes(a.account_type));
+
+      const { data: pay } = await supabaseClient.rpc('fn_payment_accounts', { p_organisation_id: orgId });
+      paymentAccounts = pay || [];
+
+      document.getElementById('r-income-acct').innerHTML = acctOptions(incomeAccounts);
+      document.getElementById('r-tax-acct').innerHTML = acctOptions(expenseAccounts);
+      document.getElementById('r-comm-acct').innerHTML = acctOptions(expenseAccounts);
+      document.getElementById('r-bank').innerHTML = acctOptions(paymentAccounts);
+
+      document.getElementById('r-date').value = new Date().toISOString().slice(0,10);
+      addCollectionLine(); addCostLine(); recalc();
+      loadRemittances();
+    })();
+  </script>
+</body>
+</html>

@@ -128,6 +128,10 @@
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
             <input type="checkbox" id="eb-mod-banking" style="width:16px;flex-shrink:0"> Banking
           </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
+            <input type="checkbox" id="eb-mod-rent" style="width:16px;flex-shrink:0"> Rent
+            <span style="font-size:11px;color:var(--color-muted)">(off unless ticked)</span>
+          </label>
         </div>
 
         <p id="edit-billing-error" class="error" style="display:none"></p>
@@ -291,6 +295,7 @@
       document.getElementById("eb-mod-loans").checked = m.loans !== false;
       document.getElementById("eb-mod-expenditure").checked = m.expenditure !== false;
       document.getElementById("eb-mod-banking").checked = m.banking !== false;
+      document.getElementById("eb-mod-rent").checked = m.rent === true;
     }
     function closeEditBillingDrawer() {
       document.getElementById("edit-billing-backdrop").classList.remove("open");
@@ -314,6 +319,7 @@
           loans: document.getElementById("eb-mod-loans").checked,
           expenditure: document.getElementById("eb-mod-expenditure").checked,
           banking: document.getElementById("eb-mod-banking").checked,
+          rent: document.getElementById("eb-mod-rent").checked,
         },
       });
       if (modError) { showError(errorEl, modError.message); return; }
