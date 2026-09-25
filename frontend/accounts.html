@@ -63,6 +63,13 @@
       <select id="d-normal"><option value="debit">Debit</option><option value="credit">Credit</option></select>
     </div>
     <div class="field"><label>Description (optional)</label><input id="d-desc"></div>
+    <div class="field" id="d-rental-wrap">
+      <label><input type="checkbox" id="d-rental"> Report on the rental schedule</label>
+      <div style="font-size:12px;color:var(--color-muted);margin-top:2px">
+        Income and costs tagged this way are reported on their own rental schedule.
+        Only the net result appears in the main income and expenditure statement.
+      </div>
+    </div>
     <div class="field" id="d-active-wrap" style="display:none">
       <label><input type="checkbox" id="d-active" checked> Active</label>
     </div>
@@ -94,7 +101,7 @@
     async function loadAccounts() {
       const { data, error } = await supabaseClient
         .from('chart_of_accounts')
-        .select('id,code,name,account_type,subtype,is_control,is_active,is_payment_account,normal_balance,parent_account_id,description')
+        .select('id,code,name,account_type,subtype,is_control,is_active,is_payment_account,normal_balance,parent_account_id,description,in_rental_schedule')
         .eq('organisation_id', orgId)
         .order('code');
       if (error) { document.getElementById('coa-container').innerHTML = `<p class="error">${error.message}</p>`; return; }
@@ -211,9 +218,17 @@
         document.getElementById('d-desc').value = a.description || '';
         document.getElementById('d-active').checked = a.is_active !== false;
         document.getElementById('d-parent').value = a.parent_account_id || '';
+        document.getElementById('d-rental').checked = a.in_rental_schedule === true;
       } else {
         ['d-code','d-name','d-desc'].forEach(i => document.getElementById(i).value = '');
-        if (presetParentId) { document.getElementById('d-parent').value = presetParentId; autoSetType(); }
+        document.getElementById('d-rental').checked = false;
+        // A new sub-account usually belongs wherever its parent does.
+        if (presetParentId) {
+          const parent = allAccounts.find(a => a.id === presetParentId);
+          document.getElementById('d-rental').checked = parent ? parent.in_rental_schedule === true : false;
+          document.getElementById('d-parent').value = presetParentId;
+          autoSetType();
+        }
       }
       document.getElementById('backdrop').classList.add('open');
       document.getElementById('drawer').classList.add('open');
@@ -283,6 +298,7 @@
         normal_balance: document.getElementById('d-normal').value,
         description: document.getElementById('d-desc').value || null,
         parent_account_id: document.getElementById('d-parent').value || null,
+        in_rental_schedule: document.getElementById('d-rental').checked,
         is_active: editingId ? document.getElementById('d-active').checked : true,
         is_control: false,
       };

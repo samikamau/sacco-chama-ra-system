@@ -57,6 +57,7 @@
               <option value="bs">Balance Sheet</option>
               <option value="cf">Cash Flow (Direct)</option>
               <option value="cfi">Cash Flow (Indirect)</option>
+              <option value="rent">Rental Schedule</option>
               <option value="gl">General Ledger</option>
             </select>
           </div>
@@ -172,6 +173,9 @@
       } else if (kind==="cfi") {
         ({from,to} = dates());
         ({data,error} = await supabaseClient.rpc("fn_cash_flow_indirect",{p_organisation_id:orgId,p_from:from,p_to:to}));
+      } else if (kind==="rent") {
+        ({from,to} = dates());
+        ({data,error} = await supabaseClient.rpc("fn_rental_schedule",{p_organisation_id:orgId,p_from:from,p_to:to}));
       } else {
         ({from,to} = dates());
         const acctId = document.getElementById("gl-account").value||null;
@@ -196,7 +200,7 @@
     // ── RENDER TO SCREEN ─────────────────────────────────────────────────
     async function renderReport(body, rpt) {
       const {kind, data} = rpt;
-      const titles = {trial:"Trial Balance",ie:"Income & Expenditure",bs:"Balance Sheet",cf:"Cash Flow",gl:"General Ledger"};
+      const titles = {trial:"Trial Balance",ie:"Income & Expenditure",bs:"Balance Sheet",cf:"Cash Flow",cfi:"Cash Flow (Indirect)",rent:"Rental Schedule",gl:"General Ledger"};
       const title = titles[kind];
       const now = new Date().toLocaleDateString("en-KE",{year:"numeric",month:"long",day:"numeric"});
 
@@ -216,6 +220,7 @@
       else if (kind==="bs") html += renderBSHTML(data);
       else if (kind==="cf") html += renderCFHTML(data);
       else if (kind==="cfi") html += renderCFIHTML(data);
+      else if (kind==="rent") html += renderRentHTML(data);
       else html += renderGLHTML(data);
 
       body.innerHTML = html;
@@ -318,6 +323,41 @@
             </tr>`;
           }).join("")}
         </tbody></table>`).join("");
+    }
+
+    function renderRentHTML(data) {
+      const income = data.filter(r => r.section === 'Income');
+      const costs  = data.filter(r => r.section === 'Costs');
+      const totalIncome = income.reduce((s,r) => s + Number(r.amount), 0);
+      const totalCosts  = costs.reduce((s,r) => s + Number(r.amount), 0);
+      const net = totalIncome - totalCosts;
+
+      const block = (label, rows, total) => `
+        <div class="section-heading">${label}</div>
+        <table><tbody>
+          ${rows.length
+            ? rows.map(r => `<tr>
+                <td style="font-family:var(--font-mono);font-size:12px;color:var(--color-muted)">${r.account_code}</td>
+                <td>${r.account_name}</td>
+                <td class="num">${money(r.amount)}</td>
+              </tr>`).join('')
+            : `<tr><td colspan="3" class="empty">Nothing in this period.</td></tr>`}
+        </tbody>
+        <tfoot><tr class="total-row">
+          <td colspan="2">Total ${label.toLowerCase()}</td>
+          <td class="num">${money(total)}</td>
+        </tr></tfoot></table>`;
+
+      return block('Income', income, totalIncome)
+           + block('Costs', costs, totalCosts)
+           + `<table style="margin-top:16px"><tfoot><tr class="total-row" style="font-size:16px">
+                <td colspan="2">Net rental income carried to income &amp; expenditure</td>
+                <td class="num" style="${net<0?'color:var(--color-alert)':''}">${money(net)}</td>
+              </tr></tfoot></table>
+              <p style="font-size:12px;color:var(--color-muted);margin-top:10px">
+                Rental income is subject to a final tax, so it is reported separately here.
+                Only the net figure above is carried into the main income and expenditure statement.
+              </p>`;
     }
 
     function renderGLHTML(data) {
