@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Billing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --navy: #0B1626;
+    --panel: #12213A;
+    --line: rgba(234, 240, 247, 0.12);
+    --brass: #B08D57;
+    --brass-hi: #C6A36C;
+    --stamp: #A5382B;
+    --cream: #EFE7D6;
+    --ink: #EAF0F7;
+    --muted: rgba(234, 240, 247, 0.66);
+    --error: #E8A093;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--navy);
+    color: var(--ink);
+    font: 16px/1.55 Inter, system-ui, sans-serif;
+    min-height: 100vh;
+  }
+  main { max-width: 34rem; margin: 0 auto; padding: 3.5rem 1.25rem 4rem; }
+  a { color: var(--brass-hi); }
+  a:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+
+  .firm { color: var(--brass); font-weight: 500; font-size: 0.9rem; margin: 0 0 2.5rem; }
+  h1 {
+    font-family: Fraunces, Georgia, serif;
+    font-weight: 600;
+    font-size: 2.25rem;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    margin: 0 0 0.6rem;
+  }
+  .standing { color: var(--muted); margin: 0 0 2.5rem; }
+  .standing strong { color: var(--ink); font-weight: 500; }
+
+  fieldset { border: 0; margin: 0 0 2rem; padding: 0; }
+  legend, .field-label {
+    display: block;
+    font-family: Fraunces, Georgia, serif;
+    font-size: 1.15rem;
+    font-weight: 500;
+    padding: 0;
+    margin-bottom: 0.7rem;
+  }
+  .plans { background: var(--panel); border-radius: 10px; overflow: hidden; }
+  .plan {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 1rem;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-top: 1px solid var(--line);
+    cursor: pointer;
+  }
+  .plan:first-child { border-top: 0; }
+  .plan:has(input:checked) { background: rgba(176, 141, 87, 0.13); }
+  .plan input { accent-color: var(--brass); width: 1.1rem; height: 1.1rem; margin: 0; }
+  .plan input:focus-visible { outline: 2px solid var(--brass); outline-offset: 3px; }
+  .plan-name { font-weight: 500; }
+  .plan-cycle { color: var(--muted); font-size: 0.875rem; }
+  .plan-price { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 0.95rem; }
+  .plans-empty { padding: 1rem 1.25rem; margin: 0; color: var(--muted); }
+
+  input[type="tel"] {
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--ink);
+    font: 1.05rem "JetBrains Mono", ui-monospace, monospace;
+    padding: 0.85rem 1rem;
+  }
+  input[type="tel"]::placeholder { color: rgba(234, 240, 247, 0.35); }
+  input[type="tel"]:focus { outline: 2px solid var(--brass); outline-offset: 2px; border-color: transparent; }
+  .hint { color: var(--muted); font-size: 0.875rem; margin: 0.5rem 0 0; }
+
+  .pay {
+    margin-top: 2rem;
+    width: 100%;
+    background: var(--brass);
+    color: var(--navy);
+    border: 0;
+    border-radius: 10px;
+    padding: 1rem;
+    font: 600 1.05rem Inter, system-ui, sans-serif;
+    cursor: pointer;
+  }
+  .pay:hover { background: var(--brass-hi); }
+  .pay:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+  .pay:disabled { opacity: 0.55; cursor: wait; }
+
+  .status { margin-top: 1.5rem; min-height: 1.5rem; }
+  .status.error, .blocked { color: var(--error); }
+  .waiting { display: flex; gap: 0.75rem; align-items: flex-start; margin: 0; }
+  .pulse {
+    flex: none;
+    width: 0.6rem; height: 0.6rem;
+    margin-top: 0.5rem;
+    border-radius: 50%;
+    background: var(--brass);
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse { 50% { opacity: 0.25; } }
+
+  .receipt {
+    position: relative;
+    margin-top: 0.5rem;
+    background: var(--cream);
+    color: var(--navy);
+    border-radius: 4px;
+    padding: 1.75rem 1.5rem 1.5rem;
+  }
+  .receipt h2 {
+    font-family: Fraunces, Georgia, serif;
+    font-weight: 600;
+    font-size: 1.4rem;
+    margin: 0 0 1.25rem;
+    padding-right: 6rem;
+  }
+  .receipt dl { display: grid; grid-template-columns: auto 1fr; gap: 0.55rem 1.5rem; margin: 0; }
+  .receipt dt { color: rgba(11, 22, 38, 0.62); }
+  .receipt dd { margin: 0; text-align: right; }
+  .receipt .num { font-family: "JetBrains Mono", ui-monospace, monospace; }
+  .stamp {
+    position: absolute;
+    top: 1.15rem; right: 1.25rem;
+    border: 3px solid var(--stamp);
+    border-radius: 4px;
+    color: var(--stamp);
+    font: 700 1.1rem Fraunces, Georgia, serif;
+    letter-spacing: 0.12em;
+    padding: 0.15rem 0.6rem;
+    transform: rotate(-8deg);
+    animation: press 0.35s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  }
+  @keyframes press { from { transform: rotate(-8deg) scale(1.8); opacity: 0; } }
+  .back { display: inline-block; margin-top: 2rem; }
+
+  @media (prefers-reduced-motion: reduce) { .pulse, .stamp { animation: none; } }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <p class="firm">Sami Accountants</p>
+  <h1>Your subscription</h1>
+  <p class="standing" id="standing">Checking your subscription...</p>
+  <p class="blocked" id="blocked" hidden></p>
+
+  <section id="payArea" hidden>
+    <fieldset>
+      <legend>Choose a plan</legend>
+      <div class="plans" id="plans"></div>
+    </fieldset>
+
+    <label class="field-label" for="phone">M-Pesa number</label>
+    <input id="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="0712 345 678">
+    <p class="hint">You'll get a prompt on this phone to enter your M-Pesa PIN.</p>
+
+    <button class="pay" id="payBtn" type="button">Pay</button>
+    <div class="status" id="status" role="status" aria-live="polite"></div>
+  </section>
+
+  <section class="receipt" id="receipt" tabindex="-1" hidden></section>
+
+  <a class="back" id="backLink" href="#">Back to dashboard</a>
+</main>
+
+<script>
+  // ---------- SETTINGS (edit these) ----------
+  const CONFIG = {
+    SUPABASE_URL: "https://xrjctoisrgycfesstgbg.supabase.co",
+    SUPABASE_KEY: "sb_publishable_KNEHRVU2nK2OUb8DB_CMww_g5OZ7teo", // publishable key, safe in the browser
+    APP_CODE: "sacco",                  // matches subscription_plans.app_code
+    APP_NAME: "the SACCO system",
+    DASHBOARD_URL: "index.html",        // your main app page
+    LOGIN_URL: "index.html",            // where users sign in
+    SUPPORT: "Sami Accountants on 0722 908 232",
+  };
+  // -------------------------------------------
+
+  const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
+  const $ = (id) => document.getElementById(id);
+  const orgId = new URLSearchParams(location.search).get("org");
+  let plans = [];
+  let busy = false;
+
+  $("backLink").href = CONFIG.DASHBOARD_URL;
+
+  const kes = (n) => "KES " + Number(n).toLocaleString("en-KE", { maximumFractionDigits: 2 });
+  const fmtDate = (d) => new Date(d).toLocaleDateString("en-KE", {
+    day: "numeric", month: "short", year: "numeric", timeZone: "Africa/Nairobi",
+  });
+  const cycleText = {
+    monthly: "Billed every month",
+    quarterly: "Billed every 3 months",
+    annual: "Billed once a year",
+  };
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  function normalisePhone(p) {
+    let s = String(p).replace(/\D/g, "");
+    if (s.startsWith("0")) s = "254" + s.slice(1);
+    if (s.length === 9) s = "254" + s;
+    return /^254(7|1)\d{8}$/.test(s) ? s : null;
+  }
+
+  function block(html) {
+    $("standing").hidden = true;
+    $("blocked").innerHTML = html;
+    $("blocked").hidden = false;
+  }
+
+  function showError(msg) {
+    $("status").className = "status error";
+    $("status").textContent = msg;
+  }
+
+  function showWaiting(msg) {
+    $("status").className = "status";
+    $("status").innerHTML = `<p class="waiting"><span class="pulse" aria-hidden="true"></span><span>${esc(msg)}</span></p>`;
+  }
+
+  function selectedPlan() {
+    const id = document.querySelector('input[name="plan"]:checked')?.value;
+    return plans.find((p) => p.id === id);
+  }
+
+  function updateButton() {
+    const p = selectedPlan();
+    $("payBtn").textContent = p ? `Pay ${kes(p.price_kes)}` : "Pay";
+  }
+
+  async function loadStanding() {
+    const { data, error } = await sb.rpc("get_subscription", { p_org: orgId, p_app: CONFIG.APP_CODE });
+    const el = $("standing");
+    if (error) {
+      el.textContent = "Couldn't load your subscription. Refresh the page to try again.";
+      return null;
+    }
+    const s = data?.[0] ?? null;
+    const live = s && ["active", "trial"].includes(s.status) && new Date(s.current_period_end) > new Date();
+    if (live) {
+      el.innerHTML = `Active until <strong>${fmtDate(s.current_period_end)}</strong>` +
+        (s.plan_name ? ` on ${esc(s.plan_name)}` : "") +
+        `. Paying now adds time on top.`;
+    } else if (s?.current_period_end) {
+      el.innerHTML = `Your subscription ended on <strong>${fmtDate(s.current_period_end)}</strong>. ` +
+        `Choose a plan to keep using ${esc(CONFIG.APP_NAME)}.`;
+    } else {
+      el.textContent = `No active subscription yet. Choose a plan to start using ${CONFIG.APP_NAME}.`;
+    }
+    return s;
+  }
+
+  async function loadPlans() {
+    const { data, error } = await sb
+      .from("subscription_plans")
+      .select("id, name, billing_cycle, price_kes")
+      .eq("app_code", CONFIG.APP_CODE)
+      .eq("is_active", true)
+      .order("price_kes");
+
+    if (error || !data?.length) {
+      $("plans").innerHTML = `<p class="plans-empty">No plans are available right now. Contact ${esc(CONFIG.SUPPORT)}.</p>`;
+      $("payBtn").disabled = true;
+      return;
+    }
+    plans = data;
+    $("plans").innerHTML = data.map((p, i) => `
+      <label class="plan">
+        <input type="radio" name="plan" value="${esc(p.id)}" ${i === 0 ? "checked" : ""}>
+        <span>
+          <span class="plan-name">${esc(p.name)}</span><br>
+          <span class="plan-cycle">${cycleText[p.billing_cycle] ?? ""}</span>
+        </span>
+        <span class="plan-price">${kes(p.price_kes)}</span>
+      </label>`).join("");
+    updateButton();
+  }
+
+  function friendly(err) {
+    if (!err) return "Couldn't start the payment. Try again.";
+    if (err.includes("Invalid Safaricom number")) return "Enter a Safaricom number, for example 0712 345 678.";
+    if (err.includes("Not signed in")) return "Your session has ended. Sign in again, then come back to this page.";
+    if (err.includes("Plan not found")) return "That plan is no longer available. Refresh the page and choose another.";
+    return `Couldn't start the payment: ${err}`;
+  }
+
+  async function poll(checkoutId) {
+    for (let i = 0; i < 40; i++) {           // about 2 minutes
+      await sleep(3000);
+      const { data } = await sb.rpc("get_payment_status", { p_checkout: checkoutId });
+      const row = data?.[0];
+      if (row && row.status !== "PENDING") return row;
+    }
+    return null;
+  }
+
+  function showReceipt(row, plan, sub) {
+    $("receipt").innerHTML = `
+      <span class="stamp" aria-hidden="true">PAID</span>
+      <h2>Payment received</h2>
+      <dl>
+        <dt>M-Pesa receipt</dt><dd class="num">${esc(row.mpesa_receipt)}</dd>
+        <dt>Amount</dt><dd class="num">${kes(row.mpesa_amount)}</dd>
+        <dt>Plan</dt><dd>${esc(plan?.name)}</dd>
+        <dt>Paid on</dt><dd class="num">${fmtDate(row.transaction_date ?? new Date())}</dd>
+        ${sub?.current_period_end ? `<dt>Active until</dt><dd class="num">${fmtDate(sub.current_period_end)}</dd>` : ""}
+      </dl>`;
+    $("payArea").hidden = true;
+    $("receipt").hidden = false;
+    $("receipt").focus();
+  }
+
+  async function pay() {
+    if (busy) return;
+    const plan = selectedPlan();
+    const phone = normalisePhone($("phone").value);
+    if (!plan) return showError("Choose a plan first.");
+    if (!phone) { $("phone").focus(); return showError("Enter a Safaricom number, for example 0712 345 678."); }
+
+    busy = true;
+    $("payBtn").disabled = true;
+    showWaiting("Sending the payment prompt to your phone.");
+
+    const { data, error } = await sb.functions.invoke("mpesa-stkpush", {
+      body: { plan_id: plan.id, organisation_id: orgId, phone },
+    });
+    let result = data;
+    if (error) {
+      try { result = await error.context.json(); } catch { result = { ok: false, error: error.message }; }
+    }
+    if (!result?.ok) {
+      busy = false; $("payBtn").disabled = false;
+      return showError(friendly(result?.error));
+    }
+
+    showWaiting("Check your phone and enter your M-Pesa PIN to confirm.");
+    const row = await poll(result.checkout_request_id);
+    busy = false;
+    $("payBtn").disabled = false;
+
+    if (!row) {
+      return showError("M-Pesa hasn't confirmed the payment yet. If you entered your PIN, refresh this page in a few minutes to see your updated subscription.");
+    }
+    if (row.status === "SUCCESS") {
+      await sleep(1500);                      // give the subscription a moment to update
+      const sub = await loadStanding();
+      return showReceipt(row, plan, sub);
+    }
+    if (row.status === "CANCELLED") {
+      return showError("You cancelled the prompt on your phone. No money was taken. You can try again.");
+    }
+    showError(`The payment didn't go through (${row.result_desc || "unknown reason"}). You can try again.`);
+  }
+
+  $("plans").addEventListener("change", updateButton);
+  $("payBtn").addEventListener("click", pay);
+
+  (async () => {
+    if (!orgId) {
+      return block(`Open this page from your dashboard so we know which organisation you're paying for. <a href="${esc(CONFIG.DASHBOARD_URL)}">Go to dashboard</a>`);
+    }
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) {
+      return block(`Sign in first, then come back to this page. <a href="${esc(CONFIG.LOGIN_URL)}">Sign in</a>`);
+    }
+    $("payArea").hidden = false;
+    await Promise.all([loadStanding(), loadPlans()]);
+  })();
+</script>
+</body>
+</html>
