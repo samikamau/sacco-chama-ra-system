@@ -1,158 +1,298 @@
-// Shared "Pay Subscription" modal, used by both the dashboard and the
-// suspended-account page so payment details live in exactly one place.
-//
-// Usage:
-//   renderPayModal();                       // injects the markup once
-//   setPayDetails(fee, accountNumber);      // fill in org-specific values
-//   openPayModal(); / closePayModal();
-//
-// STK push: PAY_PUSH_ENDPOINT is intentionally left null until the real
-// endpoint exists. While it's null the modal shows manual Paybill
-// instructions only. Set it to your endpoint URL and the "Pay now"
-// button starts working with no other change needed.
-const PAY_PUSH_ENDPOINT = null;
+// pay-subscription.js
+// M-Pesa subscription popup for the dashboard.
+// Usage: <button onclick="openPayModal()">Pay Subscription</button>
+// Needs: supabase-js loaded on the page, and window.currentOrgId set by the dashboard.
 
-const PAYBILL_NUMBER = '247247';
+(function () {
+  // ---------- SETTINGS ----------
+  const CONFIG = {
+    SUPABASE_URL: "https://xrjctoisrgycfesstgbg.supabase.co",
+    SUPABASE_KEY: "sb_publishable_KNEHRVU2nK2OUb8DB_CMww_g5OZ7teo",
+    APP_CODE: "sacco",
+    SUPPORT: "Sami Accountants on 0722 908 232",
+  };
+  // ------------------------------
 
-let payFee = null;
-let payAccountNumber = null;
+  // Use the page's Supabase client if it exists, otherwise create one (same login session)
+  function getClient() {
+    if (window.__payClient) return window.__payClient;
+    const s = window.supabase;
+    window.__payClient = s && s.auth ? s : s.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
+    return window.__payClient;
+  }
 
-function setPayDetails(fee, accountNumber) {
-  payFee = fee;
-  payAccountNumber = accountNumber;
-  const feeEl = document.getElementById('pay-fee');
-  const acctEl = document.getElementById('pay-account');
-  if (feeEl) feeEl.textContent = fee != null ? 'KES ' + money(fee) : 'Not set';
-  if (acctEl) acctEl.textContent = accountNumber || 'Not yet assigned';
-}
+  const kes = (n) => "KES " + Number(n).toLocaleString("en-KE", { maximumFractionDigits: 2 });
+  const fmtDate = (d) => new Date(d).toLocaleDateString("en-KE", {
+    day: "numeric", month: "short", year: "numeric", timeZone: "Africa/Nairobi",
+  });
+  const cycleText = { monthly: "Every month", quarterly: "Every 3 months", annual: "Once a year" };
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function renderPayModal() {
-  if (document.getElementById('pay-drawer')) return;
+  function normalisePhone(p) {
+    let s = String(p).replace(/\D/g, "");
+    if (s.startsWith("0")) s = "254" + s.slice(1);
+    if (s.length === 9) s = "254" + s;
+    return /^254(7|1)\d{8}$/.test(s) ? s : null;
+  }
 
-  const backdrop = document.createElement('div');
-  backdrop.className = 'drawer-backdrop';
-  backdrop.id = 'pay-backdrop';
-  backdrop.onclick = closePayModal;
-
-  const drawer = document.createElement('div');
-  drawer.className = 'drawer';
-  drawer.id = 'pay-drawer';
-  drawer.innerHTML = `
-    <h2>Pay Subscription</h2>
-
-    <div style="background:var(--color-bg,#F7F6F3);border-radius:8px;padding:14px;margin:12px 0">
-      <div style="display:flex;justify-content:space-between;padding:4px 0">
-        <span style="color:var(--color-muted)">Paybill</span>
-        <strong style="font-family:var(--font-mono)">${PAYBILL_NUMBER}</strong>
-      </div>
-      <div style="display:flex;justify-content:space-between;padding:4px 0">
-        <span style="color:var(--color-muted)">Account number</span>
-        <strong style="font-family:var(--font-mono)" id="pay-account">-</strong>
-      </div>
-      <div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid var(--color-line);margin-top:6px;padding-top:8px">
-        <span style="color:var(--color-muted)">Amount</span>
-        <strong id="pay-fee">-</strong>
-      </div>
-    </div>
-
-    <div id="pay-push-area"></div>
-
-    <details style="margin-top:12px">
-      <summary style="cursor:pointer;color:var(--color-muted);font-size:13px">Pay manually instead</summary>
-      <ol style="font-size:13px;margin:8px 0 0 18px;line-height:1.7">
-        <li>Go to M-Pesa, then Lipa na M-Pesa, then Pay Bill</li>
-        <li>Business number: <strong>${PAYBILL_NUMBER}</strong></li>
-        <li>Account number: <strong id="pay-account-2">-</strong></li>
-        <li>Enter the amount and confirm</li>
-      </ol>
-    </details>
-
-    <p id="pay-status" style="display:none;font-size:13px;margin-top:10px"></p>
-
-    <button class="btn" style="margin-top:14px;background:var(--color-muted)" onclick="closePayModal()">Close</button>
+  // ---------- Styles (all prefixed mp- so they don't clash with the app) ----------
+  const css = `
+    .mp-backdrop { position: fixed; inset: 0; background: rgba(0, 30, 12, 0.55); display: flex;
+      align-items: center; justify-content: center; padding: 1rem; z-index: 9999; }
+    .mp-modal { background: #fff; color: #1B2A1F; width: 100%; max-width: 26rem; border-radius: 14px;
+      overflow: hidden; box-shadow: 0 20px 50px rgba(0, 40, 15, 0.35); font-family: inherit;
+      max-height: calc(100vh - 2rem); display: flex; flex-direction: column; }
+    .mp-head { background: #00A651; color: #fff; padding: 1.1rem 1.25rem; display: flex;
+      align-items: center; justify-content: space-between; }
+    .mp-brand { font-weight: 800; font-size: 1.35rem; letter-spacing: 0.02em; margin: 0; line-height: 1.1; }
+    .mp-brand span { font-weight: 500; font-size: 0.85rem; display: block; letter-spacing: 0; opacity: 0.9; margin-top: 0.2rem; }
+    .mp-close { background: transparent; border: 0; color: #fff; font-size: 1.6rem; line-height: 1;
+      cursor: pointer; padding: 0.25rem 0.5rem; border-radius: 6px; }
+    .mp-close:focus-visible { outline: 2px solid #fff; }
+    .mp-body { padding: 1.25rem; overflow-y: auto; }
+    .mp-standing { font-size: 0.9rem; color: #4A5A4E; margin: 0 0 1.1rem; }
+    .mp-standing strong { color: #1B2A1F; }
+    .mp-label { display: block; font-weight: 600; font-size: 0.9rem; margin: 0 0 0.5rem; }
+    .mp-plans { border: 1px solid #D6E9DB; border-radius: 10px; overflow: hidden; margin-bottom: 1.1rem; }
+    .mp-plan { display: grid; grid-template-columns: auto 1fr auto; gap: 0.75rem; align-items: center;
+      padding: 0.8rem 1rem; border-top: 1px solid #E6F2E9; cursor: pointer; }
+    .mp-plan:first-child { border-top: 0; }
+    .mp-plan:has(input:checked) { background: #E9F7EE; }
+    .mp-plan input { accent-color: #00A651; width: 1.05rem; height: 1.05rem; margin: 0; }
+    .mp-plan-name { font-weight: 600; font-size: 0.95rem; }
+    .mp-plan-cycle { font-size: 0.8rem; color: #5E6E62; }
+    .mp-plan-price { font-weight: 700; font-size: 0.95rem; white-space: nowrap; }
+    .mp-empty { padding: 0.9rem 1rem; margin: 0; color: #5E6E62; font-size: 0.9rem; }
+    .mp-phone { width: 100%; box-sizing: border-box; border: 1.5px solid #CFE3D5; border-radius: 10px;
+      padding: 0.8rem 0.9rem; font-size: 1.05rem; letter-spacing: 0.03em; color: #1B2A1F; background: #fff; }
+    .mp-phone:focus { outline: none; border-color: #00A651; box-shadow: 0 0 0 3px rgba(0, 166, 81, 0.2); }
+    .mp-hint { font-size: 0.8rem; color: #5E6E62; margin: 0.4rem 0 0; }
+    .mp-pay { margin-top: 1.25rem; width: 100%; background: #00A651; color: #fff; border: 0;
+      border-radius: 10px; padding: 0.95rem; font-weight: 700; font-size: 1.05rem; cursor: pointer; }
+    .mp-pay:hover { background: #008A43; }
+    .mp-pay:focus-visible { outline: 3px solid rgba(0, 166, 81, 0.35); outline-offset: 2px; }
+    .mp-pay:disabled { opacity: 0.6; cursor: wait; }
+    .mp-status { margin-top: 1rem; font-size: 0.92rem; min-height: 1.2rem; }
+    .mp-status.mp-error { color: #B3261E; }
+    .mp-wait { display: flex; gap: 0.6rem; align-items: flex-start; margin: 0; }
+    .mp-dot { flex: none; width: 0.55rem; height: 0.55rem; margin-top: 0.4rem; border-radius: 50%;
+      background: #00A651; animation: mp-pulse 1.3s ease-in-out infinite; }
+    @keyframes mp-pulse { 50% { opacity: 0.25; } }
+    .mp-receipt { position: relative; background: #F2FAF4; border: 1px solid #CFE8D6; border-radius: 10px;
+      padding: 1.2rem 1.1rem 1rem; }
+    .mp-receipt h3 { margin: 0 0 1rem; font-size: 1.15rem; padding-right: 5rem; }
+    .mp-receipt dl { display: grid; grid-template-columns: auto 1fr; gap: 0.45rem 1rem; margin: 0; font-size: 0.92rem; }
+    .mp-receipt dt { color: #5E6E62; }
+    .mp-receipt dd { margin: 0; text-align: right; font-weight: 600; }
+    .mp-stamp { position: absolute; top: 0.9rem; right: 1rem; border: 3px solid #00A651; color: #00A651;
+      border-radius: 4px; font-weight: 800; letter-spacing: 0.12em; padding: 0.1rem 0.5rem;
+      transform: rotate(-8deg); animation: mp-press 0.35s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+    @keyframes mp-press { from { transform: rotate(-8deg) scale(1.8); opacity: 0; } }
+    .mp-done { margin-top: 1rem; width: 100%; background: #fff; color: #00843F; border: 1.5px solid #00A651;
+      border-radius: 10px; padding: 0.8rem; font-weight: 700; cursor: pointer; }
+    @media (prefers-reduced-motion: reduce) { .mp-dot, .mp-stamp { animation: none; } }
+    .mp-backdrop[hidden], .mp-backdrop [hidden] { display: none !important; }
   `;
 
-  document.body.appendChild(backdrop);
-  document.body.appendChild(drawer);
+  let root = null;
+  let plans = [];
+  let busy = false;
 
-  // Keep the duplicated account number in the manual instructions in sync.
-  const observer = new MutationObserver(() => {
-    const a = document.getElementById('pay-account');
-    const b = document.getElementById('pay-account-2');
-    if (a && b) b.textContent = a.textContent;
-  });
-  const acctEl = document.getElementById('pay-account');
-  if (acctEl) observer.observe(acctEl, { childList: true, characterData: true, subtree: true });
+  function build() {
+    if (root) return;
+    const style = document.createElement("style");
+    style.textContent = css;
+    document.head.appendChild(style);
 
-  renderPushArea();
-}
+    root = document.createElement("div");
+    root.className = "mp-backdrop";
+    root.hidden = true;
+    root.innerHTML = `
+      <div class="mp-modal" role="dialog" aria-modal="true" aria-labelledby="mp-title">
+        <div class="mp-head">
+          <p class="mp-brand" id="mp-title">M-PESA<span>Pay subscription</span></p>
+          <button class="mp-close" type="button" aria-label="Close">&times;</button>
+        </div>
+        <div class="mp-body">
+          <p class="mp-standing" id="mp-standing">Checking your subscription...</p>
+          <div id="mp-form">
+            <span class="mp-label">Choose a plan</span>
+            <div class="mp-plans" id="mp-plans"></div>
+            <label class="mp-label" for="mp-phone">M-Pesa number</label>
+            <input class="mp-phone" id="mp-phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="0712 345 678">
+            <p class="mp-hint">You'll get a prompt on this phone to enter your M-Pesa PIN.</p>
+            <button class="mp-pay" id="mp-pay" type="button">Pay</button>
+            <div class="mp-status" id="mp-status" role="status" aria-live="polite"></div>
+          </div>
+          <div id="mp-receipt" hidden></div>
+        </div>
+      </div>`;
+    document.body.appendChild(root);
 
-function renderPushArea() {
-  const area = document.getElementById('pay-push-area');
-  if (!area) return;
-
-  if (!PAY_PUSH_ENDPOINT) {
-    area.innerHTML = `
-      <p style="font-size:13px;color:var(--color-muted)">
-        Use the Paybill details above to pay. Once your payment is received your
-        account will be activated.
-      </p>`;
-    return;
+    root.querySelector(".mp-close").addEventListener("click", close);
+    root.addEventListener("click", (e) => { if (e.target === root) close(); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !root.hidden) close(); });
+    root.querySelector("#mp-plans").addEventListener("change", updateButton);
+    root.querySelector("#mp-pay").addEventListener("click", pay);
   }
 
-  area.innerHTML = `
-    <div class="field">
-      <label>M-Pesa phone number</label>
-      <input id="pay-phone" type="tel" placeholder="2547XXXXXXXX">
-    </div>
-    <button class="btn accent" style="width:100%" onclick="sendStkPush()">Pay now</button>
-    <p style="font-size:12px;color:var(--color-muted);margin-top:6px">
-      You'll get a prompt on your phone to enter your M-Pesa PIN.
-    </p>`;
-}
+  const $ = (id) => root.querySelector("#" + id);
 
-async function sendStkPush() {
-  const statusEl = document.getElementById('pay-status');
-  const phone = (document.getElementById('pay-phone') || {}).value;
-  statusEl.style.display = 'block';
-  statusEl.style.color = 'var(--color-muted)';
-
-  if (!phone || !/^2547\d{8}$/.test(phone.trim())) {
-    statusEl.style.color = 'var(--color-alert, #E11D48)';
-    statusEl.textContent = 'Enter a valid phone number in the format 2547XXXXXXXX.';
-    return;
+  function close() {
+    if (busy && !confirm("A payment is still waiting for confirmation. Close anyway? If you paid, your subscription will still update.")) return;
+    root.hidden = true;
+    document.body.style.overflow = "";
   }
 
-  statusEl.textContent = 'Sending payment request…';
-  try {
-    const res = await fetch(PAY_PUSH_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        phone: phone.trim(),
-        amount: payFee,
-        account_number: payAccountNumber,
-      }),
+  function showError(msg) { $("mp-status").className = "mp-status mp-error"; $("mp-status").textContent = msg; }
+  function showWaiting(msg) {
+    $("mp-status").className = "mp-status";
+    $("mp-status").innerHTML = `<p class="mp-wait"><span class="mp-dot" aria-hidden="true"></span><span>${esc(msg)}</span></p>`;
+  }
+
+  function selectedPlan() {
+    const id = root.querySelector('input[name="mp-plan"]:checked')?.value;
+    return plans.find((p) => p.id === id);
+  }
+  function updateButton() {
+    const p = selectedPlan();
+    $("mp-pay").textContent = p ? `Pay ${kes(p.price_kes)}` : "Pay";
+  }
+
+  async function loadStanding(orgId) {
+    const { data, error } = await getClient().rpc("get_subscription", { p_org: orgId, p_app: CONFIG.APP_CODE });
+    const el = $("mp-standing");
+    if (error) { el.textContent = "Couldn't load your subscription status."; return null; }
+    const s = data?.[0] ?? null;
+    const live = s && ["active", "trial"].includes(s.status) && new Date(s.current_period_end) > new Date();
+    if (live) el.innerHTML = `Active until <strong>${fmtDate(s.current_period_end)}</strong>. Paying now adds time on top.`;
+    else if (s?.current_period_end) el.innerHTML = `Your subscription ended on <strong>${fmtDate(s.current_period_end)}</strong>.`;
+    else el.textContent = "No active subscription yet.";
+    return s;
+  }
+
+  async function loadPlans() {
+    const { data, error } = await getClient()
+      .from("subscription_plans")
+      .select("id, name, billing_cycle, price_kes")
+      .eq("app_code", CONFIG.APP_CODE)
+      .eq("is_active", true)
+      .order("price_kes");
+    if (error || !data?.length) {
+      $("mp-plans").innerHTML = `<p class="mp-empty">No plans are available right now. Contact ${esc(CONFIG.SUPPORT)}.</p>`;
+      $("mp-pay").disabled = true;
+      return;
+    }
+    plans = data;
+    $("mp-pay").disabled = false;
+    $("mp-plans").innerHTML = data.map((p, i) => `
+      <label class="mp-plan">
+        <input type="radio" name="mp-plan" value="${esc(p.id)}" ${i === 0 ? "checked" : ""}>
+        <span><span class="mp-plan-name">${esc(p.name)}</span><br><span class="mp-plan-cycle">${cycleText[p.billing_cycle] ?? ""}</span></span>
+        <span class="mp-plan-price">${kes(p.price_kes)}</span>
+      </label>`).join("");
+    updateButton();
+  }
+
+  function friendly(err) {
+    if (!err) return "Couldn't start the payment. Try again.";
+    if (err.includes("Invalid Safaricom number")) return "Enter a Safaricom number, for example 0712 345 678.";
+    if (err.includes("Not signed in")) return "Your session has ended. Sign in again and retry.";
+    if (err.includes("Plan not found")) return "That plan is no longer available. Close and reopen this window.";
+    return `Couldn't start the payment: ${err}`;
+  }
+
+  async function poll(checkoutId) {
+    for (let i = 0; i < 40; i++) {
+      await sleep(3000);
+      const { data } = await getClient().rpc("get_payment_status", { p_checkout: checkoutId });
+      const row = data?.[0];
+      if (row && row.status !== "PENDING") return row;
+    }
+    return null;
+  }
+
+  function showReceipt(row, plan, sub) {
+    $("mp-form").hidden = true;
+    $("mp-receipt").hidden = false;
+    $("mp-receipt").innerHTML = `
+      <div class="mp-receipt">
+        <span class="mp-stamp" aria-hidden="true">PAID</span>
+        <h3>Payment received</h3>
+        <dl>
+          <dt>M-Pesa receipt</dt><dd>${esc(row.mpesa_receipt)}</dd>
+          <dt>Amount</dt><dd>${kes(row.mpesa_amount)}</dd>
+          <dt>Plan</dt><dd>${esc(plan?.name)}</dd>
+          <dt>Paid on</dt><dd>${fmtDate(row.transaction_date ?? new Date())}</dd>
+          ${sub?.current_period_end ? `<dt>Active until</dt><dd>${fmtDate(sub.current_period_end)}</dd>` : ""}
+        </dl>
+      </div>
+      <button class="mp-done" type="button" id="mp-done">Done</button>`;
+    $("mp-done").addEventListener("click", close);
+    $("mp-done").focus();
+  }
+
+  async function pay() {
+    if (busy) return;
+    const orgId = window.currentOrgId;
+    const plan = selectedPlan();
+    const phone = normalisePhone($("mp-phone").value);
+    if (!plan) return showError("Choose a plan first.");
+    if (!phone) { $("mp-phone").focus(); return showError("Enter a Safaricom number, for example 0712 345 678."); }
+
+    busy = true;
+    $("mp-pay").disabled = true;
+    showWaiting("Sending the payment prompt to your phone.");
+
+    const { data, error } = await getClient().functions.invoke("mpesa-stkpush", {
+      body: { plan_id: plan.id, organisation_id: orgId, phone },
     });
-    if (!res.ok) throw new Error('Payment request failed (' + res.status + ')');
-    statusEl.style.color = 'var(--color-success, #10B981)';
-    statusEl.textContent = 'Check your phone and enter your M-Pesa PIN to complete payment.';
-  } catch (e) {
-    statusEl.style.color = 'var(--color-alert, #E11D48)';
-    statusEl.textContent = e.message + '. Use the manual Paybill option below instead.';
+    let result = data;
+    if (error) {
+      try { result = await error.context.json(); } catch { result = { ok: false, error: error.message }; }
+    }
+    if (!result?.ok) {
+      busy = false; $("mp-pay").disabled = false;
+      return showError(friendly(result?.error));
+    }
+
+    showWaiting("Check your phone and enter your M-Pesa PIN to confirm.");
+    const row = await poll(result.checkout_request_id);
+    busy = false;
+    $("mp-pay").disabled = false;
+
+    if (!row) return showError("M-Pesa hasn't confirmed yet. If you entered your PIN, your subscription will update within a few minutes.");
+    if (row.status === "SUCCESS") {
+      await sleep(1500);
+      const sub = await loadStanding(orgId);
+      if (typeof window.loadSubscriptionStatus === "function") {
+        try { window.loadSubscriptionStatus(orgId); } catch (e) { /* ignore */ }
+      }
+      return showReceipt(row, plan, sub);
+    }
+    if (row.status === "CANCELLED") return showError("You cancelled the prompt on your phone. No money was taken. You can try again.");
+    showError(`The payment didn't go through (${row.result_desc || "unknown reason"}). You can try again.`);
   }
-}
 
-function openPayModal() {
-  const b = document.getElementById('pay-backdrop');
-  const d = document.getElementById('pay-drawer');
-  if (b) b.classList.add('open');
-  if (d) d.classList.add('open');
-}
-
-function closePayModal() {
-  const b = document.getElementById('pay-backdrop');
-  const d = document.getElementById('pay-drawer');
-  if (b) b.classList.remove('open');
-  if (d) d.classList.remove('open');
-}
+  // ---------- Public function called by the button ----------
+  window.openPayModal = async function () {
+    if (!window.currentOrgId) {
+      alert("Your organisation is still loading. Wait a moment and try again.");
+      return;
+    }
+    build();
+    // reset to a fresh form each time it opens
+    $("mp-form").hidden = false;
+    $("mp-receipt").hidden = true;
+    $("mp-status").textContent = "";
+    $("mp-status").className = "mp-status";
+    $("mp-standing").textContent = "Checking your subscription...";
+    root.hidden = false;
+    document.body.style.overflow = "hidden";
+    $("mp-phone").focus();
+    await Promise.all([loadStanding(window.currentOrgId), loadPlans()]);
+  };
+})();
