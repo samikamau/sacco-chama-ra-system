@@ -40,59 +40,66 @@
 
   // ---------- Styles (all prefixed mp- so they don't clash with the app) ----------
   const css = `
-    .mp-backdrop { position: fixed; inset: 0; background: rgba(0, 30, 12, 0.55); display: flex;
-      align-items: center; justify-content: center; padding: 1rem; z-index: 9999; }
-    .mp-modal { background: #fff; color: #1B2A1F; width: 100%; max-width: 26rem; border-radius: 14px;
-      overflow: hidden; box-shadow: 0 20px 50px rgba(0, 40, 15, 0.35); font-family: inherit;
-      max-height: calc(100vh - 2rem); display: flex; flex-direction: column; }
-    .mp-head { background: #00A651; color: #fff; padding: 1.1rem 1.25rem; display: flex;
-      align-items: center; justify-content: space-between; }
-    .mp-brand { font-weight: 800; font-size: 1.35rem; letter-spacing: 0.02em; margin: 0; line-height: 1.1; }
-    .mp-brand span { font-weight: 500; font-size: 0.85rem; display: block; letter-spacing: 0; opacity: 0.9; margin-top: 0.2rem; }
-    .mp-close { background: transparent; border: 0; color: #fff; font-size: 1.6rem; line-height: 1;
-      cursor: pointer; padding: 0.25rem 0.5rem; border-radius: 6px; }
+    .mp-backdrop { position: fixed; inset: 0; background: rgba(0, 30, 12, 0.18); z-index: 9999; }
+    .mp-modal { position: fixed; width: min(21rem, calc(100vw - 1.5rem)); background: #fff; color: #1B2A1F;
+      border-radius: 12px; overflow: hidden; box-shadow: 0 14px 40px rgba(0, 40, 15, 0.28);
+      font-family: inherit; display: flex; flex-direction: column; max-height: calc(100vh - 1.5rem);
+      text-transform: none; letter-spacing: normal; }
+    .mp-modal * { box-sizing: border-box; }
+    .mp-head { background: #00A651; color: #fff; padding: 0.7rem 0.9rem; display: flex;
+      align-items: center; justify-content: space-between; flex: none; }
+    .mp-brand { font-weight: 800; font-size: 1.1rem; letter-spacing: 0.02em; margin: 0; line-height: 1.1; color: #fff; }
+    .mp-brand span { font-weight: 500; font-size: 0.78rem; display: block; letter-spacing: 0; opacity: 0.9; margin-top: 0.15rem; }
+    .mp-close { background: transparent; border: 0; color: #fff; font-size: 1.4rem; line-height: 1;
+      cursor: pointer; padding: 0.2rem 0.45rem; border-radius: 6px; }
     .mp-close:focus-visible { outline: 2px solid #fff; }
-    .mp-body { padding: 1.25rem; overflow-y: auto; }
-    .mp-standing { font-size: 0.9rem; color: #4A5A4E; margin: 0 0 1.1rem; }
+    .mp-body { padding: 0.9rem; overflow-y: auto; font-size: 0.88rem; }
+    .mp-standing { font-size: 0.82rem; color: #4A5A4E; margin: 0 0 0.8rem; }
     .mp-standing strong { color: #1B2A1F; }
-    .mp-label { display: block; font-weight: 600; font-size: 0.9rem; margin: 0 0 0.5rem; }
-    .mp-plans { border: 1px solid #D6E9DB; border-radius: 10px; overflow: hidden; margin-bottom: 1.1rem; }
-    .mp-plan { display: grid; grid-template-columns: auto 1fr auto; gap: 0.75rem; align-items: center;
-      padding: 0.8rem 1rem; border-top: 1px solid #E6F2E9; cursor: pointer; }
+    .mp-modal .mp-label { display: block; font-weight: 600; font-size: 0.82rem; margin: 0 0 0.4rem;
+      color: #1B2A1F; text-transform: none; letter-spacing: normal; }
+    .mp-plans { border: 1px solid #D6E9DB; border-radius: 9px; overflow: hidden; margin-bottom: 0.8rem; }
+    .mp-modal .mp-plan { display: grid; grid-template-columns: auto 1fr auto; gap: 0.6rem; align-items: center;
+      padding: 0.55rem 0.75rem; border-top: 1px solid #E6F2E9; cursor: pointer; margin: 0;
+      color: #1B2A1F; text-transform: none; letter-spacing: normal; font-size: 0.88rem; font-weight: 400; }
     .mp-plan:first-child { border-top: 0; }
     .mp-plan:has(input:checked) { background: #E9F7EE; }
-    .mp-plan input { accent-color: #00A651; width: 1.05rem; height: 1.05rem; margin: 0; }
-    .mp-plan-name { font-weight: 600; font-size: 0.95rem; }
-    .mp-plan-cycle { font-size: 0.8rem; color: #5E6E62; }
-    .mp-plan-price { font-weight: 700; font-size: 0.95rem; white-space: nowrap; }
-    .mp-empty { padding: 0.9rem 1rem; margin: 0; color: #5E6E62; font-size: 0.9rem; }
-    .mp-phone { width: 100%; box-sizing: border-box; border: 1.5px solid #CFE3D5; border-radius: 10px;
-      padding: 0.8rem 0.9rem; font-size: 1.05rem; letter-spacing: 0.03em; color: #1B2A1F; background: #fff; }
+    .mp-plan input { accent-color: #00A651; width: 1rem; height: 1rem; margin: 0; }
+    .mp-plan-name { font-weight: 600; color: #1B2A1F; }
+    .mp-plan-cycle { font-size: 0.75rem; color: #5E6E62; }
+    .mp-plan-price { font-weight: 700; white-space: nowrap; color: #1B2A1F; }
+    .mp-empty { padding: 0.7rem 0.8rem; margin: 0; color: #5E6E62; }
+    .mp-phone { width: 100%; border: 1.5px solid #CFE3D5; border-radius: 9px;
+      padding: 0.6rem 0.75rem; font-size: 0.98rem; letter-spacing: 0.03em; color: #1B2A1F; background: #fff; }
     .mp-phone:focus { outline: none; border-color: #00A651; box-shadow: 0 0 0 3px rgba(0, 166, 81, 0.2); }
-    .mp-hint { font-size: 0.8rem; color: #5E6E62; margin: 0.4rem 0 0; }
-    .mp-pay { margin-top: 1.25rem; width: 100%; background: #00A651; color: #fff; border: 0;
-      border-radius: 10px; padding: 0.95rem; font-weight: 700; font-size: 1.05rem; cursor: pointer; }
+    .mp-hint { font-size: 0.74rem; color: #5E6E62; margin: 0.35rem 0 0; }
+    .mp-pay { margin-top: 0.85rem; width: 100%; background: #00A651; color: #fff; border: 0;
+      border-radius: 9px; padding: 0.7rem; font-weight: 700; font-size: 0.95rem; cursor: pointer; }
     .mp-pay:hover { background: #008A43; }
     .mp-pay:focus-visible { outline: 3px solid rgba(0, 166, 81, 0.35); outline-offset: 2px; }
     .mp-pay:disabled { opacity: 0.6; cursor: wait; }
-    .mp-status { margin-top: 1rem; font-size: 0.92rem; min-height: 1.2rem; }
+    .mp-status { margin-top: 0.7rem; font-size: 0.82rem; }
+    .mp-status:empty { margin-top: 0; }
     .mp-status.mp-error { color: #B3261E; }
-    .mp-wait { display: flex; gap: 0.6rem; align-items: flex-start; margin: 0; }
-    .mp-dot { flex: none; width: 0.55rem; height: 0.55rem; margin-top: 0.4rem; border-radius: 50%;
+    .mp-wait { display: flex; gap: 0.5rem; align-items: flex-start; margin: 0; }
+    .mp-dot { flex: none; width: 0.5rem; height: 0.5rem; margin-top: 0.35rem; border-radius: 50%;
       background: #00A651; animation: mp-pulse 1.3s ease-in-out infinite; }
     @keyframes mp-pulse { 50% { opacity: 0.25; } }
-    .mp-receipt { position: relative; background: #F2FAF4; border: 1px solid #CFE8D6; border-radius: 10px;
-      padding: 1.2rem 1.1rem 1rem; }
-    .mp-receipt h3 { margin: 0 0 1rem; font-size: 1.15rem; padding-right: 5rem; }
-    .mp-receipt dl { display: grid; grid-template-columns: auto 1fr; gap: 0.45rem 1rem; margin: 0; font-size: 0.92rem; }
+    .mp-receipt { position: relative; background: #F2FAF4; border: 1px solid #CFE8D6; border-radius: 9px;
+      padding: 0.9rem 0.85rem 0.8rem; }
+    .mp-receipt h3 { margin: 0 0 0.75rem; font-size: 1rem; padding-right: 4.5rem; color: #1B2A1F; }
+    .mp-receipt dl { display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 0.8rem; margin: 0; font-size: 0.84rem; }
     .mp-receipt dt { color: #5E6E62; }
     .mp-receipt dd { margin: 0; text-align: right; font-weight: 600; }
-    .mp-stamp { position: absolute; top: 0.9rem; right: 1rem; border: 3px solid #00A651; color: #00A651;
-      border-radius: 4px; font-weight: 800; letter-spacing: 0.12em; padding: 0.1rem 0.5rem;
+    .mp-stamp { position: absolute; top: 0.7rem; right: 0.8rem; border: 2.5px solid #00A651; color: #00A651;
+      border-radius: 4px; font-weight: 800; font-size: 0.85rem; letter-spacing: 0.12em; padding: 0.05rem 0.4rem;
       transform: rotate(-8deg); animation: mp-press 0.35s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
     @keyframes mp-press { from { transform: rotate(-8deg) scale(1.8); opacity: 0; } }
-    .mp-done { margin-top: 1rem; width: 100%; background: #fff; color: #00843F; border: 1.5px solid #00A651;
-      border-radius: 10px; padding: 0.8rem; font-weight: 700; cursor: pointer; }
+    .mp-done { margin-top: 0.75rem; width: 100%; background: #fff; color: #00843F; border: 1.5px solid #00A651;
+      border-radius: 9px; padding: 0.6rem; font-weight: 700; cursor: pointer; }
+    @media (max-width: 639px) {
+      .mp-modal { left: 0.75rem; right: 0.75rem; bottom: 0.75rem; width: auto; }
+    }
     @media (prefers-reduced-motion: reduce) { .mp-dot, .mp-stamp { animation: none; } }
     .mp-backdrop[hidden], .mp-backdrop [hidden] { display: none !important; }
   `;
@@ -100,6 +107,29 @@
   let root = null;
   let plans = [];
   let busy = false;
+  let anchor = null;
+
+  // Place the popup right under (or above) the Pay Subscription button
+  function position() {
+    if (!root || root.hidden) return;
+    const m = root.querySelector(".mp-modal");
+    m.style.top = m.style.left = m.style.bottom = m.style.maxHeight = "";
+    if (window.innerWidth < 640 || !anchor) return;   // phones: bottom sheet via CSS
+    const r = anchor.getBoundingClientRect();
+    const gap = 8, pad = 12;
+    const w = m.offsetWidth;
+    const left = Math.min(Math.max(pad, r.right - w), window.innerWidth - w - pad);
+    const below = window.innerHeight - r.bottom - gap - pad;
+    const above = r.top - gap - pad;
+    m.style.left = left + "px";
+    if (below >= 380 || below >= above) {
+      m.style.top = (r.bottom + gap) + "px";
+      m.style.maxHeight = below + "px";
+    } else {
+      m.style.bottom = (window.innerHeight - r.top + gap) + "px";
+      m.style.maxHeight = above + "px";
+    }
+  }
 
   function build() {
     if (root) return;
@@ -135,6 +165,7 @@
     root.querySelector(".mp-close").addEventListener("click", close);
     root.addEventListener("click", (e) => { if (e.target === root) close(); });
     document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !root.hidden) close(); });
+    window.addEventListener("resize", position);
     root.querySelector("#mp-plans").addEventListener("change", updateButton);
     root.querySelector("#mp-pay").addEventListener("click", pay);
   }
@@ -233,6 +264,7 @@
       <button class="mp-done" type="button" id="mp-done">Done</button>`;
     $("mp-done").addEventListener("click", close);
     $("mp-done").focus();
+    position();
   }
 
   async function pay() {
@@ -278,12 +310,16 @@
   }
 
   // ---------- Public function called by the button ----------
-  window.openPayModal = async function () {
+  window.openPayModal = async function (evt) {
     if (!window.currentOrgId) {
       alert("Your organisation is still loading. Wait a moment and try again.");
       return;
     }
     build();
+    const ae = document.activeElement;
+    anchor = (evt && evt.currentTarget && evt.currentTarget.getBoundingClientRect) ? evt.currentTarget
+      : (ae && ae.matches && ae.matches("button, a")) ? ae
+      : document.querySelector('[onclick*="openPayModal"]');
     // reset to a fresh form each time it opens
     $("mp-form").hidden = false;
     $("mp-receipt").hidden = true;
@@ -292,7 +328,9 @@
     $("mp-standing").textContent = "Checking your subscription...";
     root.hidden = false;
     document.body.style.overflow = "hidden";
-    $("mp-phone").focus();
+    position();
+    $("mp-phone").focus({ preventScroll: true });
     await Promise.all([loadStanding(window.currentOrgId), loadPlans()]);
+    position();
   };
 })();
