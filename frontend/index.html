@@ -87,7 +87,7 @@
             <div id="sub-last-payment" style="font-size:14px">-</div>
           </div>
         </div>
-        <button class="btn accent" onclick="openPayModal()">Pay Subscription</button>
+        <button class="btn accent" onclick="goToBilling()">Pay Subscription</button>
       </div>
 
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
@@ -189,7 +189,13 @@
   <script src="js/nav.js"></script>
   <script src="js/pay-subscription.js"></script>
   <script src="js/auth.js"></script>
-  <script>
+  <script>    function goToBilling() {
+      if (!window.currentOrgId) {
+        alert("Your organisation is still loading. Wait a moment and try again.");
+        return;
+      }
+      location.href = "billing.html?org=" + encodeURIComponent(window.currentOrgId);
+    }
     async function loadSubscriptionStatus(orgId) {
       try {
         const { data, error } = await supabaseClient.rpc("fn_my_org_billing", { p_org_id: orgId });
@@ -219,6 +225,7 @@
       const org = await currentOrg();
       if (!org) return;
       const orgId = org.organisation_id;
+            window.currentOrgId = orgId;
       loadSubscriptionStatus(orgId);
 
       // Hide dashboard sections for modules this organisation has turned off.
