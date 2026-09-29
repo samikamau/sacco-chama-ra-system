@@ -404,11 +404,6 @@
 
     async function exportPdf() {
       if (!lastReport) { alert("Run a report first."); return; }
-      logAccess('export', 'report_pdf', {
-        report: lastReport.kind,
-        period: periodLabel(),
-        rows: (lastReport.data || []).length,
-      });
       const {jsPDF} = window.jspdf;
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const {kind,data} = lastReport;
@@ -628,16 +623,17 @@
       }
 
       doc.save(`${title.replace(/\W+/g,"_")}_${toLocalISO(new Date())}.pdf`);
+      // Logged only once the file has been produced, so a failed attempt
+      // leaves no entry claiming data was exported.
+      logAccess('export', 'report_pdf', {
+        report: lastReport.kind, period: periodLabel(),
+        rows: (lastReport.data || []).length,
+      });
     }
 
     // ── EXCEL EXPORT ──────────────────────────────────────────────────────
     function exportExcel() {
       if (!lastReport) { alert("Run a report first."); return; }
-      logAccess('export', 'report_excel', {
-        report: lastReport.kind,
-        period: periodLabel(),
-        rows: (lastReport.data || []).length,
-      });
       const {kind,data} = lastReport;
       const titles = {trial:"Trial Balance",ie:"Income & Expenditure",bs:"Balance Sheet",cf:"Cash Flow",gl:"General Ledger"};
       const title = titles[kind];
@@ -742,6 +738,10 @@
       const ws = makeSheet(rows);
       XLSX.utils.book_append_sheet(wb, ws, title.slice(0,31));
       XLSX.writeFile(wb, `${title.replace(/\W+/g,"_")}_${toLocalISO(new Date())}.xlsx`);
+      logAccess('export', 'report_excel', {
+        report: lastReport.kind, period: periodLabel(),
+        rows: (lastReport.data || []).length,
+      });
     }
 
     // ── INIT ──────────────────────────────────────────────────────────────

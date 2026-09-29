@@ -83,6 +83,7 @@
         <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn" onclick="generateStatement()">Generate</button>
           <button class="btn accent" onclick="downloadPdf()">Download PDF</button>
+          <button class="btn accent" onclick="downloadExcel()">Download Excel</button>
           <button class="btn" onclick="window.print()">Print</button>
         </div>
       </div>
@@ -91,6 +92,7 @@
     </main>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="js/config.js"></script>
   <script src="js/nav.js"></script>
   <script src="js/member-search.js"></script>
@@ -470,13 +472,62 @@
     // -------------------------------------------------------------------------
     // PDF EXPORT
     // -------------------------------------------------------------------------
+    function downloadExcel() {
+      if (!lastStatement) { alert("Generate a statement first."); return; }
+      const s = lastStatement;
+      const rows = [
+        [s.orgName],
+        ["Member Statement"],
+        [`Member: ${s.member.full_name} (${s.member.member_number})`],
+        [`Period: ${s.periodLabel}`],
+        [`Generated: ${new Date().toLocaleDateString("en-KE", {year:"numeric",month:"long",day:"numeric"})}`],
+        [],
+      ];
+
+      for (const sec of s.sections) {
+        rows.push([sec.title]);
+        if (sec.loans !== undefined) {
+          rows.push(["Loan No.","Status","Principal","Outstanding","Issued","Due"]);
+          (sec.loans || []).forEach(l => rows.push([
+            l.loan_number || "", l.status || "",
+            Number(l.principal || 0), Number(l.outstanding || 0),
+            l.disbursed_on || "", l.due_date || "",
+          ]));
+        } else {
+          rows.push(["Date","Description","Debit","Credit","Balance"]);
+          (sec.rows || []).forEach(r => rows.push([
+            r.date, r.description || "",
+            Number(r.debit) > 0 ? Number(r.debit) : "",
+            Number(r.credit) > 0 ? Number(r.credit) : "",
+            Number(r.balance),
+          ]));
+          const closing = (sec.rows && sec.rows.length)
+            ? Number(sec.rows[sec.rows.length - 1].balance) : 0;
+          rows.push(["", "Closing balance", "", "", closing]);
+        }
+        rows.push([]);
+      }
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      const maxCols = Math.max(...rows.map(r => r.length));
+      ws['!cols'] = Array.from({length: maxCols}, (_, i) => ({
+        wch: Math.max(...rows.map(r => String(r[i] ?? "").length), 10)
+      }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Statement");
+
+      const safe = `${s.member.member_number}-${s.member.full_name}`.replace(/[^a-z0-9\-]+/gi, "_");
+      XLSX.writeFile(wb, `statement-${safe}.xlsx`);
+
+      logAccess('export', 'member_statement_excel', {
+        member_number: s.member.member_number,
+        member_name: s.member.full_name,
+        period: s.periodLabel,
+      });
+    }
+
     async function downloadPdf() {
       if (!lastStatement) { alert("Generate a statement first."); return; }
-      logAccess('export', 'member_statement_pdf', {
-        member_number: lastStatement.member.member_number,
-        member_name: lastStatement.member.full_name,
-        period: lastStatement.periodLabel,
-      });
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
       const today = new Date().toLocaleDateString("en-KE", {year:"numeric",month:"long",day:"numeric"});
@@ -557,6 +608,12 @@
 
       const safe = lastStatement.member.full_name.replace(/[^\w\- ]/g,"").replace(/\s+/g,"_");
       doc.save(`statement-${safe}.pdf`);
+      // Logged only once the file has been produced.
+      logAccess('export', 'member_statement_pdf', {
+        member_number: lastStatement.member.member_number,
+        member_name: lastStatement.member.full_name,
+        period: lastStatement.periodLabel,
+      });
     }
 
     (async () => {
