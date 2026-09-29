@@ -11,10 +11,18 @@ async function requireSession() {
 async function currentOrg() {
   const preferredId = localStorage.getItem("active_org_id");
 
+  // Every lookup is filtered to the signed-in user. Row level security lets
+  // a member read other members' rows in the same organisation, so without
+  // this these queries could return someone else's membership, and with it
+  // someone else's role.
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) return null;
+
   if (preferredId) {
     const { data, error } = await supabaseClient
       .from("organisation_users")
       .select("organisation_id, role, organisations(name, org_type, currency)")
+      .eq("user_id", user.id)
       .eq("status", "active")
       .eq("organisation_id", preferredId)
       .limit(1).single();
@@ -27,6 +35,7 @@ async function currentOrg() {
   const { data, error } = await supabaseClient
     .from("organisation_users")
     .select("organisation_id, role, organisations(name, org_type, currency)")
+    .eq("user_id", user.id)
     .eq("status", "active").limit(1).single();
   if (error) { console.error("Could not resolve org:", error.message); return null; }
   if (data) localStorage.setItem("active_org_id", data.organisation_id);
@@ -36,9 +45,16 @@ async function currentOrg() {
 // All organisations (SACCO, Chama, Residents Association, etc.) the
 // current user is an active member of - used to populate the org switcher.
 async function listMyOrganisations() {
+  // Filter to the signed-in user explicitly. Row level security lets a
+  // member see every membership row of an organisation they belong to, so
+  // without this the switcher listed that organisation once per member.
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) return [];
+
   const { data, error } = await supabaseClient
     .from("organisation_users")
     .select("organisation_id, role, organisations(name, org_type, account_number, status)")
+    .eq("user_id", user.id)
     .eq("status", "active");
   if (error) { console.error("Could not list organisations:", error.message); return []; }
   return data || [];
