@@ -160,7 +160,9 @@
       tbody.innerHTML = lastRows.map((r, i) => `
         <tr class="audit-row" onclick="toggleDetail(${i})">
           <td style="white-space:nowrap">${when(r.occurred_at)}</td>
-          <td>${r.actor_email || '<span class="hint">system</span>'}</td>
+          <td>${r.actor_name
+            ? `${r.actor_name}<div class="hint">${r.actor_email || ''}</div>`
+            : (r.actor_email || '<span class="hint">system</span>')}</td>
           <td><span class="act ${r.action}">${r.action}</span></td>
           <td>${label(r.table_name)}</td>
           <td class="hint">${r.action === 'update' && r.changed_fields
@@ -179,9 +181,9 @@
 
     function exportLog() {
       if (!lastRows.length) { alert('Nothing to export.'); return; }
-      const rows = [['When','Who','Action','Area','Record','Changed fields','Before','After']];
+      const rows = [['When','Name','Email','Action','Area','Record','Changed fields','Before','After']];
       lastRows.forEach(r => rows.push([
-        when(r.occurred_at), r.actor_email || 'system', r.action, label(r.table_name),
+        when(r.occurred_at), r.actor_name || '', r.actor_email || 'system', r.action, label(r.table_name),
         r.record_id || '', (r.changed_fields || []).join(', '),
         r.old_values ? JSON.stringify(r.old_values) : '',
         r.new_values ? JSON.stringify(r.new_values) : '',
