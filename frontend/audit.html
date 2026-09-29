@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Audit Log — Financial Operating System</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .audit-row { cursor:pointer; }
+  .audit-row:hover { background:#F8F7F3; }
+  .act {
+    font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px;
+    text-transform:uppercase; letter-spacing:0.04em;
+  }
+  .act.insert { background:#E4EEE6; color:var(--color-success); }
+  .act.update { background:#F3EBD8; color:#8A6314; }
+  .act.delete { background:#F3E4E0; color:var(--color-alert); }
+  .detail { background:#F8F7F3; }
+  .detail td { padding:14px 16px; }
+  .diff { width:100%; border-collapse:collapse; font-size:13px; }
+  .diff th, .diff td { text-align:left; padding:5px 8px; border-bottom:1px solid var(--color-line); }
+  .diff th { color:var(--color-muted); font-weight:600; font-size:12px; }
+  .was { color:var(--color-alert); font-family:var(--font-mono); font-size:12px; }
+  .now { color:var(--color-success); font-family:var(--font-mono); font-size:12px; }
+  .hint { color:var(--color-muted); font-size:12px; }
+</style>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav" id="nav-mount"></nav>
+    <main class="main">
+      <h1>Audit Log</h1>
+      <p class="hint">
+        Every change to members, loans, bills, payments, journal entries, accounts and user access.
+        Records are kept for seven years and cannot be edited or removed from within the application.
+      </p>
+
+      <div class="card">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div class="field" style="margin-bottom:0"><label>From</label><input id="a-from" type="date"></div>
+          <div class="field" style="margin-bottom:0"><label>To</label><input id="a-to" type="date"></div>
+          <div class="field" style="margin-bottom:0;min-width:200px"><label>Area</label>
+            <select id="a-table">
+              <option value="">Everything</option>
+              <option value="journal_entries">Journal entries</option>
+              <option value="journal_lines">Journal lines</option>
+              <option value="members">Members</option>
+              <option value="loans">Loans</option>
+              <option value="loan_repayments">Loan repayments</option>
+              <option value="bills">Bills</option>
+              <option value="bill_payments">Bill payments</option>
+              <option value="payments">Payments</option>
+              <option value="chart_of_accounts">Chart of accounts</option>
+              <option value="organisation_users">Users</option>
+              <option value="organisation_user_permissions">Permissions</option>
+              <option value="rent_remittances">Rent remittances</option>
+            </select>
+          </div>
+          <button class="btn" onclick="loadLog()">Apply</button>
+          <button class="btn accent" onclick="exportLog()">&#8595; Excel</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <table>
+          <thead><tr>
+            <th style="white-space:nowrap">When</th>
+            <th>Who</th>
+            <th>Action</th>
+            <th>Area</th>
+            <th>Changed</th>
+          </tr></thead>
+          <tbody id="log-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+        </table>
+        <p class="hint" id="log-note" style="margin-top:10px"></p>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let orgId, lastRows = [];
+
+    const LABELS = {
+      journal_entries: 'Journal entries', journal_lines: 'Journal lines',
+      members: 'Members', loans: 'Loans', loan_repayments: 'Loan repayments',
+      loan_schedule: 'Loan schedule', bills: 'Bills', bill_payments: 'Bill payments',
+      suppliers: 'Suppliers', payments: 'Payments', payment_allocations: 'Payment allocations',
+      contributions: 'Contributions', organisations: 'Organisation',
+      organisation_users: 'Users', organisation_user_permissions: 'Permissions',
+      organisation_invitations: 'Invitations', chart_of_accounts: 'Chart of accounts',
+      contribution_types: 'Fund types', rent_remittances: 'Rent remittances',
+      reconciliations: 'Reconciliations', platform_admins: 'Platform admins',
+    };
+
+    const label = t => LABELS[t] || t;
+
+    function when(ts) {
+      return new Date(ts).toLocaleString('en-KE', {
+        year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'
+      });
+    }
+
+    function shortValue(v) {
+      if (v === null || v === undefined) return '—';
+      const s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+      return s.length > 80 ? s.slice(0, 80) + '…' : s;
+    }
+
+    function toggleDetail(i) {
+      const row = document.getElementById('detail-' + i);
+      row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+    }
+
+    function detailHTML(r) {
+      // An update shows only what changed. An insert or delete shows the
+      // whole record, since the whole record is what appeared or went.
+      if (r.action === 'update' && r.changed_fields) {
+        return `<table class="diff">
+          <thead><tr><th style="width:26%">Field</th><th style="width:37%">Was</th><th style="width:37%">Became</th></tr></thead>
+          <tbody>${r.changed_fields.map(f => `<tr>
+            <td>${f}</td>
+            <td class="was">${shortValue(r.old_values ? r.old_values[f] : null)}</td>
+            <td class="now">${shortValue(r.new_values ? r.new_values[f] : null)}</td>
+          </tr>`).join('')}</tbody></table>`;
+      }
+      const vals = r.action === 'delete' ? r.old_values : r.new_values;
+      if (!vals) return '<span class="hint">No detail recorded.</span>';
+      return `<table class="diff">
+        <thead><tr><th style="width:26%">Field</th><th>Value</th></tr></thead>
+        <tbody>${Object.keys(vals).sort().map(k => `<tr>
+          <td>${k}</td><td class="${r.action === 'delete' ? 'was' : 'now'}">${shortValue(vals[k])}</td>
+        </tr>`).join('')}</tbody></table>`;
+    }
+
+    async function loadLog() {
+      const tbody = document.getElementById('log-rows');
+      tbody.innerHTML = `<tr><td colspan="5" class="empty">Loading…</td></tr>`;
+
+      const { data, error } = await supabaseClient.rpc('fn_audit_log', {
+        p_organisation_id: orgId,
+        p_from: document.getElementById('a-from').value || null,
+        p_to: document.getElementById('a-to').value || null,
+        p_table: document.getElementById('a-table').value || null,
+        p_limit: 300,
+      });
+
+      if (error) { tbody.innerHTML = `<tr><td colspan="5" class="error">${error.message}</td></tr>`; return; }
+      lastRows = data || [];
+
+      if (!lastRows.length) {
+        tbody.innerHTML = `<tr><td colspan="5" class="empty">Nothing recorded for this period.</td></tr>`;
+        document.getElementById('log-note').textContent = '';
+        return;
+      }
+
+      tbody.innerHTML = lastRows.map((r, i) => `
+        <tr class="audit-row" onclick="toggleDetail(${i})">
+          <td style="white-space:nowrap">${when(r.occurred_at)}</td>
+          <td>${r.actor_email || '<span class="hint">system</span>'}</td>
+          <td><span class="act ${r.action}">${r.action}</span></td>
+          <td>${label(r.table_name)}</td>
+          <td class="hint">${r.action === 'update' && r.changed_fields
+            ? r.changed_fields.slice(0, 3).join(', ') + (r.changed_fields.length > 3 ? ` +${r.changed_fields.length - 3}` : '')
+            : '—'}</td>
+        </tr>
+        <tr class="detail" id="detail-${i}" style="display:none">
+          <td colspan="5">${detailHTML(r)}</td>
+        </tr>`).join('');
+
+      document.getElementById('log-note').textContent =
+        lastRows.length >= 300
+          ? 'Showing the 300 most recent entries. Narrow the dates or area to see more.'
+          : `${lastRows.length} entr${lastRows.length === 1 ? 'y' : 'ies'}.`;
+    }
+
+    function exportLog() {
+      if (!lastRows.length) { alert('Nothing to export.'); return; }
+      const rows = [['When','Who','Action','Area','Record','Changed fields','Before','After']];
+      lastRows.forEach(r => rows.push([
+        when(r.occurred_at), r.actor_email || 'system', r.action, label(r.table_name),
+        r.record_id || '', (r.changed_fields || []).join(', '),
+        r.old_values ? JSON.stringify(r.old_values) : '',
+        r.new_values ? JSON.stringify(r.new_values) : '',
+      ]));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Audit Log');
+      XLSX.writeFile(wb, `Audit_Log_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+
+    (async () => {
+      const org = await currentOrg();
+      if (!org) { window.location.href = 'login.html'; return; }
+      orgId = org.organisation_id;
+
+      const to = new Date();
+      const from = new Date(); from.setMonth(from.getMonth() - 1);
+      document.getElementById('a-to').value = to.toISOString().slice(0,10);
+      document.getElementById('a-from').value = from.toISOString().slice(0,10);
+
+      loadLog();
+    })();
+  </script>
+</body>
+</html>

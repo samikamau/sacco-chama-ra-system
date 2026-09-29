@@ -64,6 +64,7 @@ const ACCOUNTANT_ITEMS = [
   { href: 'periods.html',           label: 'Accounting Periods' },
   { href: 'opening-balances.html',  label: 'Opening Balances' },
   { href: 'reconcile.html',         label: 'Reconciliation' },
+  { href: 'audit.html',             label: 'Audit Log' },
 ];
 
 // Sub-pages that should highlight a top-level item even though their
