@@ -13,13 +13,15 @@
   /* Confirmation banner, fixed at the top of the screen so it is seen even
      if the page has been scrolled away from the form. */
   .toast {
+    /* Sits across the top of the main content area, clear of the 220px
+       sidebar, so it is fully readable without covering the nav. */
     position: fixed;
     top: 16px;
-    left: 50%;
-    transform: translateX(-50%) translateY(-20px);
+    left: 236px;
+    right: 24px;
+    max-width: 900px;
+    transform: translateY(-20px);
     z-index: 200;
-    min-width: 320px;
-    max-width: 640px;
     background: #fff;
     border-left: 5px solid var(--color-success);
     border-radius: 6px;
@@ -29,7 +31,12 @@
     pointer-events: none;
     transition: opacity .18s ease, transform .18s ease;
   }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+  .toast.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+  /* The sidebar is hidden on narrow screens, so span the full width there. */
+  @media (max-width: 900px) {
+    .toast { left: 12px; right: 12px; }
+  }
   .toast.error { border-left-color: var(--color-alert); }
   .toast-title { font-weight: 700; font-size: 15px; margin-bottom: 2px; }
   .toast-body { font-size: 13.5px; color: var(--color-muted); line-height: 1.5; }
