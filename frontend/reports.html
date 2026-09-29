@@ -403,6 +403,14 @@
     }
 
     async function exportPdf() {
+      try { await exportPdfInner(); }
+      catch (e) {
+        console.error('PDF export failed:', e);
+        alert('Could not create the PDF: ' + (e && e.message ? e.message : e));
+      }
+    }
+
+    async function exportPdfInner() {
       if (!lastReport) { alert("Run a report first."); return; }
       const {jsPDF} = window.jspdf;
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -564,14 +572,15 @@
         // own subtotal rows, so it is printed in the order given.
         let currentSection = null;
         data.forEach(r => {
-          if (r.section !== currentSection) {
-            currentSection = r.section;
-            sectionHeader(currentSection.toUpperCase());
+          const section = r.section || "";
+          if (section !== currentSection) {
+            currentSection = section;
+            if (section) sectionHeader(section.toUpperCase());
             tableHeader(["Item","Amount"],[145,37]);
           }
-          const amt = Number(r.amount);
+          const amt = Number(r.amount || 0);
           const shown = amt < 0 ? `(${money(Math.abs(amt))})` : money(amt);
-          const label = (r.account_code ? r.account_code + "  " : "") + r.label;
+          const label = (r.account_code ? r.account_code + "  " : "") + (r.label || "");
           tableRow([label, shown],[145,37], r.is_subtotal === true,
                    r.is_subtotal ? TOTAL_BG : null);
         });
@@ -633,6 +642,14 @@
 
     // ── EXCEL EXPORT ──────────────────────────────────────────────────────
     function exportExcel() {
+      try { exportExcelInner(); }
+      catch (e) {
+        console.error('Excel export failed:', e);
+        alert('Could not create the Excel file: ' + (e && e.message ? e.message : e));
+      }
+    }
+
+    function exportExcelInner() {
       if (!lastReport) { alert("Run a report first."); return; }
       const {kind,data} = lastReport;
       const titles = {trial:"Trial Balance",ie:"Income & Expenditure",bs:"Balance Sheet",cf:"Cash Flow",gl:"General Ledger"};
