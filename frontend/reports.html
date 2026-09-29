@@ -201,7 +201,7 @@
     async function renderReport(body, rpt) {
       const {kind, data} = rpt;
       const titles = {trial:"Trial Balance",ie:"Income & Expenditure",bs:"Balance Sheet",cf:"Cash Flow",cfi:"Cash Flow (Indirect)",rent:"Rental Schedule",gl:"General Ledger"};
-      const title = titles[kind];
+      const title = titles[kind] || "Report";
       const now = new Date().toLocaleDateString("en-KE",{year:"numeric",month:"long",day:"numeric"});
 
       let html = `<div class="report-header" style="display:flex;align-items:center;gap:14px">
@@ -415,8 +415,8 @@
       const {jsPDF} = window.jspdf;
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const {kind,data} = lastReport;
-      const titles = {trial:"Trial Balance",ie:"Income & Expenditure",bs:"Balance Sheet",cf:"Cash Flow",gl:"General Ledger"};
-      const title = titles[kind];
+      const titles = {trial:"Trial Balance",ie:"Income & Expenditure",bs:"Balance Sheet",cf:"Cash Flow",cfi:"Cash Flow (Indirect)",rent:"Rental Schedule",gl:"General Ledger"};
+      const title = titles[kind] || "Report";
       const period = periodLabel();
       const now = new Date().toLocaleDateString("en-KE",{year:"numeric",month:"long",day:"numeric"});
 
@@ -652,8 +652,8 @@
     function exportExcelInner() {
       if (!lastReport) { alert("Run a report first."); return; }
       const {kind,data} = lastReport;
-      const titles = {trial:"Trial Balance",ie:"Income & Expenditure",bs:"Balance Sheet",cf:"Cash Flow",gl:"General Ledger"};
-      const title = titles[kind];
+      const titles = {trial:"Trial Balance",ie:"Income & Expenditure",bs:"Balance Sheet",cf:"Cash Flow",cfi:"Cash Flow (Indirect)",rent:"Rental Schedule",gl:"General Ledger"};
+      const title = titles[kind] || "Report";
       const wb = XLSX.utils.book_new();
       const period = periodLabel();
       const now = new Date().toLocaleDateString("en-KE",{year:"numeric",month:"long",day:"numeric"});
