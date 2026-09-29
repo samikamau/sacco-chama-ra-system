@@ -9,9 +9,44 @@
   .role-desc { font-size:12px; color:var(--color-muted); margin-top:4px; line-height:1.5; }
   .invite-link { background:#F3EBD8; padding:12px; border-radius:var(--radius); font-family:var(--font-mono); font-size:12px; word-break:break-all; margin-top:8px; }
   .me-badge { background:var(--color-primary); color:#fff; font-size:10px; padding:1px 6px; border-radius:999px; margin-left:6px; }
+
+  /* Confirmation banner, fixed at the top of the screen so it is seen even
+     if the page has been scrolled away from the form. */
+  .toast {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    z-index: 200;
+    min-width: 320px;
+    max-width: 640px;
+    background: #fff;
+    border-left: 5px solid var(--color-success);
+    border-radius: 6px;
+    box-shadow: 0 10px 34px rgba(0,0,0,0.22);
+    padding: 14px 44px 14px 18px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+  .toast.error { border-left-color: var(--color-alert); }
+  .toast-title { font-weight: 700; font-size: 15px; margin-bottom: 2px; }
+  .toast-body { font-size: 13.5px; color: var(--color-muted); line-height: 1.5; }
+  .toast-close {
+    position: absolute; top: 8px; right: 10px;
+    background: none; border: none; cursor: pointer;
+    font-size: 19px; line-height: 1; color: var(--color-muted);
+  }
 </style>
 </head>
 <body>
+  <div class="toast" id="toast">
+    <button class="toast-close" onclick="hideToast()" aria-label="Dismiss">&times;</button>
+    <div class="toast-title" id="toast-title"></div>
+    <div class="toast-body" id="toast-body"></div>
+  </div>
+
   <div class="app-shell">
     <nav class="nav" id="nav-mount"></nav>
     <main class="main">
@@ -113,6 +148,26 @@
   <script src="js/auth.js"></script>
   <script>
     let orgId, orgName, myRole = null;
+    let toastTimer = null;
+
+    // Confirmation banner. Stays up for a while and can be dismissed, so a
+    // result is not missed when the page is scrolled or the form is below
+    // the fold.
+    function showToast(title, body, isError) {
+      const el = document.getElementById('toast');
+      document.getElementById('toast-title').textContent = title;
+      document.getElementById('toast-body').innerHTML = body || '';
+      el.classList.toggle('error', isError === true);
+      el.classList.add('show');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(hideToast, isError ? 12000 : 9000);
+    }
+
+    function hideToast() {
+      clearTimeout(toastTimer);
+      document.getElementById('toast').classList.remove('show');
+    }
 
     const ROLE_DESCRIPTIONS = {
       viewer:     "Can view reports and records. Cannot record, post, or approve anything.",
@@ -186,16 +241,24 @@
           showError(errEl,
             `Invitation recorded, but the email could not be sent: ${detail}. ` +
             `They can still get in by using "Forgot password" on the sign-in page.`);
+          showToast("Invitation recorded, but the email failed",
+            `${detail}. They can still get in using "Forgot password" on the sign-in page.`, true);
           loadInvites();
           return;
         }
 
+        const who = data.full_name ? `${data.full_name} (${data.email})` : data.email;
+        const what = fnData.existing_account
+          ? "They already had an account, so they have been emailed a link to set a new password."
+          : "They have been emailed a link to set their password and sign in.";
+
+        showToast(`Invitation sent to ${who}`,
+          `Added as <strong>${data.role}</strong>. ${what} Once they sign in, the invitation appears at the top of this page for them to accept.`);
+
         okEl.style.display = "block";
         okEl.innerHTML = `
-          <p style="color:var(--color-success)">Invitation sent to <strong>${data.full_name ? data.full_name + " (" + data.email + ")" : data.email}</strong> as <strong>${data.role}</strong>.</p>
-          <p style="font-size:13px;margin-top:8px">${fnData.existing_account
-            ? "They already had an account, so they have been emailed a link to set a new password."
-            : "They have been emailed a link to set their password and sign in."}
+          <p style="color:var(--color-success)">Invitation sent to <strong>${who}</strong> as <strong>${data.role}</strong>.</p>
+          <p style="font-size:13px;margin-top:8px">${what}
           Once they sign in, the invitation appears at the top of this page for them to accept.</p>`;
         document.getElementById("i-email").value = "";
         document.getElementById("i-name").value = "";
@@ -255,6 +318,7 @@
 
       successEl.textContent = "Branding saved. Reload the page to see it applied.";
       successEl.style.display = "block";
+      showToast("Branding saved", "Reload the page to see it applied to statements and reports.");
       fileInput.value = "";
       loadBranding();
     }
@@ -322,8 +386,8 @@
           <input type="checkbox" class="perm-check" value="${p.permission}"
             ${p.effective ? 'checked' : ''}
             style="width:16px;flex-shrink:0">
-          <span>${p.label}</span>
-          <span style="font-size:11px;color:var(--color-muted);margin-left:auto">
+          <span style="flex:1;min-width:0">${p.label}</span>
+          <span style="font-size:11px;color:var(--color-muted);white-space:nowrap;flex-shrink:0">
             ${p.overridden
               ? (p.effective ? 'added' : 'removed')
               : (p.from_role ? 'from role' : '')}
@@ -360,6 +424,7 @@
       await openPermissions(permUserId, label);
       successEl.textContent = "Permissions saved.";
       successEl.style.display = "block";
+      showToast("Permissions saved", `Updated for ${label}.`);
     }
 
     async function changeRole(userId, role) {
