@@ -12,8 +12,8 @@
 <style>
   .filter-row { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
   .filter-row .field { margin-bottom:0; min-width:160px; }
-  .stmt-header { background:var(--color-primary); color:#fff; padding:var(--space-4); border-radius:var(--radius) var(--radius) 0 0; }
-  .stmt-header h2 { color:#fff; margin-bottom:4px; font-size:20px; }
+  .stmt-header { background:var(--color-primary); color:var(--color-on-primary, #fff); padding:var(--space-4); border-radius:var(--radius) var(--radius) 0 0; }
+  .stmt-header h2 { color:var(--color-on-primary, #fff); margin-bottom:4px; font-size:20px; }
   .stmt-header .sub { opacity:0.75; font-size:13px; }
   .stmt-section { border:1px solid var(--color-line); border-top:none; }
   .stmt-section-title { background:#F3EBD8; padding:8px 16px; font-weight:600; font-size:13px; letter-spacing:0.03em; }
@@ -99,7 +99,7 @@
   <script src="js/auth.js"></script>
   <script src="js/doc-branding.js"></script>
   <script>
-    let orgId, orgName, fundTypes = [], members = [], loans = [];
+    let orgId, orgName, fundTypes = [], members = [], loans = [], docAuthor = '';
     let lastStatement = null;
 
     // -------------------------------------------------------------------------
@@ -440,7 +440,7 @@
           </div>
           ${sectionsHTML || `<div class="stmt-section"><p class="empty" style="padding:16px">No data found for the selected components and period.</p></div>`}
           <div style="padding:12px 16px;text-align:right;color:var(--color-muted);font-size:12px">
-            Generated: ${new Date().toLocaleDateString("en-KE", {year:"numeric",month:"long",day:"numeric"})}
+            Generated ${docTimestamp()}${docAuthor ? ` by ${docAuthor}` : ''}
           </div>
         </div>`;
 
@@ -480,7 +480,7 @@
         ["Member Statement"],
         [`Member: ${s.member.full_name} (${s.member.member_number})`],
         [`Period: ${s.periodLabel}`],
-        [`Generated: ${new Date().toLocaleDateString("en-KE", {year:"numeric",month:"long",day:"numeric"})}`],
+        [`Generated: ${docTimestamp()}${docAuthor ? ` by ${docAuthor}` : ''}`],
         [],
       ];
 
@@ -555,7 +555,7 @@
       doc.setFontSize(10); doc.setTextColor(100);
       doc.text(`Member: ${lastStatement.member.full_name} (${lastStatement.member.member_number})`, 14, y); y += 5;
       doc.text(`Period: ${lastStatement.periodLabel}`, 14, y); y += 5;
-      doc.text(`Generated: ${today}`, 14, y); y += 8;
+      doc.text(`Generated: ${docTimestamp()}${docAuthor ? ` by ${docAuthor}` : ''}`, 14, y); y += 8;
       doc.setTextColor(0);
 
       for (const sec of lastStatement.sections) {
@@ -581,7 +581,7 @@
                 rows.push([r.payment_date, r.reference ?? "—", money(r.principal_portion), money(r.interest_portion), money(bal)]);
               }
               doc.autoTable({ startY: y, head:[["Date","Reference","Principal","Interest","Balance"]], body: rows,
-                styles:{fontSize:8}, headStyles:{fillColor:PRIMARY}, margin:{left:14,right:14} });
+                styles:{fontSize:8}, headStyles:{fillColor:PRIMARY, textColor:brandTextOn(PRIMARY)}, margin:{left:14,right:14} });
               y = doc.lastAutoTable.finalY + 8;
             }
           }
@@ -596,7 +596,7 @@
           const closing = sec.rows.length ? sec.rows[sec.rows.length-1].balance : 0;
           rows.push(["Closing balance", "", "", "", "", money(closing)]);
           doc.autoTable({ startY: y, head:[["Date","Reference","Description","Debit","Credit","Balance"]], body: rows,
-            styles:{fontSize:8}, headStyles:{fillColor:PRIMARY}, margin:{left:14,right:14} });
+            styles:{fontSize:8}, headStyles:{fillColor:PRIMARY, textColor:brandTextOn(PRIMARY)}, margin:{left:14,right:14} });
           y = doc.lastAutoTable.finalY + 8;
           if (y > 250) { doc.addPage(); y = 14; }
         }
@@ -623,6 +623,7 @@
       if (!org) return;
       orgId = org.organisation_id;
       orgName = org.organisations.name;
+      docAuthor = await getDocAuthor();
       applyPreset();
       loadFilters();
     })();

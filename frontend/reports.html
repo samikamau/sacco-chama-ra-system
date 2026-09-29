@@ -9,8 +9,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
-  .report-header { background:var(--color-primary); color:#fff; padding:16px 20px; border-radius:var(--radius) var(--radius) 0 0; margin:-24px -24px 20px -24px; }
-  .report-header h2 { color:#fff; margin:0; }
+  .report-header { background:var(--color-primary); color:var(--color-on-primary, #fff); padding:16px 20px; border-radius:var(--radius) var(--radius) 0 0; margin:-24px -24px 20px -24px; }
+  .report-header h2 { color:var(--color-on-primary, #fff); margin:0; }
+  .report-header .sub { color:var(--color-on-primary, #fff); opacity:0.82; }
   .report-header .sub { opacity:0.75; font-size:13px; margin-top:2px; }
   .section-heading { background:#F3EBD8; padding:6px 12px; font-weight:700; font-size:13px; letter-spacing:0.03em; margin:16px -1px 0; border-top:1px solid var(--color-line); }
   .total-row td { font-weight:700; border-top:2px solid var(--color-ink); }
@@ -27,7 +28,7 @@
   }
   .gl-account-heading {
     background:var(--color-primary);
-    color:#fff;
+    color:var(--color-on-primary, #fff);
     padding:9px 14px;
     font-weight:700;
     font-size:13px;
@@ -100,7 +101,7 @@
   <script src="js/auth.js"></script>
   <script src="js/doc-branding.js"></script>
   <script>
-    let orgId, orgName, lastReport = null, glAccounts = [];
+    let orgId, orgName, lastReport = null, glAccounts = [], docAuthor = '';
 
     // ── LOCAL DATE FORMATTER (avoids UTC shift in Nairobi UTC+3) ─────────
     function toLocalISO(d) {
@@ -202,11 +203,16 @@
       const {kind, data} = rpt;
       const titles = {trial:"Trial Balance",ie:"Income & Expenditure",bs:"Balance Sheet",cf:"Cash Flow",cfi:"Cash Flow (Indirect)",rent:"Rental Schedule",gl:"General Ledger"};
       const title = titles[kind] || "Report";
-      const now = new Date().toLocaleDateString("en-KE",{year:"numeric",month:"long",day:"numeric"});
+      const now = docTimestamp();
+      const author = docAuthor;
 
       let html = `<div class="report-header" style="display:flex;align-items:center;gap:14px">
         <span id="report-logo-slot"></span>
-        <div><h2>${orgName}</h2><div class="sub">${title} &nbsp;|&nbsp; ${periodLabel()} &nbsp;|&nbsp; Generated ${now}</div></div>
+        <div>
+          <h2>${orgName}</h2>
+          <div class="sub">${title} &nbsp;|&nbsp; ${periodLabel()}</div>
+          <div class="sub" style="font-size:12px;margin-top:2px">Generated ${now}${author ? ` by ${author}` : ''}</div>
+        </div>
       </div>`;
 
       if (!data.length) {
@@ -418,7 +424,8 @@
       const titles = {trial:"Trial Balance",ie:"Income & Expenditure",bs:"Balance Sheet",cf:"Cash Flow",cfi:"Cash Flow (Indirect)",rent:"Rental Schedule",gl:"General Ledger"};
       const title = titles[kind] || "Report";
       const period = periodLabel();
-      const now = new Date().toLocaleDateString("en-KE",{year:"numeric",month:"long",day:"numeric"});
+      const now = docTimestamp();
+      const author = docAuthor;
 
       const branding = await getDocBranding();
       const PRIMARY = brandHexToRgb(branding.primaryColor);
@@ -437,11 +444,15 @@
         } catch (e) { /* unsupported image format, skip */ }
       }
       const textX = logoDataUrl ? 60 : 18;
-      doc.setTextColor(255,255,255);
+      // Text on the brand colour, black or white depending on how light it is.
+      const ON_PRIMARY = brandTextOn(PRIMARY);
+      doc.setTextColor(...ON_PRIMARY);
       doc.setFontSize(14); doc.setFont(undefined,"bold");
       doc.text(orgName||"Report", textX, y+8);
       doc.setFontSize(10); doc.setFont(undefined,"normal");
-      doc.text(`${title}  |  ${period}  |  Generated ${now}`, textX, y+16);
+      doc.text(`${title}  |  ${period}`, textX, y+13);
+      doc.setFontSize(8);
+      doc.text(`Generated ${now}${author ? `  by ${author}` : ''}`, textX, y+19);
       doc.setTextColor(0);
       y += 28;
 
@@ -482,7 +493,7 @@
         checkPage(8);
         doc.setFillColor(...PRIMARY);
         doc.rect(14, y, W, 7, "F");
-        doc.setTextColor(255); doc.setFontSize(8); doc.setFont(undefined,"bold");
+        doc.setTextColor(...ON_PRIMARY); doc.setFontSize(8); doc.setFont(undefined,"bold");
         let x = 14;
         cols.forEach((col,i) => {
           const w = widths[i];
@@ -656,7 +667,7 @@
       const title = titles[kind] || "Report";
       const wb = XLSX.utils.book_new();
       const period = periodLabel();
-      const now = new Date().toLocaleDateString("en-KE",{year:"numeric",month:"long",day:"numeric"});
+      const now = docTimestamp() + (docAuthor ? ` by ${docAuthor}` : '');
 
       function makeSheet(rows) {
         const ws = XLSX.utils.aoa_to_sheet(rows);
@@ -775,6 +786,7 @@
       const org = await currentOrg(); if (!org) return;
       orgId = org.organisation_id;
       orgName = org.organisations.name;
+      docAuthor = await getDocAuthor();
       await loadGLAccounts();
       applyPreset();
     })();
