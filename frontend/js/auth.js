@@ -126,3 +126,16 @@ function showError(el, message) {
 function money(n) {
   return Number(n||0).toLocaleString("en-KE", {minimumFractionDigits:2,maximumFractionDigits:2});
 }
+
+/* Edhafu legal gate: runs on every page that loads auth.js */
+(function () {
+  const me = document.currentScript ? document.currentScript.src : '';
+  const s = document.createElement('script');
+  s.src = me ? me.replace(/auth\.js.*$/, 'legal-gate.js') : 'js/legal-gate.js';
+  s.onload = function () {
+    if (window.EdhafuLegal && typeof supabaseClient !== 'undefined') {
+      EdhafuLegal.init(supabaseClient, 'edhafu_ledgers');
+    }
+  };
+  document.head.appendChild(s);
+})();
