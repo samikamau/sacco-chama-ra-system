@@ -390,8 +390,25 @@
     }
 
     // ── PDF EXPORT ────────────────────────────────────────────────────────
+    // Best effort: a logging failure must never block the user's work.
+    async function logAccess(action, activity, detail) {
+      try {
+        await supabaseClient.rpc('fn_log_access', {
+          p_organisation_id: orgId,
+          p_action: action,
+          p_activity: activity,
+          p_detail: detail || {},
+        });
+      } catch (e) { /* ignore */ }
+    }
+
     async function exportPdf() {
       if (!lastReport) { alert("Run a report first."); return; }
+      logAccess('export', 'report_pdf', {
+        report: lastReport.kind,
+        period: periodLabel(),
+        rows: (lastReport.data || []).length,
+      });
       const {jsPDF} = window.jspdf;
       const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const {kind,data} = lastReport;
@@ -616,6 +633,11 @@
     // ── EXCEL EXPORT ──────────────────────────────────────────────────────
     function exportExcel() {
       if (!lastReport) { alert("Run a report first."); return; }
+      logAccess('export', 'report_excel', {
+        report: lastReport.kind,
+        period: periodLabel(),
+        rows: (lastReport.data || []).length,
+      });
       const {kind,data} = lastReport;
       const titles = {trial:"Trial Balance",ie:"Income & Expenditure",bs:"Balance Sheet",cf:"Cash Flow",gl:"General Ledger"};
       const title = titles[kind];

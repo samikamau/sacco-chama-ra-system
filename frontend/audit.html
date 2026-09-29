@@ -15,6 +15,7 @@
   .act.insert { background:#E4EEE6; color:var(--color-success); }
   .act.update { background:#F3EBD8; color:#8A6314; }
   .act.delete { background:#F3E4E0; color:var(--color-alert); }
+  .act.export, .act.generate { background:#E6EBF2; color:#00173D; }
   .detail { background:#F8F7F3; }
   .detail td { padding:14px 16px; }
   .diff { width:100%; border-collapse:collapse; font-size:13px; }
@@ -42,6 +43,10 @@
           <div class="field" style="margin-bottom:0;min-width:200px"><label>Area</label>
             <select id="a-table">
               <option value="">Everything</option>
+              <option value="member_statement">Statements viewed</option>
+              <option value="member_statement_pdf">Statements downloaded</option>
+              <option value="report_pdf">Reports exported (PDF)</option>
+              <option value="report_excel">Reports exported (Excel)</option>
               <option value="journal_entries">Journal entries</option>
               <option value="journal_lines">Journal lines</option>
               <option value="members">Members</option>
@@ -94,6 +99,9 @@
       organisation_invitations: 'Invitations', chart_of_accounts: 'Chart of accounts',
       contribution_types: 'Fund types', rent_remittances: 'Rent remittances',
       reconciliations: 'Reconciliations', platform_admins: 'Platform admins',
+      member_statement: 'Statement viewed', member_statement_pdf: 'Statement downloaded',
+      report_pdf: 'Report exported (PDF)', report_excel: 'Report exported (Excel)',
+      audit_log_export: 'Audit log exported',
     };
 
     const label = t => LABELS[t] || t;
@@ -128,6 +136,9 @@
           </tr>`).join('')}</tbody></table>`;
       }
       const vals = r.action === 'delete' ? r.old_values : r.new_values;
+      if ((r.action === 'export' || r.action === 'generate') && vals && !Object.keys(vals).length) {
+        return '<span class="hint">No further detail recorded.</span>';
+      }
       if (!vals) return '<span class="hint">No detail recorded.</span>';
       return `<table class="diff">
         <thead><tr><th style="width:26%">Field</th><th>Value</th></tr></thead>
@@ -165,9 +176,12 @@
             : (r.actor_email || '<span class="hint">system</span>')}</td>
           <td><span class="act ${r.action}">${r.action}</span></td>
           <td>${label(r.table_name)}</td>
-          <td class="hint">${r.action === 'update' && r.changed_fields
-            ? r.changed_fields.slice(0, 3).join(', ') + (r.changed_fields.length > 3 ? ` +${r.changed_fields.length - 3}` : '')
-            : '—'}</td>
+          <td class="hint">${
+            r.action === 'update' && r.changed_fields
+              ? r.changed_fields.slice(0, 3).join(', ') + (r.changed_fields.length > 3 ? ` +${r.changed_fields.length - 3}` : '')
+              : (r.action === 'export' || r.action === 'generate')
+                ? Object.values(r.new_values || {}).filter(Boolean).slice(0, 2).join(' · ') || '—'
+                : '—'}</td>
         </tr>
         <tr class="detail" id="detail-${i}" style="display:none">
           <td colspan="5">${detailHTML(r)}</td>
@@ -181,6 +195,18 @@
 
     function exportLog() {
       if (!lastRows.length) { alert('Nothing to export.'); return; }
+      // Exporting the audit log is itself worth recording.
+      supabaseClient.rpc('fn_log_access', {
+        p_organisation_id: orgId,
+        p_action: 'export',
+        p_activity: 'audit_log_export',
+        p_detail: {
+          from: document.getElementById('a-from').value || null,
+          to: document.getElementById('a-to').value || null,
+          area: document.getElementById('a-table').value || 'all',
+          rows: lastRows.length,
+        },
+      }).then(() => {}, () => {});
       const rows = [['When','Name','Email','Action','Area','Record','Changed fields','Before','After']];
       lastRows.forEach(r => rows.push([
         when(r.occurred_at), r.actor_name || '', r.actor_email || 'system', r.action, label(r.table_name),

@@ -446,6 +446,25 @@
         scopeEl: document.getElementById('statement-print-area'),
         logoEl: document.getElementById('statement-logo-slot'),
       });
+
+      // Record that this member's statement was viewed, and by whom.
+      logAccess('generate', 'member_statement', {
+        member_number: member.member_number,
+        member_name: member.full_name,
+        period: periodLabel,
+      });
+    }
+
+    // Best effort: a logging failure must never block the user's work.
+    async function logAccess(action, activity, detail) {
+      try {
+        await supabaseClient.rpc('fn_log_access', {
+          p_organisation_id: orgId,
+          p_action: action,
+          p_activity: activity,
+          p_detail: detail || {},
+        });
+      } catch (e) { /* ignore */ }
     }
 
     // -------------------------------------------------------------------------
@@ -453,6 +472,11 @@
     // -------------------------------------------------------------------------
     async function downloadPdf() {
       if (!lastStatement) { alert("Generate a statement first."); return; }
+      logAccess('export', 'member_statement_pdf', {
+        member_number: lastStatement.member.member_number,
+        member_name: lastStatement.member.full_name,
+        period: lastStatement.periodLabel,
+      });
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
       const today = new Date().toLocaleDateString("en-KE", {year:"numeric",month:"long",day:"numeric"});
