@@ -196,6 +196,64 @@ async function renderNav() {
   );
   renderGroupBar('members-bar', membersItemsThemed, current, isMembersActive);
   renderGroupBar('accountant-bar', ACCOUNTANT_ITEMS, current, isAccountantActive);
+
+  showPendingInvitations();
+}
+
+// A pending invitation to another organisation is easy to miss if it only
+// appears on the settings page, so it is surfaced at the top of every page
+// until it is accepted.
+async function showPendingInvitations() {
+  try {
+    if (document.getElementById('invite-banner')) return;
+    // The settings page shows its own invitations card, so skip there.
+    if (document.getElementById('my-invites-card')) return;
+
+    const { data } = await supabaseClient.rpc('fn_my_invitations');
+    if (!data || !data.length) return;
+
+    const style = document.createElement('style');
+    style.textContent = `
+      #invite-banner {
+        background:#FFF8E8; border:1px solid #E0C88A; border-left:5px solid var(--color-accent, #C08A3E);
+        border-radius:6px; padding:14px 18px; margin-bottom:20px;
+        display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+      }
+      #invite-banner .msg { flex:1; min-width:240px; font-size:14px; }
+      #invite-banner .sub { color:var(--color-muted, #6B6558); font-size:12px; margin-top:2px; }
+    `;
+    document.head.appendChild(style);
+
+    const wrap = document.createElement('div');
+    wrap.id = 'invite-banner-wrap';
+    wrap.innerHTML = data.map(i => `
+      <div id="invite-banner">
+        <div class="msg">
+          <strong>${i.organisation_name}</strong> has invited you to join as
+          <strong>${i.role === 'org_admin' ? 'Administrator' : i.role.charAt(0).toUpperCase() + i.role.slice(1)}</strong>.
+          <div class="sub">Expires ${new Date(i.expires_at).toLocaleDateString()}</div>
+        </div>
+        <button class="btn accent" onclick="acceptInvitationFromBanner('${i.id}')">Accept invitation</button>
+      </div>`).join('');
+
+    // Sits directly under the page heading, above the page's own content.
+    const main = document.querySelector('.main');
+    if (!main) return;
+    const heading = main.querySelector('h1');
+    if (heading && heading.nextSibling) {
+      main.insertBefore(wrap, heading.nextSibling);
+    } else {
+      main.insertBefore(wrap, main.firstChild);
+    }
+  } catch (e) {
+    // A banner failing must never stop the rest of the page rendering.
+  }
+}
+
+async function acceptInvitationFromBanner(id) {
+  const { error } = await supabaseClient.rpc('fn_accept_invitation', { p_invitation_id: id });
+  if (error) { alert(error.message); return; }
+  window.location.reload();
 }
 
 function toggleOrgSwitcher(e) {
