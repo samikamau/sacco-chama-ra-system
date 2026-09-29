@@ -215,12 +215,22 @@ async function showPendingInvitations() {
     const style = document.createElement('style');
     style.textContent = `
       #invite-banner {
-        background:#FFF8E8; border:1px solid #E0C88A; border-left:5px solid var(--color-accent, #C08A3E);
-        border-radius:6px; padding:14px 18px; margin-bottom:20px;
+        background:#FB0137; color:#fff;
+        border-radius:6px; padding:16px 20px; margin-bottom:20px;
         display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+        box-shadow:0 4px 18px rgba(251,1,55,0.35);
+        animation: invitePulse 1.6s ease-in-out 3;
       }
-      #invite-banner .msg { flex:1; min-width:240px; font-size:14px; }
-      #invite-banner .sub { color:var(--color-muted, #6B6558); font-size:12px; margin-top:2px; }
+      @keyframes invitePulse {
+        0%, 100% { box-shadow:0 4px 18px rgba(251,1,55,0.35); }
+        50%      { box-shadow:0 4px 30px rgba(251,1,55,0.75); }
+      }
+      #invite-banner .msg { flex:1; min-width:240px; font-size:15px; }
+      #invite-banner .sub { color:rgba(255,255,255,0.85); font-size:12px; margin-top:3px; }
+      #invite-banner .btn {
+        background:#fff; color:#FB0137; font-weight:700; border:none;
+      }
+      #invite-banner .btn:hover { background:#F3F3F3; }
     `;
     document.head.appendChild(style);
 
@@ -228,6 +238,10 @@ async function showPendingInvitations() {
     wrap.id = 'invite-banner-wrap';
     wrap.innerHTML = data.map(i => `
       <div id="invite-banner">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0">
+          <path d="M4 4h16v12H5.17L4 17.17V4z"/><path d="M12 8v3"/><path d="M12 13.5v.01"/>
+        </svg>
         <div class="msg">
           <strong>${i.organisation_name}</strong> has invited you to join as
           <strong>${i.role === 'org_admin' ? 'Administrator' : i.role.charAt(0).toUpperCase() + i.role.slice(1)}</strong>.
