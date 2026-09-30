@@ -169,6 +169,19 @@
     let demoRequests = [];
     let currentDemoId = null;
 
+    // Anything typed by the public is escaped before it reaches the page.
+    // The demo form is open to anyone, so a name or message could otherwise
+    // carry markup that runs in an administrator's own session.
+    function esc(v) {
+      if (v === null || v === undefined) return '';
+      return String(v)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     async function loadDemoRequests() {
       const { data, error } = await supabaseClient.rpc("fn_list_demo_requests");
       const tbody = document.getElementById("demo-rows");
@@ -180,10 +193,10 @@
       tbody.innerHTML = demoRequests.map(d => `
         <tr>
           <td style="font-size:12px">${new Date(d.created_at).toLocaleDateString()}</td>
-          <td>${d.full_name}<br><span style="color:var(--color-muted);font-size:11px">${d.contact_position}</span></td>
-          <td style="font-size:12px">${d.email}<br><span style="color:var(--color-muted)">${d.phone}</span></td>
-          <td>${d.organisation_name}<br><span style="color:var(--color-muted);font-size:11px">${d.org_type}</span></td>
-          <td style="font-size:13px">${d.member_range}</td>
+          <td>${esc(d.full_name)}<br><span style="color:var(--color-muted);font-size:11px">${esc(d.contact_position)}</span></td>
+          <td style="font-size:12px">${esc(d.email)}<br><span style="color:var(--color-muted)">${esc(d.phone)}</span></td>
+          <td>${esc(d.organisation_name)}<br><span style="color:var(--color-muted);font-size:11px">${esc(d.org_type)}</span></td>
+          <td style="font-size:13px">${esc(d.member_range)}</td>
           <td><span class="status ${statusClass[d.status] || ""}">${d.status}</span></td>
           <td><button class="btn" style="padding:2px 8px;font-size:12px" onclick="openDemoDrawer('${d.id}')">View</button></td>
         </tr>`).join("");
@@ -194,14 +207,14 @@
       if (!d) return;
       currentDemoId = id;
       document.getElementById("demo-detail").innerHTML = `
-        <strong>${d.full_name}</strong> (${d.contact_position})<br>
-        <a href="mailto:${d.email}">${d.email}</a><br>
-        <a href="tel:${d.phone}">${d.phone}</a><br><br>
-        <strong>${d.organisation_name}</strong><br>
-        Type: ${d.org_type}<br>
-        Members: ${d.member_range}<br>
+        <strong>${esc(d.full_name)}</strong> (${esc(d.contact_position)})<br>
+        <a href="mailto:${encodeURIComponent(d.email || '')}">${esc(d.email)}</a><br>
+        <a href="tel:${encodeURIComponent(d.phone || '')}">${esc(d.phone)}</a><br><br>
+        <strong>${esc(d.organisation_name)}</strong><br>
+        Type: ${esc(d.org_type)}<br>
+        Members: ${esc(d.member_range)}<br>
         Received: ${new Date(d.created_at).toLocaleString()}
-        ${d.message ? `<br><br><em>"${d.message}"</em>` : ""}
+        ${d.message ? `<br><br><em>"${esc(d.message)}"</em>` : ""}
         ${d.consent_accepted_at ? `
           <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--color-line);font-size:12px;color:var(--color-muted);line-height:1.7">
             <strong style="color:var(--color-ink)">Consent</strong><br>
@@ -210,7 +223,7 @@
             <a href="${d.consent_terms_version}" target="_blank" rel="noopener">Terms accepted</a>
             &nbsp;&middot;&nbsp;
             <a href="${d.consent_privacy_version}" target="_blank" rel="noopener">Privacy policy accepted</a>
-            ${d.consent_user_agent ? `<div style="margin-top:4px;font-size:11px;word-break:break-all">${d.consent_user_agent}</div>` : ''}
+            ${d.consent_user_agent ? `<div style="margin-top:4px;font-size:11px;word-break:break-all">${esc(d.consent_user_agent)}</div>` : ''}
           </div>` : ''}`;
       document.getElementById("dr-status").value = d.status;
       document.getElementById("dr-notes").value = d.admin_notes || "";
@@ -244,9 +257,9 @@
       if (!data || !data.length) { tbody.innerHTML = `<tr><td colspan="5" class="empty">No pending organisations.</td></tr>`; return; }
       tbody.innerHTML = data.map(o => `
         <tr>
-          <td>${o.name}</td>
-          <td style="font-size:13px">${o.contact_person || "-"}<br><span style="color:var(--color-muted);font-size:12px">${o.contact_phone || ""}</span></td>
-          <td>${o.org_type}</td>
+          <td>${esc(o.name)}</td>
+          <td style="font-size:13px">${esc(o.contact_person || "-")}<br><span style="color:var(--color-muted);font-size:12px">${esc(o.contact_phone || "")}</span></td>
+          <td>${esc(o.org_type)}</td>
           <td>${new Date(o.created_at).toLocaleDateString()}</td>
           <td style="display:flex;gap:4px">
             <button class="btn accent" style="padding:2px 8px;font-size:12px" onclick="openApproveDrawer('${o.id}','${o.name.replace(/'/g,"\\'")}')">Approve</button>
@@ -267,12 +280,12 @@
           : o.access_status === "pending_approval" ? "partial" : "unpaid";
         const safeName = o.name.replace(/'/g,"\\'");
         const contact = o.contact_person || o.contact_phone
-          ? `${o.contact_person || ""}${o.contact_person && o.contact_phone ? "<br>" : ""}<span style="color:var(--color-muted);font-size:12px">${o.contact_phone || ""}</span>`
+          ? `${esc(o.contact_person || "")}${o.contact_person && o.contact_phone ? "<br>" : ""}<span style="color:var(--color-muted);font-size:12px">${esc(o.contact_phone || "")}</span>`
           : `<span style="color:var(--color-muted)">Not set</span>`;
         return `
         <tr>
-          <td>${o.name}<br><span style="color:var(--color-muted);font-size:11px">${o.org_type}</span></td>
-          <td style="font-family:var(--font-mono);font-size:12px">${o.account_number || "-"}</td>
+          <td>${esc(o.name)}<br><span style="color:var(--color-muted);font-size:11px">${esc(o.org_type)}</span></td>
+          <td style="font-family:var(--font-mono);font-size:12px">${esc(o.account_number || "-")}</td>
           <td style="font-size:13px">${contact}</td>
           <td><span class="status ${statusClass}">${statusLabel}</span></td>
           <td class="num">${o.monthly_fee != null ? money(o.monthly_fee) : "-"}</td>
