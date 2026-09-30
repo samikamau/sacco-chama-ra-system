@@ -148,8 +148,7 @@
     let orgId, members = [], fundTypes = [], paymentAccounts = [];
     let headers = [], rawRows = [], checked = [];
 
-    const money = n => Number(n||0).toLocaleString('en-KE',
-      { minimumFractionDigits:2, maximumFractionDigits:2 });
+    // money() comes from auth.js, which every page already loads.
 
     // ── FILE READING ──────────────────────────────────────────────────────
     function readFile() {
