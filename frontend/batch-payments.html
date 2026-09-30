@@ -420,15 +420,35 @@
 
     // ── TEMPLATE ──────────────────────────────────────────────────────────
     function downloadTemplate() {
-      const cols = ['Member Number','Date','Reference','Description',
-                    ...fundTypes.map(f => f.name)];
-      const example = ['M001','2026-01-15','QAB123XY','January contribution',
-                       ...fundTypes.map((_, i) => i === 0 ? 1000 : '')];
-      const ws = XLSX.utils.aoa_to_sheet([cols, example]);
-      ws['!cols'] = cols.map(c => ({ wch: Math.max(c.length + 2, 14) }));
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Payments');
-      XLSX.writeFile(wb, 'batch-payments-template.xlsx');
+      try {
+        if (typeof XLSX === 'undefined') {
+          alert('The spreadsheet library did not load. Check the connection and refresh the page.');
+          return;
+        }
+
+        // Funds may not have loaded yet, or the organisation may have none
+        // set up, so fall back to a single generic amount column.
+        const fundNames = fundTypes.length
+          ? fundTypes.map(f => String(f.name))
+          : ['Amount'];
+
+        const cols = ['Member Number','Date','Reference','Description', ...fundNames];
+        const example = ['M001','2026-01-15','QAB123XY','January contribution',
+                         ...fundNames.map((_, i) => i === 0 ? 1000 : '')];
+
+        const ws = XLSX.utils.aoa_to_sheet([cols, example]);
+        ws['!cols'] = cols.map(c => ({ wch: Math.max(String(c).length + 2, 14) }));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Payments');
+        XLSX.writeFile(wb, 'batch-payments-template.xlsx');
+
+        if (!fundTypes.length) {
+          alert('No fund types are set up for this organisation, so the template has one generic Amount column. Add fund types to get a column per fund.');
+        }
+      } catch (e) {
+        console.error('Template download failed:', e);
+        alert('Could not create the template: ' + (e && e.message ? e.message : e));
+      }
     }
 
     // ── INIT ──────────────────────────────────────────────────────────────
