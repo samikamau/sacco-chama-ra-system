@@ -1,0 +1,26 @@
+# Allow clean URLs: /login serves /login.html, and so on for every page.
+# The 200 status rewrites without changing the address bar, so the browser
+# keeps showing the tidy URL.
+/login              /login.html              200
+/reset-password     /reset-password.html     200
+/request-demo       /request-demo.html       200
+/members            /members.html            200
+/member             /member.html             200
+/loans              /loans.html              200
+/banking            /banking.html            200
+/expenditure        /expenditure.html        200
+/reports            /reports.html            200
+/statement          /statement.html          200
+/accounts           /accounts.html           200
+/journal            /journal.html            200
+/periods            /periods.html            200
+/opening-balances   /opening-balances.html   200
+/reconcile          /reconcile.html          200
+/contributions      /contributions.html      200
+/batch-payments     /batch-payments.html     200
+/audit              /audit.html              200
+/rent               /rent.html               200
+/users              /users.html              200
+/platform-admin     /platform-admin.html     200
+/account-status     /account-status.html     200
+/create-organisation /create-organisation.html 200
