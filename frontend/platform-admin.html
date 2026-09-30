@@ -201,7 +201,17 @@
         Type: ${d.org_type}<br>
         Members: ${d.member_range}<br>
         Received: ${new Date(d.created_at).toLocaleString()}
-        ${d.message ? `<br><br><em>"${d.message}"</em>` : ""}`;
+        ${d.message ? `<br><br><em>"${d.message}"</em>` : ""}
+        ${d.consent_accepted_at ? `
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--color-line);font-size:12px;color:var(--color-muted);line-height:1.7">
+            <strong style="color:var(--color-ink)">Consent</strong><br>
+            Accepted ${new Date(d.consent_accepted_at).toLocaleString()}<br>
+            ${d.consent_ip ? `From ${d.consent_ip}<br>` : ''}
+            <a href="${d.consent_terms_version}" target="_blank" rel="noopener">Terms accepted</a>
+            &nbsp;&middot;&nbsp;
+            <a href="${d.consent_privacy_version}" target="_blank" rel="noopener">Privacy policy accepted</a>
+            ${d.consent_user_agent ? `<div style="margin-top:4px;font-size:11px;word-break:break-all">${d.consent_user_agent}</div>` : ''}
+          </div>` : ''}`;
       document.getElementById("dr-status").value = d.status;
       document.getElementById("dr-notes").value = d.admin_notes || "";
       document.getElementById("demo-error").style.display = "none";

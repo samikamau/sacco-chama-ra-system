@@ -127,9 +127,9 @@
         return;
       }
 
-      // Record what was accepted and when. Consent you cannot evidence is
-      // not much use, so the version accepted is stored, not just a flag.
-      payload.consent_accepted_at = new Date().toISOString();
+      // Which versions were shown on this page. The time and IP are stamped
+      // by the database from the connection itself, so they do not depend on
+      // anything the browser claims.
       payload.consent_terms_version = "https://edhafu.com/legal/terms/v1.0/";
       payload.consent_privacy_version = "https://edhafu.com/legal/privacy/v1.0/";
 
