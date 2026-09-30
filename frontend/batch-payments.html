@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Batch Payments — Financial Operating System</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  .step { margin-bottom: 8px; }
+  .step-num {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:22px; height:22px; border-radius:50%; background:var(--color-primary);
+    color:#fff; font-size:12px; font-weight:700; margin-right:8px;
+  }
+  .map-grid {
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:12px; margin-top:12px;
+  }
+  .preview-wrap { max-height:460px; overflow:auto; border:1px solid var(--color-line); border-radius:var(--radius); }
+  .preview-wrap table { margin:0; }
+  .preview-wrap thead th { position:sticky; top:0; background:var(--color-bg); z-index:1; }
+  tr.bad { background:#FDF2F0; }
+  tr.dup { background:#FDF8EC; }
+  .flag { font-size:11px; font-weight:600; }
+  .flag.bad { color:var(--color-alert); }
+  .flag.dup { color:#8A6314; }
+  .counts { display:flex; gap:18px; flex-wrap:wrap; margin:12px 0; }
+  .count-box { border:1px solid var(--color-line); border-radius:var(--radius); padding:10px 14px; min-width:110px; }
+  .count-box .n { font-size:22px; font-weight:700; font-family:var(--font-mono); }
+  .count-box .l { font-size:12px; color:var(--color-muted); }
+  .hint { color:var(--color-muted); font-size:12px; }
+  .log-line { font-family:var(--font-mono); font-size:12px; padding:2px 0; }
+  .log-line.err { color:var(--color-alert); }
+</style>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav" id="nav-mount"></nav>
+    <main class="main">
+      <h1>Batch Payments</h1>
+      <p class="hint">
+        Upload a spreadsheet of member payments and post them in one go. Each row needs a member
+        number, a date, a reference and at least one amount. Every row is checked against the member
+        register and against references already posted before anything is written.
+      </p>
+
+      <!-- STEP 1: FILE -->
+      <div class="card">
+        <h2 class="step"><span class="step-num">1</span>Choose a file</h2>
+        <p class="hint">Excel (.xlsx, .xls) or CSV. The first row must be the column headings.</p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:10px">
+          <input type="file" id="f-file" accept=".xlsx,.xls,.csv" onchange="readFile()" style="max-width:320px">
+          <button class="btn" onclick="downloadTemplate()">&#8595; Download template</button>
+        </div>
+        <p id="file-error" class="error" style="display:none"></p>
+      </div>
+
+      <!-- STEP 2: MAPPING -->
+      <div class="card" id="map-card" style="display:none">
+        <h2 class="step"><span class="step-num">2</span>Match the columns</h2>
+        <p class="hint">
+          Tell the system which of your columns holds what. Any column you map to a fund is treated
+          as an amount for that fund, so a row can be split across several funds at once.
+        </p>
+
+        <div class="map-grid">
+          <div class="field" style="margin-bottom:0">
+            <label>Member number *</label><select id="m-member"></select>
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label>Date *</label><select id="m-date"></select>
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label>Reference *</label><select id="m-ref"></select>
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label>Description</label><select id="m-desc"></select>
+          </div>
+        </div>
+
+        <div class="section-label">Amount columns</div>
+        <p class="hint">Map each amount column to the fund it belongs to. Leave a column unmapped to ignore it.</p>
+        <div class="map-grid" id="fund-map"></div>
+
+        <div class="section-label">How the money was received</div>
+        <div class="map-grid">
+          <div class="field" style="margin-bottom:0">
+            <label>Channel *</label>
+            <select id="m-channel">
+              <option value="mpesa">M-Pesa</option>
+              <option value="bank">Bank</option>
+              <option value="cash">Cash</option>
+              <option value="cheque">Cheque</option>
+            </select>
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <label>Received into *</label><select id="m-cash-account"></select>
+          </div>
+        </div>
+
+        <button class="btn accent" style="margin-top:14px" onclick="validateRows()">Check the file</button>
+      </div>
+
+      <!-- STEP 3: PREVIEW -->
+      <div class="card" id="preview-card" style="display:none">
+        <h2 class="step"><span class="step-num">3</span>Review before posting</h2>
+
+        <div class="counts" id="counts"></div>
+
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;margin-bottom:12px">
+          <input type="checkbox" id="skip-dupes" checked style="width:16px;flex-shrink:0">
+          Skip rows whose reference has already been posted
+        </label>
+
+        <div class="preview-wrap">
+          <table>
+            <thead><tr>
+              <th>#</th><th>Member</th><th>Date</th><th>Reference</th>
+              <th>Allocation</th><th class="num">Total</th><th>Status</th>
+            </tr></thead>
+            <tbody id="preview-rows"></tbody>
+          </table>
+        </div>
+
+        <button class="btn accent" style="margin-top:14px" id="post-btn" onclick="postBatch()">Post these payments</button>
+        <p class="hint" style="margin-top:8px">
+          Rows with errors are never posted. Posting happens one row at a time, so a failure part way
+          through leaves the rows before it posted and the rest untouched.
+        </p>
+      </div>
+
+      <!-- STEP 4: RESULT -->
+      <div class="card" id="result-card" style="display:none">
+        <h2 class="step"><span class="step-num">4</span>Result</h2>
+        <div id="result-summary"></div>
+        <div id="result-log" style="margin-top:10px;max-height:280px;overflow:auto"></div>
+        <button class="btn" style="margin-top:12px" onclick="location.reload()">Upload another file</button>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    let orgId, members = [], fundTypes = [], paymentAccounts = [];
+    let headers = [], rawRows = [], checked = [];
+
+    const money = n => Number(n||0).toLocaleString('en-KE',
+      { minimumFractionDigits:2, maximumFractionDigits:2 });
+
+    // ── FILE READING ──────────────────────────────────────────────────────
+    function readFile() {
+      const errEl = document.getElementById('file-error');
+      errEl.style.display = 'none';
+      const file = document.getElementById('f-file').files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const wb = XLSX.read(e.target.result, { type:'array', cellDates:true });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, { header:1, blankrows:false, defval:'' });
+
+          if (!rows.length) { showError(errEl, 'That file has no rows.'); return; }
+
+          headers = rows[0].map(h => String(h).trim()).filter(h => h !== '');
+          rawRows = rows.slice(1)
+            .filter(r => r.some(cell => String(cell).trim() !== ''))
+            .map(r => {
+              const obj = {};
+              headers.forEach((h, i) => obj[h] = r[i]);
+              return obj;
+            });
+
+          if (!rawRows.length) { showError(errEl, 'That file has headings but no data rows.'); return; }
+
+          buildMapping();
+          document.getElementById('map-card').style.display = 'block';
+          document.getElementById('preview-card').style.display = 'none';
+          document.getElementById('result-card').style.display = 'none';
+        } catch (err) {
+          showError(errEl, 'Could not read that file: ' + (err.message || err));
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    // ── COLUMN MAPPING ────────────────────────────────────────────────────
+    // Guesses a sensible column by name, so an obvious file needs no work.
+    function guess(candidates) {
+      const norm = s => String(s).toLowerCase().replace(/[^a-z0-9]/g,'');
+      for (const c of candidates) {
+        const hit = headers.find(h => norm(h).includes(norm(c)));
+        if (hit) return hit;
+      }
+      return '';
+    }
+
+    function colOptions(selected, includeBlank) {
+      return (includeBlank ? '<option value="">— none —</option>' : '')
+        + headers.map(h => `<option value="${h}" ${h===selected?'selected':''}>${h}</option>`).join('');
+    }
+
+    function buildMapping() {
+      document.getElementById('m-member').innerHTML =
+        colOptions(guess(['member number','memberno','member','membernumber','no']), false);
+      document.getElementById('m-date').innerHTML =
+        colOptions(guess(['date','paid','transaction date']), false);
+      document.getElementById('m-ref').innerHTML =
+        colOptions(guess(['reference','ref','receipt','code','transaction']), false);
+      document.getElementById('m-desc').innerHTML =
+        colOptions(guess(['description','narration','details','notes']), true);
+
+      // One mapping control per column, so amount columns can be pointed at
+      // the fund they belong to.
+      document.getElementById('fund-map').innerHTML = headers.map(h => {
+        const auto = fundTypes.find(f =>
+          f.name.toLowerCase().replace(/[^a-z0-9]/g,'') ===
+          String(h).toLowerCase().replace(/[^a-z0-9]/g,''));
+        return `
+          <div class="field" style="margin-bottom:0">
+            <label>${h}</label>
+            <select class="fund-sel" data-col="${h}">
+              <option value="">— not an amount —</option>
+              ${fundTypes.map(f =>
+                `<option value="${f.id}" ${auto && auto.id===f.id ? 'selected':''}>${f.name}</option>`
+              ).join('')}
+            </select>
+          </div>`;
+      }).join('');
+    }
+
+    // ── VALIDATION ────────────────────────────────────────────────────────
+    function parseDate(v) {
+      if (v instanceof Date && !isNaN(v)) return v.toISOString().slice(0,10);
+      const s = String(v || '').trim();
+      if (!s) return null;
+      // ISO first, then day-first, which is what a Kenyan spreadsheet will
+      // almost always contain.
+      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+      const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+      if (m) {
+        let [, d, mo, y] = m;
+        if (y.length === 2) y = '20' + y;
+        const dt = new Date(Number(y), Number(mo)-1, Number(d));
+        if (!isNaN(dt)) return dt.toISOString().slice(0,10);
+      }
+      const dt = new Date(s);
+      return isNaN(dt) ? null : dt.toISOString().slice(0,10);
+    }
+
+    function parseAmount(v) {
+      if (v === '' || v === null || v === undefined) return 0;
+      const n = Number(String(v).replace(/[,\s]/g,''));
+      return isNaN(n) ? NaN : n;
+    }
+
+    async function validateRows() {
+      const memberCol = document.getElementById('m-member').value;
+      const dateCol   = document.getElementById('m-date').value;
+      const refCol    = document.getElementById('m-ref').value;
+      const descCol   = document.getElementById('m-desc').value;
+
+      const fundCols = [...document.querySelectorAll('.fund-sel')]
+        .filter(s => s.value)
+        .map(s => ({ col: s.dataset.col, typeId: s.value,
+                     name: s.options[s.selectedIndex].text }));
+
+      if (!fundCols.length) {
+        alert('Map at least one column to a fund, otherwise there is nothing to post.');
+        return;
+      }
+
+      // Members are matched on member number, trimmed and case-insensitive,
+      // because spreadsheets are rarely tidy.
+      const byNumber = {};
+      members.forEach(m => byNumber[String(m.member_number).trim().toLowerCase()] = m);
+
+      checked = rawRows.map((r, i) => {
+        const errors = [];
+        const rawNo = String(r[memberCol] ?? '').trim();
+        const member = byNumber[rawNo.toLowerCase()];
+        if (!rawNo) errors.push('no member number');
+        else if (!member) errors.push(`member "${rawNo}" not found`);
+
+        const date = parseDate(r[dateCol]);
+        if (!date) errors.push('date not understood');
+
+        const ref = String(r[refCol] ?? '').trim();
+        if (!ref) errors.push('no reference');
+
+        const allocations = [];
+        let total = 0;
+        fundCols.forEach(f => {
+          const amt = parseAmount(r[f.col]);
+          if (isNaN(amt)) { errors.push(`"${f.col}" is not a number`); return; }
+          if (amt > 0) {
+            allocations.push({ contribution_type_id: f.typeId, amount: amt, name: f.name });
+            total += amt;
+          } else if (amt < 0) {
+            errors.push(`"${f.col}" is negative`);
+          }
+        });
+        if (total <= 0 && !errors.length) errors.push('no amount');
+
+        return {
+          line: i + 2,          // spreadsheet row number, header is row 1
+          member, rawNo, date, ref, total, allocations,
+          description: descCol ? String(r[descCol] ?? '').trim() : '',
+          errors, duplicate: false,
+        };
+      });
+
+      // Check references already posted, so the same batch is not posted twice.
+      const refs = [...new Set(checked.filter(r => r.ref).map(r => r.ref))];
+      if (refs.length) {
+        const { data } = await supabaseClient.rpc('fn_existing_payment_references', {
+          p_organisation_id: orgId, p_references: refs,
+        });
+        const seen = new Set((data || []).map(d => d.reference));
+        checked.forEach(r => { if (seen.has(r.ref)) r.duplicate = true; });
+      }
+
+      // Duplicates within the file itself.
+      const counts = {};
+      checked.forEach(r => { if (r.ref) counts[r.ref] = (counts[r.ref]||0) + 1; });
+      checked.forEach(r => { if (r.ref && counts[r.ref] > 1) r.duplicate = true; });
+
+      renderPreview();
+    }
+
+    function renderPreview() {
+      const bad = checked.filter(r => r.errors.length).length;
+      const dup = checked.filter(r => !r.errors.length && r.duplicate).length;
+      const ok  = checked.length - bad - dup;
+      const total = checked.filter(r => !r.errors.length).reduce((s,r) => s + r.total, 0);
+
+      document.getElementById('counts').innerHTML = `
+        <div class="count-box"><div class="n">${checked.length}</div><div class="l">Rows in file</div></div>
+        <div class="count-box"><div class="n" style="color:var(--color-success)">${ok}</div><div class="l">Ready to post</div></div>
+        <div class="count-box"><div class="n" style="color:#8A6314">${dup}</div><div class="l">Duplicate reference</div></div>
+        <div class="count-box"><div class="n" style="color:var(--color-alert)">${bad}</div><div class="l">With errors</div></div>
+        <div class="count-box"><div class="n">${money(total)}</div><div class="l">Total value</div></div>`;
+
+      document.getElementById('preview-rows').innerHTML = checked.map(r => `
+        <tr class="${r.errors.length ? 'bad' : (r.duplicate ? 'dup' : '')}">
+          <td>${r.line}</td>
+          <td>${r.member ? `${r.member.full_name}<div class="hint">${r.member.member_number}</div>` : `<span class="flag bad">${r.rawNo || '—'}</span>`}</td>
+          <td>${r.date || '<span class="flag bad">?</span>'}</td>
+          <td><code style="font-size:11px">${r.ref || '—'}</code></td>
+          <td class="hint">${r.allocations.map(a => `${a.name} ${money(a.amount)}`).join(' · ') || '—'}</td>
+          <td class="num">${money(r.total)}</td>
+          <td>${r.errors.length
+                ? `<span class="flag bad">${r.errors.join('; ')}</span>`
+                : (r.duplicate ? '<span class="flag dup">already posted</span>' : '<span class="hint">ready</span>')}</td>
+        </tr>`).join('');
+
+      document.getElementById('preview-card').style.display = 'block';
+      document.getElementById('preview-card').scrollIntoView({ behavior:'smooth' });
+    }
+
+    // ── POSTING ───────────────────────────────────────────────────────────
+    async function postBatch() {
+      const skipDupes = document.getElementById('skip-dupes').checked;
+      const toPost = checked.filter(r =>
+        !r.errors.length && (skipDupes ? !r.duplicate : true));
+
+      if (!toPost.length) { alert('There is nothing to post.'); return; }
+      if (!confirm(`Post ${toPost.length} payment${toPost.length===1?'':'s'} totalling KES ${money(toPost.reduce((s,r)=>s+r.total,0))}?`)) return;
+
+      const btn = document.getElementById('post-btn');
+      btn.disabled = true;
+
+      const channel = document.getElementById('m-channel').value;
+      const cashAccount = document.getElementById('m-cash-account').value;
+      const log = [];
+      let posted = 0, failed = 0;
+
+      for (const r of toPost) {
+        btn.textContent = `Posting ${posted + failed + 1} of ${toPost.length}…`;
+        const { error } = await supabaseClient.rpc('fn_record_batch_payment', {
+          p_organisation_id: orgId,
+          p_member_id: r.member.id,
+          p_payment_date: r.date,
+          p_channel: channel,
+          p_reference: r.ref,
+          p_description: r.description || null,
+          p_cash_account_id: cashAccount,
+          p_allocations: r.allocations.map(a => ({
+            contribution_type_id: a.contribution_type_id, amount: a.amount,
+          })),
+        });
+
+        if (error) {
+          failed++;
+          log.push({ err:true, text:`Row ${r.line} (${r.ref}): ${error.message}` });
+        } else {
+          posted++;
+          log.push({ err:false, text:`Row ${r.line} (${r.ref}): posted ${money(r.total)}` });
+        }
+      }
+
+      btn.textContent = 'Post these payments';
+      btn.disabled = false;
+
+      document.getElementById('result-summary').innerHTML = `
+        <p style="font-size:15px">
+          <strong style="color:var(--color-success)">${posted}</strong> posted
+          ${failed ? `, <strong style="color:var(--color-alert)">${failed}</strong> failed` : ''}.
+        </p>`;
+      document.getElementById('result-log').innerHTML =
+        log.map(l => `<div class="log-line ${l.err?'err':''}">${l.text}</div>`).join('');
+      document.getElementById('result-card').style.display = 'block';
+      document.getElementById('result-card').scrollIntoView({ behavior:'smooth' });
+    }
+
+    // ── TEMPLATE ──────────────────────────────────────────────────────────
+    function downloadTemplate() {
+      const cols = ['Member Number','Date','Reference','Description',
+                    ...fundTypes.map(f => f.name)];
+      const example = ['M001','2026-01-15','QAB123XY','January contribution',
+                       ...fundTypes.map((_, i) => i === 0 ? 1000 : '')];
+      const ws = XLSX.utils.aoa_to_sheet([cols, example]);
+      ws['!cols'] = cols.map(c => ({ wch: Math.max(c.length + 2, 14) }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Payments');
+      XLSX.writeFile(wb, 'batch-payments-template.xlsx');
+    }
+
+    // ── INIT ──────────────────────────────────────────────────────────────
+    (async () => {
+      const org = await currentOrg();
+      if (!org) { window.location.href = 'login.html'; return; }
+      orgId = org.organisation_id;
+
+      const { data: mem } = await supabaseClient.from('members')
+        .select('id, member_number, full_name')
+        .eq('organisation_id', orgId).order('member_number');
+      members = mem || [];
+
+      const { data: funds } = await supabaseClient.from('contribution_types')
+        .select('id, name').eq('organisation_id', orgId)
+        .eq('active', true).order('name');
+      fundTypes = funds || [];
+
+      const { data: accts } = await supabaseClient.rpc('fn_payment_accounts',
+        { p_organisation_id: orgId });
+      paymentAccounts = accts || [];
+      document.getElementById('m-cash-account').innerHTML =
+        paymentAccounts.map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join('');
+    })();
+  </script>
+</body>
+</html>

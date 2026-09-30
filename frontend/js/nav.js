@@ -59,6 +59,7 @@ async function getOrgContext() {
 
 const ACCOUNTANT_ITEMS = [
   { href: 'contributions.html',     label: 'Contributions' },
+  { href: 'batch-payments.html',    label: 'Batch Payments' },
   { href: 'accounts.html',          label: 'Chart of Accounts' },
   { href: 'journal.html',           label: 'General Journal' },
   { href: 'periods.html',           label: 'Accounting Periods' },
