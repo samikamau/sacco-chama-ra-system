@@ -199,6 +199,12 @@
           <strong>${i.organisation_name}</strong> has invited you as <strong>${i.role.replace('org_admin','Administrator')}</strong>.
           <div style="color:var(--color-muted);font-size:12px;margin:4px 0">Expires ${new Date(i.expires_at).toLocaleDateString()}</div>
           <button class="btn accent" onclick="acceptInvite('${i.id}')">Accept invitation</button>
+          <div style="color:var(--color-muted);font-size:12px;margin-top:8px;line-height:1.6">
+            By accepting you agree to the
+            <a href="https://edhafu.com/legal/terms/" target="_blank" rel="noopener">Terms of Service</a>,
+            <a href="https://edhafu.com/legal/aup/" target="_blank" rel="noopener">Acceptable Use Policy</a>
+            and <a href="https://edhafu.com/legal/privacy/" target="_blank" rel="noopener">Privacy Policy</a>.
+          </div>
         </div>`).join("");
     }
 

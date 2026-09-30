@@ -250,6 +250,12 @@ async function showPendingInvitations() {
           <div class="sub">Expires ${new Date(i.expires_at).toLocaleDateString()}</div>
         </div>
         <button class="btn accent" onclick="acceptInvitationFromBanner('${i.id}')">Accept invitation</button>
+        <div style="flex-basis:100%;font-size:11.5px;color:rgba(255,255,255,0.85);line-height:1.6">
+          By accepting you agree to the
+          <a href="https://edhafu.com/legal/terms/" target="_blank" rel="noopener" style="color:#fff">Terms of Service</a>,
+          <a href="https://edhafu.com/legal/aup/" target="_blank" rel="noopener" style="color:#fff">Acceptable Use Policy</a>
+          and <a href="https://edhafu.com/legal/privacy/" target="_blank" rel="noopener" style="color:#fff">Privacy Policy</a>.
+        </div>
       </div>`).join('');
 
     // Sits directly under the page heading, above the page's own content.

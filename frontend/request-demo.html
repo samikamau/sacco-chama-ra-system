@@ -64,6 +64,17 @@
 
         <div class="field"><label>Anything else? (optional)</label><input id="d-message" placeholder="Tell us what you are looking for"></div>
 
+        <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;font-size:13px;line-height:1.5;margin:18px 0 14px">
+          <input type="checkbox" id="d-consent" style="width:16px;flex-shrink:0;margin-top:2px">
+          <span>
+            I agree to the
+            <a href="https://edhafu.com/legal/terms/" target="_blank" rel="noopener">Terms of Service</a>
+            and consent to Edhafu processing the details above to respond to this request,
+            as described in the
+            <a href="https://edhafu.com/legal/privacy/" target="_blank" rel="noopener">Privacy Policy</a>.
+          </span>
+        </label>
+
         <button class="btn accent" style="width:100%" onclick="submitRequest()">Submit request</button>
         <p id="error" class="error" style="display:none"></p>
 
@@ -111,6 +122,16 @@
       if (!payload.org_type) { showError(errorEl, "Select your organisation type."); return; }
       if (!payload.member_range) { showError(errorEl, "Select an approximate number of members."); return; }
       if (!payload.contact_position) { showError(errorEl, "Select your position."); return; }
+      if (!document.getElementById("d-consent").checked) {
+        showError(errorEl, "Please accept the Terms of Service and Privacy Policy to continue.");
+        return;
+      }
+
+      // Record what was accepted and when. Consent you cannot evidence is
+      // not much use, so the version accepted is stored, not just a flag.
+      payload.consent_accepted_at = new Date().toISOString();
+      payload.consent_terms_version = "https://edhafu.com/legal/terms/v1.0/";
+      payload.consent_privacy_version = "https://edhafu.com/legal/privacy/v1.0/";
 
       const btn = document.querySelector("#form-area .btn.accent");
       btn.disabled = true;
