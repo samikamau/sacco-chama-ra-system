@@ -171,6 +171,7 @@
   <script src="js/nav.js"></script>
   <script src="js/member-search.js"></script>
   <script src="js/auth.js"></script>
+  <script src="js/date-shortcuts.js"></script>
   <script>
     let orgId, paymentAccounts = [], fundTypes = [], activeLoans = [];
     // The id of the payment just posted, so a receipt can be opened from the
@@ -198,9 +199,8 @@
       // Default to today, and never allow a payment dated in the future.
       const today = new Date().toISOString().slice(0,10);
       document.getElementById('t-date').value = today;
-      const payDate = document.getElementById('f-date');
-      payDate.value = today;
-      payDate.max = today;
+      document.getElementById('f-date').value = today;
+
 
       // Members, for the Record Payment tab
       const { data: paymentMembers } = await supabaseClient.from('members')
