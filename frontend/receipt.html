@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Receipt — Financial Operating System</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  .rct-wrap { max-width:640px; margin:0 auto; }
+  .rct {
+    background:#fff; border:1px solid var(--color-line); border-radius:var(--radius);
+    overflow:hidden;
+  }
+  .rct-head {
+    background:var(--color-primary); color:var(--color-on-primary, #fff);
+    padding:20px 24px; display:flex; align-items:center; gap:16px;
+  }
+  .rct-head h2 { color:var(--color-on-primary, #fff); margin:0; font-size:19px; }
+  .rct-head .sub { font-size:12.5px; opacity:0.85; margin-top:2px; }
+  .rct-no {
+    margin-left:auto; text-align:right; font-family:var(--font-mono);
+  }
+  .rct-no .label { font-size:10.5px; text-transform:uppercase; letter-spacing:0.07em; opacity:0.8; }
+  .rct-no .val { font-size:19px; font-weight:700; }
+  .rct-body { padding:24px; }
+  .rct-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px 24px; margin-bottom:22px; }
+  .rct-f .l { font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--color-muted); }
+  .rct-f .v { font-size:14.5px; font-weight:600; margin-top:1px; }
+  .rct-amount {
+    border-top:2px solid var(--color-ink); border-bottom:2px solid var(--color-ink);
+    padding:14px 0; display:flex; justify-content:space-between; align-items:center;
+    margin:18px 0;
+  }
+  .rct-amount .l { font-size:13px; font-weight:600; }
+  .rct-amount .v { font-size:24px; font-weight:800; font-family:var(--font-mono); }
+  .rct-alloc { width:100%; border-collapse:collapse; font-size:13.5px; margin-bottom:18px; }
+  .rct-alloc td { padding:6px 0; border-bottom:1px solid var(--color-line); }
+  .rct-alloc td:last-child { text-align:right; font-family:var(--font-mono); }
+  .rct-foot {
+    border-top:1px solid var(--color-line); padding-top:14px;
+    font-size:12px; color:var(--color-muted); line-height:1.7;
+  }
+  .rct-void {
+    background:#F3E4E0; color:var(--color-alert); border:1px solid var(--color-alert);
+    border-radius:var(--radius); padding:12px 16px; margin-bottom:18px;
+    font-size:13.5px; font-weight:600;
+  }
+  .hint { color:var(--color-muted); font-size:12px; }
+
+  @media print {
+    .nav, .no-print { display:none !important; }
+    .main { padding:0 !important; }
+    .app-shell { display:block !important; }
+    .rct { border:none; }
+    .rct-wrap { max-width:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav" id="nav-mount"></nav>
+    <main class="main">
+      <div class="no-print" style="display:flex;gap:12px;align-items:center;margin-bottom:18px;flex-wrap:wrap">
+        <h1 style="margin:0">Receipt</h1>
+        <button class="btn accent" style="margin-left:auto" onclick="window.print()">Print</button>
+        <button class="btn" onclick="history.back()">Back</button>
+      </div>
+
+      <div class="rct-wrap">
+        <div class="rct" id="rct-print-area">
+          <div id="rct-content">
+            <div style="padding:40px" class="hint">Loading…</div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/doc-branding.js"></script>
+  <script>
+    const paymentId = new URLSearchParams(location.search).get('id');
+
+    function longDate(d) {
+      if (!d) return '—';
+      return new Date(d).toLocaleDateString('en-KE',
+        { year:'numeric', month:'long', day:'numeric' });
+    }
+
+    function dateAndTime(d) {
+      if (!d) return '—';
+      return new Date(d).toLocaleString('en-KE',
+        { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    }
+
+    const CHANNELS = { mpesa:'M-Pesa', bank:'Bank transfer', cash:'Cash', cheque:'Cheque' };
+
+    async function loadReceipt() {
+      if (!paymentId) {
+        document.getElementById('rct-content').innerHTML =
+          `<div style="padding:40px" class="error">No payment specified.</div>`;
+        return;
+      }
+
+      const { data, error } = await supabaseClient.rpc('fn_receipt', { p_payment_id: paymentId });
+      if (error || !data || !data.length) {
+        document.getElementById('rct-content').innerHTML =
+          `<div style="padding:40px" class="error">${error ? error.message : 'Receipt not found.'}</div>`;
+        return;
+      }
+
+      const r = data[0];
+      const allocations = r.allocations || [];
+
+      document.getElementById('rct-content').innerHTML = `
+        <div class="rct-head">
+          <span id="receipt-logo-slot"></span>
+          <div>
+            <h2>${r.organisation_name}</h2>
+            <div class="sub">Official receipt</div>
+          </div>
+          <div class="rct-no">
+            <div class="label">Receipt No.</div>
+            <div class="val">${r.receipt_number || '—'}</div>
+          </div>
+        </div>
+
+        <div class="rct-body">
+          ${r.reversed_at ? `
+            <div class="rct-void">
+              This receipt was reversed on ${longDate(r.reversed_at)}.
+              ${r.reversal_reason ? `Reason: ${r.reversal_reason}` : ''}
+            </div>` : ''}
+
+          <div class="rct-grid">
+            <div class="rct-f"><div class="l">Received from</div><div class="v">${r.member_name}</div></div>
+            <div class="rct-f"><div class="l">Member number</div><div class="v">${r.member_number || '—'}</div></div>
+            <div class="rct-f"><div class="l">Date paid</div><div class="v">${longDate(r.paid_on)}</div></div>
+            <div class="rct-f"><div class="l">Date posted</div><div class="v">${dateAndTime(r.posted_at)}</div></div>
+            <div class="rct-f"><div class="l">Received by</div><div class="v">${CHANNELS[r.channel] || r.channel}</div></div>
+            <div class="rct-f"><div class="l">Their reference</div><div class="v">${r.reference || '—'}</div></div>
+          </div>
+
+          <div class="rct-amount">
+            <span class="l">Amount received</span>
+            <span class="v">KES ${money(r.amount)}</span>
+          </div>
+
+          ${allocations.length ? `
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-muted);margin-bottom:6px">
+              Applied to
+            </div>
+            <table class="rct-alloc"><tbody>
+              ${allocations.map(a => `<tr><td>${a.fund}</td><td>KES ${money(a.amount)}</td></tr>`).join('')}
+            </tbody></table>` : ''}
+
+          ${r.description ? `<p style="font-size:13.5px;margin-bottom:16px">${r.description}</p>` : ''}
+
+          <div class="rct-foot">
+            Issued by ${r.issued_by || 'the system'}.<br>
+            ${r.paid_on && new Date(r.posted_at).toISOString().slice(0,10) !== r.paid_on
+              ? 'The date paid and the date posted differ because this payment was entered after it was received.<br>'
+              : ''}
+            This receipt is computer generated and is valid without a signature.
+          </div>
+        </div>`;
+
+      // Apply the organisation's own branding to the printed document.
+      applyDocBranding(await getDocBranding(), {
+        scopeEl: document.getElementById('rct-print-area'),
+        logoEl: document.getElementById('receipt-logo-slot'),
+      });
+
+      logAccess('generate', 'payment_receipt', {
+        receipt_number: r.receipt_number,
+        member_name: r.member_name,
+        amount: r.amount,
+      });
+    }
+
+    // Best effort: a logging failure must never block the receipt.
+    async function logAccess(action, activity, detail) {
+      try {
+        const org = await currentOrg();
+        if (!org) return;
+        await supabaseClient.rpc('fn_log_access', {
+          p_organisation_id: org.organisation_id,
+          p_action: action,
+          p_activity: activity,
+          p_detail: detail || {},
+        });
+      } catch (e) { /* ignore */ }
+    }
+
+    (async () => {
+      const session = await requireSession(); if (!session) return;
+      const org = await currentOrg(); if (!org) { window.location.href = 'login.html'; return; }
+      loadReceipt();
+    })();
+  </script>
+</body>
+</html>
