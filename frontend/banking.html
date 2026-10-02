@@ -20,6 +20,7 @@
   .split-total { display:flex; justify-content:space-between; font-weight:700; padding:8px 0; border-top:2px solid var(--color-ink); font-family:var(--font-mono); }
   .loan-row { background:#F3EBD8; border-radius:3px; padding:8px 12px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center; font-size:13px; }
   .loan-row input { width:140px; }
+  .field-hint { font-size:11.5px; color:var(--color-muted); margin-top:3px; }
 </style>
 </head>
 <body>
@@ -86,9 +87,10 @@
               <input type="hidden" id="f-member">
               <div id="f-member-list"></div>
             </div>
-            <div class="field" style="flex:1;min-width:140px">
-              <label>Date *</label>
+            <div class="field" style="flex:1;min-width:150px">
+              <label>Date paid *</label>
               <input id="f-date" type="date">
+              <div class="field-hint">The day the member actually paid.</div>
             </div>
           </div>
           <div style="display:flex;gap:12px;flex-wrap:wrap">
@@ -106,8 +108,9 @@
               </select>
             </div>
             <div class="field" style="flex:1;min-width:160px">
-              <label>Reference *</label>
+              <label>Their reference *</label>
               <input id="f-reference" placeholder="e.g. QAB123XY">
+              <div class="field-hint">A receipt number is issued separately.</div>
             </div>
           </div>
         </div>
@@ -141,7 +144,7 @@
         </div>
 
         <div class="card">
-          <button class="btn accent" style="font-size:15px;padding:12px 28px" onclick="postPayment()">Post payment</button>
+          <button class="btn accent" style="font-size:15px;padding:12px 28px" id="post-btn" onclick="postPayment()">Post payment</button>
           <p id="pay-error" class="error" style="display:none"></p>
           <p id="pay-success" style="display:none;color:var(--color-success)"></p>
         </div>
@@ -152,8 +155,12 @@
         <div class="card">
           <h2>Payment history</h2>
           <table>
-            <thead><tr><th>Date</th><th>Member</th><th>Channel</th><th>Reference</th><th class="num">Amount</th><th>Status</th></tr></thead>
-            <tbody id="payment-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+            <thead><tr>
+              <th>Receipt No.</th><th>Date paid</th><th>Member</th>
+              <th>Channel</th><th>Their reference</th>
+              <th class="num">Amount</th><th>Status</th>
+            </tr></thead>
+            <tbody id="payment-rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -166,6 +173,9 @@
   <script src="js/auth.js"></script>
   <script>
     let orgId, paymentAccounts = [], fundTypes = [], activeLoans = [];
+    // The id of the payment just posted, so a receipt can be opened from the
+    // confirmation without hunting for it in the history.
+    let lastPaymentId = null;
 
     function switchTab(i) {
       [0,1,2,3].forEach(n => document.getElementById('pane-'+n).style.display = n===i?'block':'none');
@@ -183,9 +193,14 @@
       const opts = paymentAccounts.map(a => `<option value="${a.id}">${a.code} — ${a.name}</option>`).join('');
       document.getElementById('t-from').innerHTML = opts;
       document.getElementById('t-to').innerHTML = opts;
-      document.getElementById('t-date').value = new Date().toISOString().slice(0,10);
       document.getElementById('f-cash-account').innerHTML = opts;
-      document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
+
+      // Default to today, and never allow a payment dated in the future.
+      const today = new Date().toISOString().slice(0,10);
+      document.getElementById('t-date').value = today;
+      const payDate = document.getElementById('f-date');
+      payDate.value = today;
+      payDate.max = today;
 
       // Members, for the Record Payment tab
       const { data: paymentMembers } = await supabaseClient.from('members')
@@ -327,7 +342,9 @@
     async function postPayment() {
       const errorEl = document.getElementById('pay-error');
       const successEl = document.getElementById('pay-success');
+      const btn = document.getElementById('post-btn');
       errorEl.style.display = 'none'; successEl.style.display = 'none';
+      lastPaymentId = null;
 
       const memberId = document.getElementById('f-member').value;
       const date     = document.getElementById('f-date').value;
@@ -338,8 +355,11 @@
       if (!memberId || !date || !cashAcct) {
         showError(errorEl, 'Member, date and account are required.'); return;
       }
+      if (date > new Date().toISOString().slice(0,10)) {
+        showError(errorEl, 'A payment cannot be dated in the future.'); return;
+      }
       if (!ref) {
-        showError(errorEl, 'A reference is required (the M-Pesa code, cheque number or receipt number) so this payment can be traced.'); return;
+        showError(errorEl, 'A reference is required (the M-Pesa code or cheque number) so this payment can be traced.'); return;
       }
 
       const allocations = [];
@@ -358,58 +378,77 @@
         showError(errorEl, 'Enter at least one fund contribution or loan repayment amount.'); return;
       }
 
-      if (allocations.length) {
-        const { error } = await supabaseClient.rpc('fn_record_and_post_split_payment', {
-          p_organisation_id: orgId,
-          p_member_id: memberId,
-          p_channel: channel,
-          p_reference: ref,
-          p_description: `Payment received - ${ref||date}`,
-          p_cash_account_id: cashAcct,
-          p_allocations: allocations,
-          p_paid_on: date,
-        });
-           if (error) { showError(errorEl, 'Contributions: ' + error.message); return; }
-        lastPaymentId = data;
+      // Locked while posting. Without this a second click while the first is
+      // still in flight posts the payment twice.
+      btn.disabled = true;
+      btn.textContent = 'Posting…';
+
+      try {
+        if (allocations.length) {
+          const { data, error } = await supabaseClient.rpc('fn_record_and_post_split_payment', {
+            p_organisation_id: orgId,
+            p_member_id: memberId,
+            p_channel: channel,
+            p_reference: ref,
+            p_description: `Payment received - ${ref||date}`,
+            p_cash_account_id: cashAcct,
+            p_allocations: allocations,
+            p_paid_on: date,
+          });
+          if (error) { showError(errorEl, 'Contributions: ' + error.message); return; }
+          lastPaymentId = data;
+        }
+
+        for (const lr of loanRepayments) {
+          const { error } = await supabaseClient.rpc('fn_record_loan_repayment', {
+            p_loan_id: lr.loan_id,
+            p_amount: lr.amount,
+            p_channel: channel,
+            p_reference: ref,
+            p_cash_account_id: cashAcct,
+          });
+          if (error) { showError(errorEl, 'Loan repayment: ' + error.message); return; }
+        }
+
+        const total = allocations.reduce((s,a)=>s+a.amount,0) +
+                      loanRepayments.reduce((s,l)=>s+l.amount,0);
+        successEl.innerHTML = `Payment of KES ${money(total)} posted successfully.` +
+          (lastPaymentId
+            ? ` <a href="receipt.html?id=${lastPaymentId}" style="font-weight:600">View receipt</a>`
+            : '');
+        successEl.style.display = 'block';
+
+        document.querySelectorAll('.fund-amount,.loan-amount').forEach(i => i.value = '');
+        document.getElementById('f-reference').value = '';
+        updateTotals();
+        loadMemberLoans();
+
+      } catch (e) {
+        // The payment may well have gone through before this, so say so
+        // rather than inviting a second attempt.
+        console.error('Payment posting failed:', e);
+        showError(errorEl,
+          'Something went wrong after the payment was sent: ' + (e && e.message ? e.message : e) +
+          '. Check the payment history before trying again.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Post payment';
       }
-
-      for (const lr of loanRepayments) {
-        const { error } = await supabaseClient.rpc('fn_record_loan_repayment', {
-          p_loan_id: lr.loan_id,
-          p_amount: lr.amount,
-          p_channel: channel,
-          p_reference: ref,
-          p_cash_account_id: cashAcct,
-        });
-        if (error) { showError(errorEl, 'Loan repayment: ' + error.message); return; }
-      }
-
-      const total = allocations.reduce((s,a)=>s+a.amount,0) +
-                    loanRepayments.reduce((s,l)=>s+l.amount,0);
-      successEl.innerHTML = `Payment of KES ${money(total)} posted successfully.` +
-        (lastPaymentId
-          ? ` <a href="receipt.html?id=${lastPaymentId}" style="font-weight:600">View receipt</a>`
-          : '');
-      successEl.style.display = 'block';
-
-      document.querySelectorAll('.fund-amount,.loan-amount').forEach(i => i.value = '');
-      document.getElementById('f-reference').value = '';
-      updateTotals();
-      loadMemberLoans();
     }
 
     async function loadPaymentHistory() {
       const { data, error } = await supabaseClient.from('payments')
-        .select('transaction_date, channel, reference, amount, status, members(full_name)')
+        .select('id, receipt_number, paid_on, transaction_date, channel, reference, amount, status, members(full_name)')
         .eq('organisation_id', orgId)
         .order('transaction_date', { ascending: false })
         .limit(100);
       const tbody = document.getElementById('payment-rows');
-      if (error) { tbody.innerHTML=`<tr><td colspan="6" class="error">${error.message}</td></tr>`; return; }
-      if (!data.length) { tbody.innerHTML=`<tr><td colspan="6" class="empty">No payments yet.</td></tr>`; return; }
+      if (error) { tbody.innerHTML=`<tr><td colspan="7" class="error">${error.message}</td></tr>`; return; }
+      if (!data.length) { tbody.innerHTML=`<tr><td colspan="7" class="empty">No payments yet.</td></tr>`; return; }
       tbody.innerHTML = data.map(p=>`
         <tr>
-          <td>${p.transaction_date}</td>
+          <td><a href="receipt.html?id=${p.id}" style="font-family:var(--font-mono);font-size:12px">${p.receipt_number || '—'}</a></td>
+          <td>${p.paid_on || p.transaction_date}</td>
           <td>${p.members?.full_name||'—'}</td>
           <td>${p.channel}</td>
           <td>${p.reference||'—'}</td>
