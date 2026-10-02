@@ -274,34 +274,22 @@
         showError(errorEl, 'Enter at least one fund contribution or loan repayment amount.'); return;
       }
 
-      // Post fund contributions. The function returns the payment id, which
-      // is what the receipt is opened by.
-      if (allocations.length) {
-        const { data, error } = await supabaseClient.rpc('fn_record_and_post_split_payment', {
-          p_organisation_id: orgId,
-          p_member_id: memberId,
-          p_channel: channel,
-          p_reference: ref,
-          p_description: `Payment received - ${ref||date}`,
-          p_cash_account_id: cashAcct,
-          p_allocations: allocations,
-          p_paid_on: date,
-        });
-        if (error) { showError(errorEl, 'Contributions: ' + error.message); return; }
-        lastPaymentId = data;
-      }
-
-      // Post loan repayments individually
-      for (const lr of loanRepayments) {
-        const { error } = await supabaseClient.rpc('fn_record_loan_repayment', {
-          p_loan_id: lr.loan_id,
-          p_amount: lr.amount,
-          p_channel: channel,
-          p_reference: ref,
-          p_cash_account_id: cashAcct,
-        });
-        if (error) { showError(errorEl, 'Loan repayment: ' + error.message); return; }
-      }
+      // One call for the whole payment. Contributions and loan repayments
+      // share a receipt number and a journal entry, so either the whole
+      // payment is recorded or none of it is.
+      const { data, error } = await supabaseClient.rpc('fn_record_member_payment', {
+        p_organisation_id: orgId,
+        p_member_id: memberId,
+        p_paid_on: date,
+        p_channel: channel,
+        p_reference: ref,
+        p_description: `Payment received - ${ref||date}`,
+        p_cash_account_id: cashAcct,
+        p_allocations: allocations,
+        p_loan_repayments: loanRepayments,
+      });
+      if (error) { showError(errorEl, error.message); return; }
+      lastPaymentId = data;
 
       const total = allocations.reduce((s,a)=>s+a.amount,0) +
                     loanRepayments.reduce((s,l)=>s+l.amount,0);
