@@ -15,6 +15,7 @@
   .tabs { display:flex; gap:4px; border-bottom:2px solid var(--color-line); margin-bottom:20px; }
   .tab { padding:8px 16px; cursor:pointer; border-bottom:3px solid transparent; font-size:14px; }
   .tab.active { border-bottom-color:var(--color-accent); font-weight:600; }
+  .date-hint { font-size:11.5px; color:var(--color-muted); margin-top:3px; }
 </style>
 </head>
 <body>
@@ -37,9 +38,10 @@
               <label>Member *</label>
               <select id="f-member" onchange="loadMemberLoans()"></select>
             </div>
-            <div class="field" style="flex:1;min-width:140px">
-              <label>Date *</label>
+            <div class="field" style="flex:1;min-width:150px">
+              <label>Date paid *</label>
               <input id="f-date" type="date">
+              <div class="date-hint">The day the member actually paid, not today's date if different.</div>
             </div>
           </div>
           <div style="display:flex;gap:12px;flex-wrap:wrap">
@@ -57,8 +59,9 @@
               </select>
             </div>
             <div class="field" style="flex:1;min-width:160px">
-              <label>Reference *</label>
+              <label>Their reference *</label>
               <input id="f-reference" placeholder="e.g. QAB123XY">
+              <div class="date-hint">The M-Pesa code or cheque number. A receipt number is issued separately.</div>
             </div>
           </div>
         </div>
@@ -106,8 +109,12 @@
         <div class="card">
           <h2>Payment history</h2>
           <table>
-            <thead><tr><th>Date</th><th>Member</th><th>Channel</th><th>Reference</th><th class="num">Amount</th><th>Status</th></tr></thead>
-            <tbody id="payment-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+            <thead><tr>
+              <th>Receipt No.</th><th>Date paid</th><th>Member</th>
+              <th>Channel</th><th>Their reference</th>
+              <th class="num">Amount</th><th>Status</th>
+            </tr></thead>
+            <tbody id="payment-rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -119,6 +126,9 @@
   <script src="js/auth.js"></script>
   <script>
     let orgId, fundTypes = [], paymentAccounts = [], activeLoans = [];
+    // The id of the payment just posted, so a receipt can be opened from the
+    // confirmation without going to the history tab to find it.
+    let lastPaymentId = null;
 
     function switchTab(i) {
       [0,1].forEach(n => document.getElementById('pane-'+n).style.display = n===i?'block':'none');
@@ -146,8 +156,11 @@
       fundTypes = ft || [];
       buildFundSplits();
 
-      // Set today's date
-      document.getElementById('f-date').value = new Date().toISOString().slice(0,10);
+      // Default to today, and never allow a payment dated in the future.
+      const today = new Date().toISOString().slice(0,10);
+      const dateEl = document.getElementById('f-date');
+      dateEl.value = today;
+      dateEl.max = today;
 
       // Load loans for first member
       loadMemberLoans();
@@ -225,6 +238,7 @@
       const errorEl = document.getElementById('pay-error');
       const successEl = document.getElementById('pay-success');
       errorEl.style.display = 'none'; successEl.style.display = 'none';
+      lastPaymentId = null;
 
       const memberId = document.getElementById('f-member').value;
       const date     = document.getElementById('f-date').value;
@@ -235,8 +249,11 @@
       if (!memberId || !date || !cashAcct) {
         showError(errorEl, 'Member, date and account are required.'); return;
       }
+      if (date > new Date().toISOString().slice(0,10)) {
+        showError(errorEl, 'A payment cannot be dated in the future.'); return;
+      }
       if (!ref) {
-        showError(errorEl, 'A reference is required (the M-Pesa code, cheque number or receipt number) so this payment can be traced.'); return;
+        showError(errorEl, 'A reference is required (the M-Pesa code or cheque number) so this payment can be traced.'); return;
       }
 
       // Collect fund allocations
@@ -257,10 +274,10 @@
         showError(errorEl, 'Enter at least one fund contribution or loan repayment amount.'); return;
       }
 
-      // Post fund contributions
+      // Post fund contributions. The function returns the payment id, which
+      // is what the receipt is opened by.
       if (allocations.length) {
-        const totalContrib = allocations.reduce((s,a)=>s+a.amount, 0);
-        const { error } = await supabaseClient.rpc('fn_record_and_post_split_payment', {
+        const { data, error } = await supabaseClient.rpc('fn_record_and_post_split_payment', {
           p_organisation_id: orgId,
           p_member_id: memberId,
           p_channel: channel,
@@ -270,7 +287,7 @@
           p_allocations: allocations,
           p_paid_on: date,
         });
-           if (error) { showError(errorEl, 'Contributions: ' + error.message); return; }
+        if (error) { showError(errorEl, 'Contributions: ' + error.message); return; }
         lastPaymentId = data;
       }
 
@@ -303,16 +320,17 @@
 
     async function loadHistory() {
       const { data, error } = await supabaseClient.from('payments')
-        .select('transaction_date, channel, reference, amount, status, members(full_name)')
+        .select('id, receipt_number, paid_on, transaction_date, channel, reference, amount, status, members(full_name)')
         .eq('organisation_id', orgId)
         .order('transaction_date', { ascending: false })
         .limit(100);
       const tbody = document.getElementById('payment-rows');
-      if (error) { tbody.innerHTML=`<tr><td colspan="6" class="error">${error.message}</td></tr>`; return; }
-      if (!data.length) { tbody.innerHTML=`<tr><td colspan="6" class="empty">No payments yet.</td></tr>`; return; }
+      if (error) { tbody.innerHTML=`<tr><td colspan="7" class="error">${error.message}</td></tr>`; return; }
+      if (!data.length) { tbody.innerHTML=`<tr><td colspan="7" class="empty">No payments yet.</td></tr>`; return; }
       tbody.innerHTML = data.map(p=>`
         <tr>
-          <td>${p.transaction_date}</td>
+          <td><a href="receipt.html?id=${p.id}" style="font-family:var(--font-mono);font-size:12px">${p.receipt_number || '—'}</a></td>
+          <td>${p.paid_on || p.transaction_date}</td>
           <td>${p.members?.full_name||'—'}</td>
           <td>${p.channel}</td>
           <td>${p.reference||'—'}</td>
