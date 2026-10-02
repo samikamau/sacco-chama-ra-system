@@ -268,8 +268,10 @@
           p_description: `Payment received - ${ref||date}`,
           p_cash_account_id: cashAcct,
           p_allocations: allocations,
+          p_paid_on: date,
         });
-        if (error) { showError(errorEl, 'Contributions: ' + error.message); return; }
+           if (error) { showError(errorEl, 'Contributions: ' + error.message); return; }
+        lastPaymentId = data;
       }
 
       // Post loan repayments individually
@@ -286,7 +288,10 @@
 
       const total = allocations.reduce((s,a)=>s+a.amount,0) +
                     loanRepayments.reduce((s,l)=>s+l.amount,0);
-      successEl.textContent = `Payment of KES ${money(total)} posted successfully.`;
+      successEl.innerHTML = `Payment of KES ${money(total)} posted successfully.` +
+        (lastPaymentId
+          ? ` <a href="receipt.html?id=${lastPaymentId}" style="font-weight:600">View receipt</a>`
+          : '');
       successEl.style.display = 'block';
 
       // Reset amounts
